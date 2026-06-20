@@ -2,13 +2,14 @@
 
 ---
 模块：产品文档/04_工作区协同与Session
-当前版本：v2.0
+当前版本：v2.1
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.1 | 2026-06-17 | 新增内置 BrowserView 多光标工作区、overlay 浮层系统、日程自动化维护场景 |
 | v2.0 | 2026-06-17 | 整体重写：新增 Session Graph 任务管理、右下角任务面板三视图、Session 驱动的工作区协同 |
 | v1.0 | 2026-06-01 | 初版：多 AI 工作区、拖拽协同、工作流沉淀和可监督自配置 |
 
@@ -21,12 +22,13 @@ v1 把 AI 光标理解为"多个 AI 虚拟光标 + 执行调度器"。
 v2 在此基础上新增 Session 维度：
 
 ```text
-1 个真实系统光标
-+ N 个 AI 虚拟光标
-+ N 个 AI 工作区
-+ 1 个执行调度器
+1 个系统光标（用于桌面原生应用）
++ N 个内置 BrowserView（每个有独立虚拟光标，真并行）
++ N 个 AI 工作区（每个绑定 BrowserView + Session）
++ 1 个双执行器（系统执行器 + BrowserView 执行器）
 + 1 个 Session Graph 记录引擎
 + 1 个右下角任务面板
++ 1 套 Overlay 浮层系统
 + 1 套用户偏好与工作流记忆
 ```
 
@@ -152,15 +154,36 @@ AI B：整理 PDF → Session B 记录整理过程
 AI C：等待接管光标 → Session C 暂停
 ```
 
-### 3. 沙盒并行模式
+### 3. 内置 BrowserView 真并行模式
 
 ```text
-Browser Context A → Session A
-Browser Context B → Session B
-各自独立执行，不抢真实光标
+BrowserView A → Session A → 虚拟光标 A
+BrowserView B → Session B → 虚拟光标 B
+BrowserView C → Session C → 虚拟光标 C
+各自独立执行，通过 CDP/DOM 操作，不抢系统光标
 ```
 
-每个沙盒的操作都记录在独立 Session 中，互不干扰。
+这是 v2.1 的核心工作模式。每个 BrowserView：
+
+```text
+有独立的 DOM 和 CDP 通道
+有独立的虚拟光标动画（可选）
+有独立的 Session 记录
+与其他 BrowserView 互不干扰
+Cookie/登录状态可共享（同一 Chromium profile）
+```
+
+用户看到的效果：
+
+```text
+┌─────────────────────┬─────────────────────┐
+│  BrowserView A      │  BrowserView B      │
+│  岗位搜索           │  简历编辑            │
+│  [光标 A 在动]      │  [光标 B 在动]      │
+├─────────────────────┴─────────────────────┤
+│  任务面板（日志/树/拓扑）                    │
+└───────────────────────────────────────────┘
+```
 
 ---
 
@@ -242,19 +265,71 @@ v2 新增：
 
 ---
 
+## Overlay 浮层系统
+
+AI 光标不只是操作已有界面，还可以创建自有 UI 元素覆盖在屏幕上：
+
+### 浮层类型
+
+```text
+便签（note）       — 用户口述的备忘内容
+监控卡片（monitor）  — 绑定页面元素，定时刷新
+步骤清单（checklist）— 从 Session 提取的操作步骤
+对比视图（comparison）— 并排展示两个信息片段
+文本片段（snippet）  — 从页面提取的内容
+计时器（timer）     — 倒计时/提醒
+```
+
+### 场景示例
+
+```text
+用户："记住这个电话号码" → overlay.pin(便签，“张经理 13800001234”)
+AI："发现 30 分钟后有会议" → overlay.pin(会议简报)
+用户："帮我盯着这个股票价格" → overlay.pin(监控卡片，定时刷新)
+用户："把刚才的操作步骤列出来" → overlay.pin(步骤清单，从 Session 提取)
+```
+
+### 浮层与 Session
+
+```text
+临时浮层：跟随当前 Session，任务结束自动消失
+持久浮层：用户说"一直留着" → 存入 Memory，跨 Session 保留
+每个 overlay 操作记录为 Session chunk
+```
+
+---
+
+## 日程自动化维护场景
+
+A2UI（AI-to-UI）协议结合内置 BrowserView，适合结构化、重复性的日常维护任务：
+
+```text
+早间 routine：
+  BrowserView A → 打开日历应用 → 提取今日日程
+  BrowserView B → 检查未读邮件 → 发现需要调整日程
+  AI 自动调整 → 修改日历时间
+  overlay.pin(今日摘要) → 钉在屏幕
+  耳机："早上好，今天 5 个会议，下午的推迟到 2 点了。"
+
+全程在内置 BrowserView 中完成，不占用户光标。
+```
+
+---
+
 ## MVP 建议
 
 第一版实现：
 
 ```text
-1 个真实光标
-2-3 个 AI 任务卡（工作区）
-每个任务卡绑定一个 Session
+1 个系统光标 + 2-3 个内置 BrowserView
+每个 BrowserView 绑定一个 Session
 右下角任务面板（先实现日志视图）
 简单 fork（用户纠正时自动分叉）
 Session 持久化（SQLite）
 基础拖拽输入
+基础 overlay（便签类型）
 基础偏好记忆
+口语转文字输入（基础格式转换）
 ```
 
 暂不实现：
@@ -265,10 +340,12 @@ Session Graph 可视化编辑（第二版）
 跨设备 Session 同步
 自动 Session 合并
 Session 导出/导入
+多类型 overlay（监控/对比/计时器）
+日程自动化 routine
 ```
 
 ---
 
 ## 一句话总结
 
-**v2 的工作区从"AI 虚拟光标 + 任务卡"升级为"Session 驱动的智能工作区"：每个工作区是一个活跃的 Session，所有操作自动记录为 chunk，纠正自动 fork 新分支，成功路径自动沉淀为工作流。右下角任务面板（日志/树/拓扑三视图）既是用户的操作监控台，也是 AI 的外部记忆查询入口——用户和 AI 共享同一个"记忆空间"。**
+**v2 的工作区从"任务卡"升级为"Session + BrowserView 驱动的智能工作区"：每个工作区绑定一个内置 BrowserView 和一个 Session，多个 BrowserView 通过 CDP/DOM 真正并行操作（每个有独立虚拟光标）。Overlay 浮层系统让 AI 能在屏幕上创建自有 UI（便签/监控/清单）。右下角任务面板既是用户的监控台，也是 AI 的外部记忆。**
