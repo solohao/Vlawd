@@ -36,7 +36,7 @@ v2 在此基础上新增 Session 维度：
 
 ---
 
-## Session 驱动的工作区
+## Session 驱动的工作区（WORK.SESSION）
 
 每个工作区不再只是"标签组 + 文件 + 日志"，而是一个活跃的 Session：
 
@@ -59,7 +59,7 @@ AI 生成摘要 → Session chunk：result
 
 ---
 
-## 右下角任务面板
+## 右下角任务面板（WORK.PANEL）
 
 任务面板是 Session Graph 的可视化前端，位于桌面右下角（常驻但可折叠）。
 
@@ -134,7 +134,7 @@ AI 生成摘要 → Session chunk：result
 
 ---
 
-## 多 AI 工作模式
+## 多 AI 工作模式（WORK.MULTI）
 
 沿用 v1 的多 AI 工作模式，v2 每种模式都有 Session 支撑：
 
@@ -187,7 +187,7 @@ Cookie/登录状态可共享（同一 Chromium profile）
 
 ---
 
-## "拖资料给 AI"的交互
+## "拖资料给 AI"的交互（WORK.DRAG）
 
 沿用 v1 的拖拽交互设计，v2 中拖拽也是 Session chunk：
 
@@ -201,7 +201,7 @@ AI 结果 → Session chunk: {type: "result", content: "提取了 3 个关键信
 
 ---
 
-## 个性化与 Session 的结合
+## 个性化与 Session 的结合（WORK.PERSON）
 
 v1 的个性化系统（Preference / PhraseAlias / BehaviorRule / WorkflowShortcut）在 v2 中与 Session 深度结合：
 
@@ -240,7 +240,7 @@ Personalization Layer 命中 WorkflowShortcut
 
 ---
 
-## 用户控制权
+## 用户控制权（WORK.CONTROL）
 
 沿用 v1 的用户最高控制权原则：
 
@@ -265,7 +265,7 @@ v2 新增：
 
 ---
 
-## Overlay 浮层系统
+## Overlay 浮层系统（WORK.OVERLAY）
 
 AI 光标不只是操作已有界面，还可以创建自有 UI 元素覆盖在屏幕上：
 
@@ -299,7 +299,7 @@ AI："发现 30 分钟后有会议" → overlay.pin(会议简报)
 
 ---
 
-## 日程自动化维护场景
+## 日程自动化维护场景（WORK.SCHEDULE）
 
 A2UI（AI-to-UI）协议结合内置 BrowserView，适合结构化、重复性的日常维护任务：
 
