@@ -54,7 +54,7 @@ Session Graph 天然就是为"试错 → 回退 → 再试"的交互模式设计
 
 ---
 
-## Session 数据结构
+## Session 数据结构（SESSION.STRUCT）
 
 ### Session 对象
 
@@ -110,7 +110,7 @@ Chunk 类型：
 
 ---
 
-## Session Graph
+## Session Graph（SESSION.GRAPH）
 
 Session Graph 是所有 Session 之间 fork/merge 关系组成的有向图：
 
@@ -171,7 +171,7 @@ main_session = main_session.merge(completed_branch, result="后天27度多云")
 
 ---
 
-## 记录引擎设计
+## 记录引擎设计（SESSION.ENGINE）
 
 记录引擎是 Session 上下文工程的运行时组件，负责实时监听全双工模型和执行器的所有数据流：
 
@@ -216,7 +216,7 @@ Session fork/merge → 状态机（检测纠正/分叉事件）
 
 ---
 
-## 长期 Memory
+## 长期 Memory（SESSION.MEMORY）
 
 Session 是单次任务的完整记录。Memory 是跨 Session 的持久记忆。
 
@@ -249,7 +249,7 @@ Memory 查询：
 
 ---
 
-## 右下角任务面板
+## 右下角任务面板（SESSION.PANEL）
 
 任务面板是 Session Graph 的可视化前端，同时服务用户和全双工模型：
 
@@ -385,7 +385,7 @@ AI 光标：语音输入，纠正/调整/回退是常态
 
 ---
 
-## MVP 实现建议
+## MVP 实现建议（SESSION.MVP）
 
 第一版 Session 引擎：
 
