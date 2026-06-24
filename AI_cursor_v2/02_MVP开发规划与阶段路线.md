@@ -97,6 +97,13 @@
 | PERSON.PROTOCOL | 配置变更协议 | 全量（propose/confirm/apply/revoke） |
 | GOVERN.PRINCIPLE | AI 可维护性原则 | 全量 |
 | GOVERN.CODE | 面向 AI 编码规范 | 全量 |
+| STACK.OVERVIEW | 核心决策总览 | 全量（开发基础设施） |
+| STACK.ELECTRON | 桌面框架选型 | 全量 |
+| STACK.PROCESS | 多进程架构 | 全量 |
+| STACK.LOOP | Agent 循环 | 全量 |
+| STACK.SESSION | Session 运行时 | 全量 |
+| STACK.TOOL | 工具分发 | 基础（不含 Plugin 扩展） |
+| STACK.MODEL | 模型通信 | 全量 |
 
 ### 产品定义
 
