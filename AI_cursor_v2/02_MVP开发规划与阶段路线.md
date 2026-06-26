@@ -157,13 +157,13 @@
 | Phase 3 | Session JSONL 记录 | append/read 测试 + demo 日志 |
 | Phase 4 | 浏览器 MVP 虚拟执行器 | 搜索/表单/滚动模拟测试 |
 | Phase 5 | 双角色模型配置骨架（MODEL.CONFIG） | preset/renderer rows/模型下载位置选择/路径校验/typecheck，暂不接真实模型 |
-| Phase 6 | 模块化对话入口骨架（DUPLEX.ENTRY） | audio device types/耳机优先路由/电脑麦克风 fallback/renderer status rows/Mock audio session |
+| Phase 6 | 模块化对话入口骨架（DUPLEX.ENTRY） | audio device types/耳机优先路由/电脑麦克风 fallback/入口列表 view model/renderer status rows/Mock audio session |
 
 Phase 5 的边界：只补配置类型、推荐 preset、桌面端 view model、用户自选模型下载根目录、系统盘空间风险提示和验证清单；真实 BayLing/PersonaPlex 下载执行器、许可证处理、模型 server、健康检查属于后续实现。
 
 Phase 5 存储规则：模型文件体积很大，桌面端不得把 `AI_cursor_v2/app/models` 或 C 盘作为强制默认位置；首次下载真实模型前必须让用户选择下载根目录，并把 `MODEL_STORAGE_ROOT/ai-cursor-v2-models/<role>/<model>` 写入工作流绑定。若用户选择 Windows 系统盘，应提示空间风险但不强制阻止。
 
-Phase 6 的边界：只完成音频设备与对话入口抽象，不实现真实底层蓝牙协议栈。桌面端通过系统音频设备枚举识别蓝牙耳机、内置麦克风和扬声器；优先选择支持输入+输出的 Hands-Free/HFP/HSP 耳机，若只有 A2DP 输出或未检测到耳机，则允许“电脑麦克风 + 蓝牙耳机/系统扬声器输出”的组合。真实低延迟音频流、模型 server PCM/WebSocket 接入和平台级设备监听属于后续实现。
+Phase 6 的边界：只完成音频设备与对话入口抽象，不实现真实底层蓝牙协议栈。桌面端通过系统音频设备枚举识别蓝牙耳机、内置麦克风和扬声器；优先选择支持输入+输出的 Hands-Free/HFP/HSP 耳机，若只有 A2DP 输出或未检测到耳机，则允许“电脑麦克风 + 蓝牙耳机/系统扬声器输出”的组合。入口 UI 应提供“连接对话入口”列表、刷新、连接和手动选择能力。真实低延迟音频流、模型 server PCM/WebSocket 接入和平台级设备监听属于后续实现。
 
 ---
 
