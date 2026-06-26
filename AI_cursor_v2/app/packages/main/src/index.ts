@@ -4,6 +4,7 @@ export * from "./executors/mock-system.js";
 export * from "./executors/types.js";
 export * from "./model/mock-duplex-provider.js";
 export * from "./model/action-proposal-parser.js";
+export * from "./model/dual-role-config.js";
 export * from "./model/provider-registry.js";
 export * from "./safety/policy.js";
 export * from "./safety/audio-supervision.js";

@@ -1,5 +1,6 @@
 import type { DuplexModelEvent, DuplexModelInput, DuplexModelProvider, ProviderConfig } from "@ai-cursor-v2/shared";
 import { MockDuplexModelProvider } from "./mock-duplex-provider.js";
+import { executionBrainCatalog } from "./dual-role-config.js";
 
 export class StubDuplexModelProvider implements DuplexModelProvider {
   readonly kind: ProviderConfig["kind"];
@@ -30,22 +31,6 @@ export function createProvider(config: ProviderConfig): DuplexModelProvider {
   return new StubDuplexModelProvider(config);
 }
 
-export const recommendedLocalProviderConfigs: ProviderConfig[] = [
-  {
-    kind: "glm-4-voice",
-    endpoint: "http://127.0.0.1:10000",
-    device: "cuda"
-  },
-  {
-    kind: "bayling-duplex",
-    modelPath: "models/bayling_duplex_model",
-    speechTokenizerPath: "models/speech_tokenizer",
-    speechDecoderPath: "models/speech_decoder",
-    device: "cuda"
-  },
-  {
-    kind: "personaplex",
-    endpoint: "http://127.0.0.1:10001",
-    device: "cuda"
-  }
-];
+export const recommendedLocalProviderConfigs: ProviderConfig[] = executionBrainCatalog.filter(
+  (config) => config.kind !== "mock"
+);
