@@ -5,6 +5,7 @@ import { runAgentTurn } from "./agent-loop/loop.js";
 import { VirtualBrowserViewExecutor } from "./executors/browser-mvp.js";
 import { MockSystemExecutor } from "./executors/mock-system.js";
 import type { Executor } from "./executors/types.js";
+import { bindPresetToWorkflow } from "./model/dual-role-config.js";
 import { MockDuplexModelProvider } from "./model/mock-duplex-provider.js";
 import { JsonlSessionStorage } from "./session/jsonl-storage.js";
 
@@ -20,6 +21,7 @@ await rm(logPath, { force: true });
 
 const storage = new JsonlSessionStorage(logPath);
 const provider = new MockDuplexModelProvider();
+const modelBinding = bindPresetToWorkflow("developer-mock", "browser_mvp_demo");
 
 const searchResult = await runAgentTurn(session, "帮我搜索 AI Cursor 全双工语音监督", provider, executors, {
   storage,
@@ -35,6 +37,11 @@ console.log(
   JSON.stringify(
     {
       phase0: "workspace loaded",
+      modelConfig: {
+        executionBrain: modelBinding.executionBrain.kind,
+        recordEngine: modelBinding.recordEngine.kind,
+        safetyPreemptionLocked: modelBinding.safetyPreemption.locked
+      },
       phase1: {
         proposals: searchResult.proposals.length,
         actions: searchResult.action_results.length

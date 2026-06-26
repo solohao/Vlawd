@@ -2,13 +2,14 @@
 
 ---
 模块：02_MVP开发规划与阶段路线
-当前版本：v1.0
+当前版本：v1.1
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.1 | 2026-06-26 | 新增 MODEL.CONFIG 阶段分配，并补充 MVP 代码落地批次 Phase 0-5 |
 | v1.0 | 2026-06-23 | 初版：基于功能编号体系划分 MVP / Phase 2 / Phase 3 阶段 |
 
 ---
@@ -82,6 +83,7 @@
 | MODEL.DUPLEX | 全双工模型选型 | 选定一个主力模型 |
 | MODEL.RULE | 规则引擎 | 全量 |
 | MODEL.RECORD | 记录引擎模型 | 全量 |
+| MODEL.CONFIG | 双角色模型配置 | 基础：执行大脑/记录笔记本 preset + 安全抢占锁定，不含真实模型下载器 |
 | MODEL.HW | 硬件配置 | 8GB/16GB 两档 |
 | LEASE.CURSOR | CursorLease 调度器 | 仅系统光标排他调度 |
 | LEASE.RULES | 调度规则 | 仅系统光标 Rule 1-7 |
@@ -139,6 +141,21 @@
 | VALID.CREDITS | 积分制设计 | 全量（提前设计，MVP 阶段可先用免费层） |
 | VALID.RISK | 风险与规避 | 全量 |
 | VALID.CRITERIA | 继续标准 | 全量 |
+
+---
+
+## MVP 代码落地批次
+
+| 批次 | 目标 | 验证方式 |
+|------|------|----------|
+| Phase 0 | pnpm workspace、shared/main/renderer 骨架 | `npm run typecheck` |
+| Phase 1 | Mock 全双工 Provider → ActionProposal → Executor | 单元测试 + `npm run demo` |
+| Phase 2 | 安全抢占与确认状态机 | “停/暂停/取消”测试 + 等待确认测试 |
+| Phase 3 | Session JSONL 记录 | append/read 测试 + demo 日志 |
+| Phase 4 | 浏览器 MVP 虚拟执行器 | 搜索/表单/滚动模拟测试 |
+| Phase 5 | 双角色模型配置骨架（MODEL.CONFIG） | preset/renderer rows/typecheck，暂不接真实模型 |
+
+Phase 5 的边界：只补配置类型、推荐 preset、桌面端 view model 和验证清单；真实 BayLing/PersonaPlex 下载器、许可证处理、模型 server、健康检查属于后续实现。
 
 ---
 
