@@ -6,6 +6,11 @@ import { VirtualBrowserViewExecutor } from "./executors/browser-mvp.js";
 import { MockSystemExecutor } from "./executors/mock-system.js";
 import type { Executor } from "./executors/types.js";
 import {
+  createMockDuplexAudioSession,
+  mockAudioDevices,
+  selectConversationEndpoint
+} from "./audio/conversation-endpoint.js";
+import {
   bindPresetToWorkflow,
   defaultModelStorageConfig,
   validateModelStorageConfig
@@ -26,6 +31,11 @@ await rm(logPath, { force: true });
 const storage = new JsonlSessionStorage(logPath);
 const provider = new MockDuplexModelProvider();
 const modelBinding = bindPresetToWorkflow("developer-mock", "browser_mvp_demo");
+const conversationRoute = selectConversationEndpoint(
+  mockAudioDevices,
+  modelBinding.conversationEndpoint
+);
+const audioSessionEvents = createMockDuplexAudioSession(conversationRoute);
 
 const searchResult = await runAgentTurn(session, "帮我搜索 AI Cursor 全双工语音监督", provider, executors, {
   storage,
@@ -45,6 +55,9 @@ console.log(
         executionBrain: modelBinding.executionBrain.kind,
         recordEngine: modelBinding.recordEngine.kind,
         safetyPreemptionLocked: modelBinding.safetyPreemption.locked,
+        conversationInput: conversationRoute.config.input.label,
+        conversationOutput: conversationRoute.config.output.label,
+        audioSessionStates: audioSessionEvents.map((event) => event.state),
         downloadRoot: defaultModelStorageConfig.rootDir || "user-selected-required",
         downloadWarnings: validateModelStorageConfig(defaultModelStorageConfig)
       },

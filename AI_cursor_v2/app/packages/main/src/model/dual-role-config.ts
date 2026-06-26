@@ -1,4 +1,5 @@
 import type {
+  ConversationEndpointPreference,
   DesktopModelPreset,
   ModelDownloadArtifact,
   ModelStorageConfig,
@@ -21,6 +22,12 @@ export const defaultModelStorageConfig: ModelStorageConfig = {
   managedSubdir: "ai-cursor-v2-models",
   preferNonSystemDrive: true,
   source: "user-selected"
+};
+
+export const defaultConversationEndpointPreference: ConversationEndpointPreference = {
+  mode: "headset-preferred",
+  preferBluetoothHandsFree: true,
+  allowComputerMicFallback: true
 };
 
 export const executionBrainCatalog: ProviderConfig[] = [
@@ -123,7 +130,8 @@ export const desktopModelPresets: DesktopModelPreset[] = [
       executionBrain: executionBrainCatalog[0],
       recordEngine: recordEngineCatalog[0],
       safetyPreemption: defaultSafetyPreemptionConfig,
-      modelStorage: defaultModelStorageConfig
+      modelStorage: defaultModelStorageConfig,
+      conversationEndpoint: defaultConversationEndpointPreference
     }
   },
   {
@@ -136,7 +144,8 @@ export const desktopModelPresets: DesktopModelPreset[] = [
       executionBrain: executionBrainCatalog[1],
       recordEngine: recordEngineCatalog[1],
       safetyPreemption: defaultSafetyPreemptionConfig,
-      modelStorage: defaultModelStorageConfig
+      modelStorage: defaultModelStorageConfig,
+      conversationEndpoint: defaultConversationEndpointPreference
     }
   },
   {
@@ -149,7 +158,8 @@ export const desktopModelPresets: DesktopModelPreset[] = [
       executionBrain: executionBrainCatalog[3],
       recordEngine: recordEngineCatalog[0],
       safetyPreemption: defaultSafetyPreemptionConfig,
-      modelStorage: defaultModelStorageConfig
+      modelStorage: defaultModelStorageConfig,
+      conversationEndpoint: defaultConversationEndpointPreference
     }
   }
 ];
@@ -170,6 +180,7 @@ export function bindPresetToWorkflow(
     recordEngine: { ...preset.binding.recordEngine },
     safetyPreemption: preset.binding.safetyPreemption,
     modelStorage: modelStorage ?? preset.binding.modelStorage,
+    conversationEndpoint: preset.binding.conversationEndpoint,
     workflow_id: workflowId
   };
 

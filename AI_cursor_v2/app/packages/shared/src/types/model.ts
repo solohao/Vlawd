@@ -1,4 +1,5 @@
 import type { ActionProposal } from "./action.js";
+import type { ConversationEndpointPreference } from "./audio.js";
 
 export type DuplexModelKind = "mock" | "glm-4-voice" | "bayling-duplex" | "personaplex" | "moshi" | "cloud-planner";
 export type RecordEngineKind = "rule-jsonl" | "local-lightweight" | "cloud-assisted";
@@ -86,6 +87,7 @@ export interface WorkflowModelBinding {
   recordEngine: RecordEngineConfig;
   safetyPreemption: SafetyPreemptionConfig;
   modelStorage?: ModelStorageConfig;
+  conversationEndpoint?: ConversationEndpointPreference;
 }
 
 export interface DesktopModelPreset {
