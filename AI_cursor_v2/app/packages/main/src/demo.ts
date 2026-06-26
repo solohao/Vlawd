@@ -2,6 +2,11 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createSession } from "@ai-cursor-v2/shared";
 import { runAgentTurn } from "./agent-loop/loop.js";
+import {
+  createMockDuplexAudioSession,
+  mockAudioDevices,
+  selectConversationEndpoint
+} from "./audio/conversation-endpoint.js";
 import { VirtualBrowserViewExecutor } from "./executors/browser-mvp.js";
 import { MockSystemExecutor } from "./executors/mock-system.js";
 import type { Executor } from "./executors/types.js";
@@ -26,12 +31,17 @@ await rm(logPath, { force: true });
 const storage = new JsonlSessionStorage(logPath);
 const provider = new MockDuplexModelProvider();
 const modelBinding = bindPresetToWorkflow("developer-mock", "browser_mvp_demo");
+const conversationRoute = selectConversationEndpoint(
+  mockAudioDevices,
+  modelBinding.conversationEndpoint
+);
+const audioSessionEvents = createMockDuplexAudioSession(conversationRoute);
 
-const searchResult = await runAgentTurn(session, "帮我搜索 AI Cursor 全双工语音监督", provider, executors, {
+const searchResult = await runAgentTurn(session, "search AI Cursor duplex voice supervision", provider, executors, {
   storage,
   autoConfirm: true
 });
-const pausedResult = await runAgentTurn(searchResult.session, "停，先别继续", provider, executors, {
+const pausedResult = await runAgentTurn(searchResult.session, "stop before continuing", provider, executors, {
   storage,
   autoConfirm: true
 });
@@ -45,6 +55,17 @@ console.log(
         executionBrain: modelBinding.executionBrain.kind,
         recordEngine: modelBinding.recordEngine.kind,
         safetyPreemptionLocked: modelBinding.safetyPreemption.locked,
+        availableConversationEntries: mockAudioDevices
+          .filter((device) => device.available)
+          .map((device) => ({
+            id: device.id,
+            label: device.label,
+            directions: device.directions,
+            bluetoothProfile: device.bluetoothProfile ?? "not-bluetooth"
+          })),
+        conversationInput: conversationRoute.config.input.label,
+        conversationOutput: conversationRoute.config.output.label,
+        audioSessionStates: audioSessionEvents.map((event) => event.state),
         downloadRoot: defaultModelStorageConfig.rootDir || "user-selected-required",
         downloadWarnings: validateModelStorageConfig(defaultModelStorageConfig)
       },
