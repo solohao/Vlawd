@@ -5,7 +5,11 @@ import { runAgentTurn } from "./agent-loop/loop.js";
 import { VirtualBrowserViewExecutor } from "./executors/browser-mvp.js";
 import { MockSystemExecutor } from "./executors/mock-system.js";
 import type { Executor } from "./executors/types.js";
-import { bindPresetToWorkflow } from "./model/dual-role-config.js";
+import {
+  bindPresetToWorkflow,
+  defaultModelStorageConfig,
+  validateModelStorageConfig
+} from "./model/dual-role-config.js";
 import { MockDuplexModelProvider } from "./model/mock-duplex-provider.js";
 import { JsonlSessionStorage } from "./session/jsonl-storage.js";
 
@@ -40,7 +44,9 @@ console.log(
       modelConfig: {
         executionBrain: modelBinding.executionBrain.kind,
         recordEngine: modelBinding.recordEngine.kind,
-        safetyPreemptionLocked: modelBinding.safetyPreemption.locked
+        safetyPreemptionLocked: modelBinding.safetyPreemption.locked,
+        downloadRoot: defaultModelStorageConfig.rootDir || "user-selected-required",
+        downloadWarnings: validateModelStorageConfig(defaultModelStorageConfig)
       },
       phase1: {
         proposals: searchResult.proposals.length,

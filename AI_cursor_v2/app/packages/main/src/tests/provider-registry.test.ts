@@ -5,8 +5,10 @@ import { MockSystemExecutor } from "../executors/mock-system.js";
 import {
   assertSafetyPreemptionLocked,
   bindPresetToWorkflow,
+  defaultModelStorageConfig,
   desktopModelPresets,
-  recordEngineCatalog
+  recordEngineCatalog,
+  validateModelStorageConfig
 } from "../model/dual-role-config.js";
 import { createProvider, recommendedLocalProviderConfigs } from "../model/provider-registry.js";
 
@@ -50,5 +52,31 @@ describe("duplex model providers", () => {
       "cloud-assisted"
     ]);
     expect(() => assertSafetyPreemptionLocked(binding)).not.toThrow();
+  });
+
+  it("resolves downloadable model artifacts under a user-selected storage root", () => {
+    const binding = bindPresetToWorkflow("zh-real-time-supervision", "job_search", {
+      ...defaultModelStorageConfig,
+      rootDir: "D:/ai-models"
+    });
+
+    const storage = binding.modelStorage;
+    if (!storage) {
+      throw new Error("Expected model storage to be attached to the workflow binding.");
+    }
+    expect(storage.rootDir).toBe("D:/ai-models");
+    expect(binding.executionBrain.modelPath).toContain("ai-cursor-v2-models");
+    expect(binding.executionBrain.modelPath).toContain("bayling-duplex");
+    expect(binding.executionBrain.speechTokenizerPath).toContain("glm-4-voice-tokenizer");
+    expect(validateModelStorageConfig(storage)).toEqual([]);
+  });
+
+  it("warns when real model downloads would use the Windows system drive", () => {
+    expect(
+      validateModelStorageConfig({
+        ...defaultModelStorageConfig,
+        rootDir: "C:/Users/Administrator/models"
+      })
+    ).toContain("C: drive is selected; choose another drive when system disk space is limited.");
   });
 });
