@@ -2,13 +2,14 @@
 
 ---
 模块：02_MVP开发规划与阶段路线
-当前版本：v1.1
+当前版本：v1.2
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.2 | 2026-06-26 | 补充 Phase 5 模型下载位置自选要求：真实模型不得默认占用系统盘，下载根目录、路径校验和工作流绑定进入配置骨架 |
 | v1.1 | 2026-06-26 | 新增 MODEL.CONFIG 阶段分配，并补充 MVP 代码落地批次 Phase 0-5 |
 | v1.0 | 2026-06-23 | 初版：基于功能编号体系划分 MVP / Phase 2 / Phase 3 阶段 |
 
@@ -83,7 +84,7 @@
 | MODEL.DUPLEX | 全双工模型选型 | 选定一个主力模型 |
 | MODEL.RULE | 规则引擎 | 全量 |
 | MODEL.RECORD | 记录引擎模型 | 全量 |
-| MODEL.CONFIG | 双角色模型配置 | 基础：执行大脑/记录笔记本 preset + 安全抢占锁定，不含真实模型下载器 |
+| MODEL.CONFIG | 双角色模型配置 | 基础：执行大脑/记录笔记本 preset + 安全抢占锁定 + 模型下载根目录自选与系统盘提示，不含真实下载执行器 |
 | MODEL.HW | 硬件配置 | 8GB/16GB 两档 |
 | LEASE.CURSOR | CursorLease 调度器 | 仅系统光标排他调度 |
 | LEASE.RULES | 调度规则 | 仅系统光标 Rule 1-7 |
@@ -153,9 +154,11 @@
 | Phase 2 | 安全抢占与确认状态机 | “停/暂停/取消”测试 + 等待确认测试 |
 | Phase 3 | Session JSONL 记录 | append/read 测试 + demo 日志 |
 | Phase 4 | 浏览器 MVP 虚拟执行器 | 搜索/表单/滚动模拟测试 |
-| Phase 5 | 双角色模型配置骨架（MODEL.CONFIG） | preset/renderer rows/typecheck，暂不接真实模型 |
+| Phase 5 | 双角色模型配置骨架（MODEL.CONFIG） | preset/renderer rows/模型下载位置选择/路径校验/typecheck，暂不接真实模型 |
 
-Phase 5 的边界：只补配置类型、推荐 preset、桌面端 view model 和验证清单；真实 BayLing/PersonaPlex 下载器、许可证处理、模型 server、健康检查属于后续实现。
+Phase 5 的边界：只补配置类型、推荐 preset、桌面端 view model、用户自选模型下载根目录、系统盘空间风险提示和验证清单；真实 BayLing/PersonaPlex 下载执行器、许可证处理、模型 server、健康检查属于后续实现。
+
+Phase 5 存储规则：模型文件体积很大，桌面端不得把 `AI_cursor_v2/app/models` 或 C 盘作为强制默认位置；首次下载真实模型前必须让用户选择下载根目录，并把 `MODEL_STORAGE_ROOT/ai-cursor-v2-models/<role>/<model>` 写入工作流绑定。若用户选择 Windows 系统盘，应提示空间风险但不强制阻止。
 
 ---
 

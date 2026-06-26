@@ -3,6 +3,8 @@ import type { ActionProposal } from "./action.js";
 export type DuplexModelKind = "mock" | "glm-4-voice" | "bayling-duplex" | "personaplex" | "moshi" | "cloud-planner";
 export type RecordEngineKind = "rule-jsonl" | "local-lightweight" | "cloud-assisted";
 export type ModelRole = "duplex_execution_brain" | "session_record_engine" | "safety_preemption";
+export type ModelArtifactSource = "huggingface" | "modelscope" | "local";
+export type ModelArtifactTarget = "modelPath" | "speechTokenizerPath" | "speechDecoderPath";
 export type ModelRuntimeState = "listening" | "speaking" | "thinking" | "acting" | "waiting_confirm" | "paused" | "interrupted" | "complete";
 
 export interface DuplexModelInput {
@@ -43,6 +45,7 @@ export interface ProviderConfig {
   speechTokenizerPath?: string;
   speechDecoderPath?: string;
   device?: "cpu" | "cuda" | "metal";
+  downloads?: ModelDownloadArtifact[];
 }
 
 export interface RecordEngineConfig {
@@ -52,6 +55,22 @@ export interface RecordEngineConfig {
   device?: "cpu" | "cuda" | "metal";
   storage: "jsonl" | "sqlite";
   enableWorkflowMining: boolean;
+  downloads?: ModelDownloadArtifact[];
+}
+
+export interface ModelDownloadArtifact {
+  source: ModelArtifactSource;
+  repo: string;
+  target: ModelArtifactTarget;
+  localSubdir: string;
+  requiresLicenseAcceptance?: boolean;
+}
+
+export interface ModelStorageConfig {
+  rootDir: string;
+  managedSubdir: string;
+  preferNonSystemDrive: boolean;
+  source: "user-selected" | "environment" | "default";
 }
 
 export interface SafetyPreemptionConfig {
@@ -66,6 +85,7 @@ export interface WorkflowModelBinding {
   executionBrain: ProviderConfig;
   recordEngine: RecordEngineConfig;
   safetyPreemption: SafetyPreemptionConfig;
+  modelStorage?: ModelStorageConfig;
 }
 
 export interface DesktopModelPreset {
