@@ -1,0 +1,22 @@
+{
+  "name": "ai-cursor-v2-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "demo": "tsx packages/main/src/demo.ts",
+    "verify": "npm run typecheck && npm test && npm run demo"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.20.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

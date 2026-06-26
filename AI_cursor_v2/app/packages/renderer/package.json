@@ -1,0 +1,14 @@
+{
+  "name": "@ai-cursor-v2/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/packages/renderer/src/index.js",
+  "types": "dist/packages/renderer/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ai-cursor-v2/shared": "file:../shared"
+  }
+}
