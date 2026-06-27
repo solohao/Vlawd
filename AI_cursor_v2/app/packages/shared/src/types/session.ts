@@ -3,6 +3,15 @@ import type { ModelRuntimeState } from "./model.js";
 
 export type SessionStatus = "active" | "paused" | "completed" | "interrupted" | "failed";
 export type SessionChunkType = "user" | "model" | "proposal" | "action_result" | "safety" | "state";
+export type SessionGraphNodeType =
+  | "user_instruction"
+  | "ai_plan"
+  | "action"
+  | "confirmation"
+  | "correction"
+  | "result"
+  | "merge";
+export type SessionGraphNodeStatus = "completed" | "active" | "waiting_confirmation" | "cancelled" | "merged";
 
 export interface SessionChunk {
   id: string;
@@ -11,6 +20,28 @@ export interface SessionChunk {
   created_at: string;
   summary: string;
   payload: Record<string, unknown>;
+}
+
+export interface SessionGraphNode {
+  id: string;
+  label: string;
+  type: SessionGraphNodeType;
+  status: SessionGraphNodeStatus;
+  chunk_id?: string;
+  branch_id: string;
+}
+
+export interface SessionGraphEdge {
+  from: string;
+  to: string;
+  relation: "next" | "fork" | "merge";
+}
+
+export interface SessionGraphSnapshot {
+  session_id: string;
+  current_node_id: string;
+  nodes: SessionGraphNode[];
+  edges: SessionGraphEdge[];
 }
 
 export interface SessionRun {
