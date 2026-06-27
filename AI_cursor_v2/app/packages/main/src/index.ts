@@ -10,3 +10,4 @@ export * from "./safety/policy.js";
 export * from "./safety/audio-supervision.js";
 export * from "./safety/preemption.js";
 export * from "./session/jsonl-storage.js";
+export * from "./desktop/mock-desktop-runtime.js";
