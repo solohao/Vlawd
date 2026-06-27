@@ -8,9 +8,10 @@
   ],
   "scripts": {
     "build": "tsc -b",
+    "dev": "npm run demo",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
-    "demo": "tsx packages/main/src/demo.ts",
+    "demo": "npm run build && tsx packages/main/src/demo.ts",
     "verify": "npm run typecheck && npm test && npm run demo"
   },
   "devDependencies": {
