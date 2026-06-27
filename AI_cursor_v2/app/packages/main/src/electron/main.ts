@@ -9,9 +9,13 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(currentDir, "../../../../../..");
 const runtime = new MockDesktopRuntime();
 const userDataDir = join(appRoot, ".electron-user-data");
+const cacheDir = join(userDataDir, "Cache");
 
 mkdirSync(userDataDir, { recursive: true });
+mkdirSync(cacheDir, { recursive: true });
 app.setPath("userData", userDataDir);
+app.commandLine.appendSwitch("disk-cache-dir", cacheDir);
+app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
 
 function preloadPath(): string {
   return join(currentDir, "preload.js");

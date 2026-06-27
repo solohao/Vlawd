@@ -29,7 +29,7 @@ export class MockDesktopRuntime {
   private session: SessionRun = appendChunk(createSession("desktop_mock_session"), {
     id: "chunk-user-plan",
     type: "user",
-    summary: "整理 Q2 市场调研与出差计划",
+    summary: "启动 AI Cursor 桌面工作流",
     payload: { source: "runtime_mock" }
   });
 
@@ -40,7 +40,7 @@ export class MockDesktopRuntime {
       provider: "BayLing-Duplex",
       status: "not_selected",
       progress: 0,
-      message: "选择模型下载目录后可开始准备执行大脑"
+      message: "选择模型存储位置后可准备执行大脑"
     },
     {
       role: "session_record_engine",
@@ -107,13 +107,13 @@ export class MockDesktopRuntime {
         message: this.connectedAudio ? "耳机/电脑麦克风对话入口已连接" : "等待连接对话入口"
       },
       browser: {
-        url: "browser-view://q2-market-plan",
-        title: "Q2 市场调研与出差计划",
+        url: "runtime-preview://desktop-overlay",
+        title: "Runtime 悬浮窗交互预览",
         nextAction: {
-          actionType: "form.fill",
-          targetLabel: "预算预估 / 北京调研",
-          value: "8,500",
-          reason: "依据行程天数 × 城市预算标准补齐草稿表格",
+          actionType: "runtime.action",
+          targetLabel: "目标按钮 / 当前应用",
+          value: "示例输入",
+          reason: "根据用户指令在外部应用中执行下一步可监督动作",
           riskLevel: "safe",
           countdownSeconds: 3
         }
@@ -190,7 +190,7 @@ export class MockDesktopRuntime {
 
   executeRuntimeAction(): DesktopUiSnapshot {
     this.runtimeState = "acting";
-    this.appendState("填写预算预估单元格：8,500");
+    this.appendState("执行 Runtime 悬浮窗示例动作");
     return this.getSnapshot();
   }
 
@@ -222,39 +222,39 @@ export class MockDesktopRuntime {
   private createGraph(): SessionGraphSnapshot {
     return {
       session_id: this.session.id,
-      current_node_id: "fill-budget",
+      current_node_id: "current-action",
       nodes: [
         {
           id: "user-plan",
-          label: "用户指令：整理 Q2 调研计划",
+          label: "用户指令：启动桌面 AI 工作流",
           type: "user_instruction",
           status: "completed",
           branch_id: "main"
         },
         {
           id: "ai-plan",
-          label: "AI 计划：补齐城市/预算/日程",
+          label: "AI 计划：理解目标并规划步骤",
           type: "ai_plan",
           status: "completed",
           branch_id: "main"
         },
         {
-          id: "budget-correction",
-          label: "用户纠正：预算标准调整",
+          id: "strategy-correction",
+          label: "用户纠正：调整执行策略",
           type: "correction",
           status: "merged",
-          branch_id: "correction-budget"
+          branch_id: "correction-strategy"
         },
         {
           id: "merge-budget",
-          label: "合并：预算规则更新完成",
+          label: "合并：策略更新完成",
           type: "merge",
           status: "merged",
           branch_id: "main"
         },
         {
-          id: "fill-budget",
-          label: "当前：填写预算预估",
+          id: "current-action",
+          label: "当前：等待执行下一步动作",
           type: "action",
           status: this.runtimeState === "paused" ? "waiting_confirmation" : "active",
           branch_id: "main"
@@ -262,9 +262,9 @@ export class MockDesktopRuntime {
       ],
       edges: [
         { from: "user-plan", to: "ai-plan", relation: "next" },
-        { from: "ai-plan", to: "budget-correction", relation: "fork" },
-        { from: "budget-correction", to: "merge-budget", relation: "merge" },
-        { from: "merge-budget", to: "fill-budget", relation: "next" }
+        { from: "ai-plan", to: "strategy-correction", relation: "fork" },
+        { from: "strategy-correction", to: "merge-budget", relation: "merge" },
+        { from: "merge-budget", to: "current-action", relation: "next" }
       ]
     };
   }

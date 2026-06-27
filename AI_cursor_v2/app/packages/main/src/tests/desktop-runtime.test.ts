@@ -8,8 +8,8 @@ describe("MockDesktopRuntime", () => {
 
     expect(snapshot.modelDownloads).toHaveLength(3);
     expect(snapshot.audio.devices.length).toBeGreaterThan(0);
-    expect(snapshot.browser.nextAction.targetLabel).toContain("预算");
-    expect(snapshot.graph.current_node_id).toBe("fill-budget");
+    expect(snapshot.browser.nextAction.targetLabel).toContain("当前应用");
+    expect(snapshot.graph.current_node_id).toBe("current-action");
   });
 
   it("tracks model storage, download, health, audio, and runtime actions", () => {
@@ -29,6 +29,6 @@ describe("MockDesktopRuntime", () => {
 
     const acting = runtime.executeRuntimeAction();
     expect(acting.runtimeState).toBe("acting");
-    expect(acting.session.chunks.some((chunk) => chunk.summary.includes("填写预算"))).toBe(true);
+    expect(acting.session.chunks.some((chunk) => chunk.summary.includes("Runtime 悬浮窗"))).toBe(true);
   });
 });
