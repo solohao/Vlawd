@@ -2,13 +2,14 @@
 
 ---
 模块：02_MVP开发规划与阶段路线
-当前版本：v1.3
+当前版本：v1.4
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.4 | 2026-06-27 | 战略再校准（详见 变更记录/v2.9_战略再校准）：新增 MODEL.PROBE 阶段归属（MVP，挂在 Phase 5 配置骨架）；MODEL.HW 裁剪说明按 8GB 现实调整 |
 | v1.3 | 2026-06-26 | 新增 Phase 6 对话入口骨架：蓝牙耳机 Hands-Free 优先、电脑麦克风 fallback、Mock 音频会话与测试 |
 | v1.2 | 2026-06-26 | 补充 Phase 5 模型下载位置自选要求：真实模型不得默认占用系统盘，下载根目录、路径校验和工作流绑定进入配置骨架 |
 | v1.1 | 2026-06-26 | 新增 MODEL.CONFIG 阶段分配，并补充 MVP 代码落地批次 Phase 0-5 |
@@ -87,7 +88,8 @@
 | MODEL.RECORD | 记录引擎模型 | 全量 |
 | MODEL.CONFIG | 双角色模型配置 | 基础：执行大脑/记录笔记本 preset + 安全抢占锁定 + 模型下载根目录自选与系统盘提示，不含真实下载执行器 |
 | DUPLEX.ENTRY | 模块化对话入口 | 基础：耳机优先检测、电脑麦克风 fallback、Mock duplex audio session，不直接绑定底层蓝牙协议 |
-| MODEL.HW | 硬件配置 | 8GB/16GB 两档 |
+| MODEL.HW | 硬件配置 | 8GB（入门/笔记本 4060，v0 用 3B 小模型）/16GB 两档，24GB 与低配办公本档延后 |
+| MODEL.PROBE | 环境自检与配置推荐 | 基础：探测 GPU/显存/内存/磁盘 → 推荐预设，NVIDIA 优先精确支持，其余保守降级；与 Phase 5 配置骨架衔接，不含真实下载执行 |
 | LEASE.CURSOR | CursorLease 调度器 | 仅系统光标排他调度 |
 | LEASE.RULES | 调度规则 | 仅系统光标 Rule 1-7 |
 | LEASE.TASK | Task Card | 基础：单任务为主 |
@@ -160,6 +162,8 @@
 | Phase 6 | 模块化对话入口骨架（DUPLEX.ENTRY） | audio device types/耳机优先路由/电脑麦克风 fallback/入口列表 view model/renderer status rows/Mock audio session |
 
 Phase 5 的边界：只补配置类型、推荐 preset、桌面端 view model、用户自选模型下载根目录、系统盘空间风险提示和验证清单；真实 BayLing/PersonaPlex 下载执行器、许可证处理、模型 server、健康检查属于后续实现。
+
+MODEL.PROBE 的边界：作为 Phase 5 配置骨架的“环境自检 → 推荐预设”一步，放在模型下载之前。初版用 nvidia-smi/系统 API 探测 GPU 型号与显存（Windows 避开 Win32_VideoController.AdapterRAM 的 32 位截断）、内存、磁盘空间，映射到分层 preset；允许用户手动覆盖。跨厂商（AMD/Intel/Apple）精确探测、量化质量评估属于后续实现。
 
 Phase 5 存储规则：模型文件体积很大，桌面端不得把 `AI_cursor_v2/app/models` 或 C 盘作为强制默认位置；首次下载真实模型前必须让用户选择下载根目录，并把 `MODEL_STORAGE_ROOT/ai-cursor-v2-models/<role>/<model>` 写入工作流绑定。若用户选择 Windows 系统盘，应提示空间风险但不强制阻止。
 
