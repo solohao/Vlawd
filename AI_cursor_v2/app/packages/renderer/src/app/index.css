@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* ============================================================
+   AI Cursor V2 — design tokens (extracted 1:1 from concept art)
+   ============================================================ */
+@theme {
+  --color-brand-50: #f5fbe3;
+  --color-brand-100: #eaf7c0;
+  --color-brand-200: #d8ef8c;
+  --color-brand-300: #c4e652;
+  --color-brand-400: #b4e01a;
+  --color-brand-500: #a3d100;
+  --color-brand-600: #84ab00;
+  --color-brand-700: #657f12;
+
+  /* dark surface ramp (home / runtime overlay) */
+  --color-ink-950: #0a0d0b;
+  --color-ink-900: #0e1210;
+  --color-ink-850: #141916;
+  --color-ink-800: #1a201c;
+  --color-ink-700: #232a25;
+  --color-ink-600: #2e372f;
+
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* slim scrollbars to match the desktop-app feel */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(140, 160, 140, 0.25);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes ai-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scaleY(0.55);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ai-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes ai-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
