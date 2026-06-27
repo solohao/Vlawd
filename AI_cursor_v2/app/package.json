@@ -8,16 +8,20 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "dev": "npm run demo",
+    "build:renderer": "vite build",
+    "dev": "tsx scripts/dev.ts",
+    "dev:smoke": "tsx scripts/dev.ts --smoke",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "demo": "npm run build && tsx packages/main/src/demo.ts",
-    "verify": "npm run typecheck && npm test && npm run demo"
+    "verify": "npm run typecheck && npm test && npm run demo && npm run build:renderer"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
+    "electron": "^39.8.5",
     "tsx": "^4.20.4",
     "typescript": "^6.0.3",
+    "vite": "^8.0.16",
     "vitest": "^4.1.9"
   }
 }
