@@ -1,30 +1,53 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { mkdirSync } from "node:fs";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen } from "electron";
+import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import type { ModelRole } from "@ai-cursor-v2/shared";
 import { MockDesktopRuntime } from "../desktop/mock-desktop-runtime.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
-const appRoot = resolve(currentDir, "../../../../../..");
+// currentDir = <app>/packages/main/dist/packages/main/src/electron → up 7 = <app>
+const appRoot = resolve(currentDir, "../../../../../../..");
 const runtime = new MockDesktopRuntime();
 const userDataDir = join(appRoot, ".electron-user-data");
 
 mkdirSync(userDataDir, { recursive: true });
 app.setPath("userData", userDataDir);
 
+const OVERLAY_MARGIN = 24;
+const OVERLAY_DEFAULT = { width: 208, height: 84 };
+
+let mainWindow: BrowserWindow | null = null;
+let overlayWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
+
 function preloadPath(): string {
   return join(currentDir, "preload.js");
 }
 
-async function createWindow(): Promise<BrowserWindow> {
+async function loadView(window: BrowserWindow, view: "main" | "runtime"): Promise<void> {
+  const devUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devUrl) {
+    const base = devUrl.endsWith("/") ? devUrl : `${devUrl}/`;
+    await window.loadURL(`${base}#/${view}`);
+  } else {
+    await window.loadFile(join(appRoot, "dist/renderer/index.html"), { hash: `/${view}` });
+  }
+}
+
+function createMainWindow(): BrowserWindow {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return mainWindow;
+  }
   const window = new BrowserWindow({
     width: 1440,
     height: 960,
     minWidth: 1180,
     minHeight: 760,
     title: "AI Cursor V2",
-    backgroundColor: "#eef3eb",
+    backgroundColor: "#0e1210",
+    show: false,
     webPreferences: {
       preload: preloadPath(),
       contextIsolation: true,
@@ -33,20 +56,113 @@ async function createWindow(): Promise<BrowserWindow> {
     }
   });
 
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
-    await window.loadURL(devUrl);
-  } else {
-    await window.loadFile(join(appRoot, "dist/renderer/index.html"));
-  }
+  void loadView(window, "main");
 
-  if (process.env.AI_CURSOR_DEV_SMOKE === "1") {
-    setTimeout(() => {
-      window.close();
-    }, 1500);
-  }
+  window.on("close", (event) => {
+    // Closing the main window only hides it — the app keeps running as the
+    // floating overlay (its primary working form). Quit happens via the tray.
+    if (!isQuitting) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+  window.on("closed", () => {
+    mainWindow = null;
+  });
 
+  mainWindow = window;
   return window;
+}
+
+function positionOverlayTopRight(window: BrowserWindow): void {
+  const { workArea } = screen.getPrimaryDisplay();
+  const [width, height] = window.getSize();
+  window.setPosition(
+    workArea.x + workArea.width - width - OVERLAY_MARGIN,
+    workArea.y + OVERLAY_MARGIN
+  );
+}
+
+function createOverlayWindow(): BrowserWindow {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    return overlayWindow;
+  }
+  const window = new BrowserWindow({
+    width: OVERLAY_DEFAULT.width,
+    height: OVERLAY_DEFAULT.height,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    fullscreenable: false,
+    minimizable: false,
+    maximizable: false,
+    hasShadow: false,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: preloadPath(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  });
+
+  window.setAlwaysOnTop(true, "screen-saver");
+  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  void loadView(window, "runtime");
+  window.once("ready-to-show", () => positionOverlayTopRight(window));
+  window.on("closed", () => {
+    overlayWindow = null;
+  });
+
+  overlayWindow = window;
+  return window;
+}
+
+function createTray(): void {
+  let image = nativeImage.createEmpty();
+  const iconPath = join(appRoot, "packages/renderer/assets/ai-employee-avatar-compact.png");
+  if (existsSync(iconPath)) {
+    const loaded = nativeImage.createFromPath(iconPath);
+    if (!loaded.isEmpty()) {
+      image = loaded.resize({ width: 18, height: 18 });
+    }
+  }
+  tray = new Tray(image);
+  tray.setToolTip("AI Cursor V2");
+  const showMain = (): void => {
+    const window = createMainWindow();
+    window.show();
+    window.focus();
+  };
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "打开主界面", click: showMain },
+      { label: "隐藏主界面", click: () => mainWindow?.hide() },
+      {
+        label: "显示 / 隐藏悬浮窗",
+        click: () => {
+          const window = createOverlayWindow();
+          if (window.isVisible()) {
+            window.hide();
+          } else {
+            window.show();
+          }
+        }
+      },
+      { type: "separator" },
+      {
+        label: "退出 AI Cursor",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        }
+      }
+    ])
+  );
+  tray.on("click", showMain);
 }
 
 ipcMain.handle("desktop:getSnapshot", () => runtime.getSnapshot());
@@ -69,14 +185,70 @@ ipcMain.handle("desktop:pauseSession", () => runtime.pauseSession());
 ipcMain.handle("desktop:cancelSession", () => runtime.cancelSession());
 ipcMain.handle("desktop:executeRuntimeAction", () => runtime.executeRuntimeAction());
 
-app.whenReady().then(async () => {
-  await createWindow();
+ipcMain.handle("window:openMain", () => {
+  const window = createMainWindow();
+  window.show();
+  window.focus();
+});
+
+ipcMain.handle("window:hideMain", () => {
+  mainWindow?.hide();
+});
+
+ipcMain.handle("overlay:resize", (_event, size: { width: number; height: number }) => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return;
+  }
+  const bounds = overlayWindow.getBounds();
+  const width = Math.max(80, Math.round(size.width));
+  const height = Math.max(48, Math.round(size.height));
+  // keep the window anchored by its right edge so it grows toward the screen interior
+  overlayWindow.setBounds({ x: bounds.x + bounds.width - width, y: bounds.y, width, height });
+});
+
+ipcMain.handle("app:quit", () => {
+  isQuitting = true;
+  app.quit();
+});
+
+function executionBrainReady(): boolean {
+  const brain = runtime.getSnapshot().modelDownloads.find((d) => d.role === "duplex_execution_brain");
+  return brain?.status === "downloaded" || brain?.status === "healthy";
+}
+
+app.whenReady().then(() => {
+  createTray();
+  createMainWindow();
+  createOverlayWindow();
+
+  // First run: if the execution brain isn't downloaded yet, surface the main
+  // window so the user can pick & download a model in the Model Center.
+  if (!executionBrainReady()) {
+    const window = createMainWindow();
+    window.show();
+    window.focus();
+  }
+
+  if (process.env.AI_CURSOR_DEV_SMOKE === "1") {
+    createMainWindow().show();
+    setTimeout(() => {
+      isQuitting = true;
+      app.quit();
+    }, 1500);
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      void createWindow();
+      createMainWindow();
+      createOverlayWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
+  tray?.destroy();
+  tray = null;
 });
 
 app.on("window-all-closed", () => {

@@ -25,15 +25,32 @@ function Waveform({ side }: { side: "left" | "right" }) {
 interface VoiceControllerProps {
   runtimeState?: ModelRuntimeState;
   device?: string;
+  draggable?: boolean;
+  onCollapse?: () => void;
+  onOpenSettings?: () => void;
+  onPause?: () => void;
+  onCancel?: () => void;
+  onTakeover?: () => void;
 }
 
-export function VoiceController({ runtimeState = "listening", device = "Bose QC Ultra" }: VoiceControllerProps) {
+export function VoiceController({
+  runtimeState = "listening",
+  device = "Bose QC Ultra",
+  draggable = false,
+  onCollapse,
+  onOpenSettings,
+  onPause,
+  onCancel,
+  onTakeover
+}: VoiceControllerProps) {
   const token = runtimeStateToken(runtimeState);
+  const headerDrag = draggable ? "drag" : "";
+  const noDrag = draggable ? "no-drag" : "";
   return (
     <div className="w-[392px] select-none">
       <div className="rounded-2xl border border-ink-700 bg-ink-900/95 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        {/* header */}
-        <div className="mb-3 flex items-center justify-between">
+        {/* header (drag handle) */}
+        <div className={`mb-3 flex items-center justify-between ${headerDrag}`}>
           <div className="flex items-center gap-2">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-400">
               <span className="h-2 w-2 rounded-full bg-ink-900" />
@@ -41,7 +58,11 @@ export function VoiceController({ runtimeState = "listening", device = "Bose QC 
             <span className="text-[13px] font-semibold text-white">AI Cursor</span>
             <span className="rounded bg-brand-400/20 px-1.5 py-0.5 text-[9px] font-bold text-brand-400">V2</span>
           </div>
-          <button className="text-slate-500 hover:text-slate-300">
+          <button
+            onClick={onCollapse}
+            className={`${noDrag} text-slate-500 hover:text-slate-300`}
+            aria-label="collapse"
+          >
             <CloseIcon width={16} height={16} />
           </button>
         </div>
@@ -53,7 +74,11 @@ export function VoiceController({ runtimeState = "listening", device = "Bose QC 
           <span className="text-[18px] font-medium text-white">{token.label}…</span>
           <div className="ml-auto flex items-center gap-3">
             <Waveform side="right" />
-            <button className="text-slate-500 hover:text-slate-300">
+            <button
+              onClick={onOpenSettings}
+              className={`${noDrag} text-slate-500 hover:text-slate-300`}
+              aria-label="open settings"
+            >
               <GearIcon width={16} height={16} />
             </button>
           </div>
@@ -73,13 +98,22 @@ export function VoiceController({ runtimeState = "listening", device = "Bose QC 
 
         {/* controls */}
         <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2">
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-ink-700 py-2.5 text-[13px] font-medium text-slate-200 hover:bg-ink-600">
+          <button
+            onClick={onPause}
+            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-ink-700 py-2.5 text-[13px] font-medium text-slate-200 hover:bg-ink-600`}
+          >
             <PauseIcon /> 暂停
           </button>
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-ink-700 py-2.5 text-[13px] font-medium text-rose-300 hover:bg-ink-600">
+          <button
+            onClick={onCancel}
+            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-ink-700 py-2.5 text-[13px] font-medium text-rose-300 hover:bg-ink-600`}
+          >
             <CloseIcon width={15} height={15} /> 取消
           </button>
-          <button className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-400 px-4 py-2.5 text-[13px] font-semibold text-ink-900 hover:bg-brand-300">
+          <button
+            onClick={onTakeover}
+            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-brand-400 px-4 py-2.5 text-[13px] font-semibold text-ink-900 hover:bg-brand-300`}
+          >
             <HandIcon /> 接管
             <ChevronDown width={14} height={14} />
           </button>

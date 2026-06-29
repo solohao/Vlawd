@@ -1,5 +1,10 @@
 import type { DesktopUiSnapshot, ModelRole } from "@ai-cursor-v2/shared";
 
+export interface OverlaySize {
+  width: number;
+  height: number;
+}
+
 export interface AiCursorDesktopApi {
   getSnapshot(): Promise<DesktopUiSnapshot>;
   chooseModelStorageRoot(): Promise<DesktopUiSnapshot>;
@@ -9,6 +14,10 @@ export interface AiCursorDesktopApi {
   pauseSession(): Promise<DesktopUiSnapshot>;
   cancelSession(): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
+  openMainWindow(): Promise<void>;
+  hideMainWindow(): Promise<void>;
+  resizeOverlay(size: OverlaySize): Promise<void>;
+  quitApp(): Promise<void>;
 }
 
 declare global {

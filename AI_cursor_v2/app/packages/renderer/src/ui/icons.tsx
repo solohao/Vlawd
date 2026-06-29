@@ -253,3 +253,15 @@ export const SparkIcon = (p: IconProps) => (
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" />
   </svg>
 );
+
+export const ExpandIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <path d="M9 4H5a1 1 0 0 0-1 1v4M15 4h4a1 1 0 0 1 1 1v4M9 20H5a1 1 0 0 1-1-1v-4M15 20h4a1 1 0 0 0 1-1v-4" />
+  </svg>
+);
+
+export const MinimizeIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <path d="M5 12h14" />
+  </svg>
+);

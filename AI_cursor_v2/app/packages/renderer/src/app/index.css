@@ -41,6 +41,21 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* runtime overlay window renders transparent so it floats over other apps */
+html[data-view="runtime"],
+html[data-view="runtime"] body,
+html[data-view="runtime"] #root {
+  background: transparent !important;
+}
+
+/* frameless-window drag handles */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* slim scrollbars to match the desktop-app feel */
 *::-webkit-scrollbar {
   width: 8px;
