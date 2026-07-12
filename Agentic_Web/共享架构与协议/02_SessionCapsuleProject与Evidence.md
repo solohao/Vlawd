@@ -1,19 +1,22 @@
 # 02 · Session、Capsule、Project 与 Evidence
 
 ---
-模块：技术文档/02_SessionCapsuleProject与Evidence
-当前版本：v1.0
+模块：共享架构与协议/02_SessionCapsuleProject与Evidence
+当前版本：v1.1
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.1 | 2026-07-12 | 明确本文只定义跨项目语义；Vlawd Session 实现由 `AI_cursor_v2` 管理 |
 | v1.0 | 2026-07-12 | 定义四类核心对象、转换关系、最小字段和协议边界 |
 
 ---
 
 ## 核心对象关系
+
+本文件定义跨项目交换时的最小语义。Vlawd 内部 Session 的 Chunk、Record Engine、Memory、fork / merge 和持久化实现仍以 `AI_cursor_v2/技术文档/06_Session上下文工程.md` 为准。
 
 ```text
 Session
@@ -370,4 +373,4 @@ Capsule v0.1 只能从真实摩擦中提取：
 
 ## 一句话总结
 
-**Session 保存事实，Evidence 支撑判断，Capsule 迁移能力，Living Project 组织长期演化；V3 的协议价值来自四者之间清晰且可验证的转换。**
+**Session 保存事实，Evidence 支撑判断，Capsule 迁移能力，Living Project 组织长期演化；Agentic Web 项目群的协议价值来自四者之间清晰且可验证的转换。**

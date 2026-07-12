@@ -1,21 +1,24 @@
 # 01 · Agentic Web 分层架构
 
 ---
-模块：技术文档/01_AgenticWeb分层架构
-当前版本：v1.0
+模块：共享架构与协议/01_AgenticWeb分层架构
+当前版本：v1.1
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.1 | 2026-07-12 | 改为跨项目共享架构，不再承担 Vlawd 产品实现设计 |
 | v1.0 | 2026-07-12 | 建立 L0-L7 分层、三平面模型和跨层控制面 |
 
 ---
 
 ## 架构目标
 
-V3 需要同时避免两种错误：
+本文件描述跨项目层级和接口，不是 Vlawd 系统总体架构的替代版本。Vlawd Runtime 的包边界、Provider、调度器和执行器仍以 `AI_cursor_v2/技术文档/01_系统总体架构.md` 为准。
+
+Agentic Web 项目群需要同时避免两种错误：
 
 1. 把所有能力塞进 Vlawd 单体应用；
 2. 在没有真实使用前拆出大量协议、平台和服务。
@@ -197,13 +200,13 @@ Runtime 可以是 Vlawd、Coding Agent 或其他兼容客户端。
 
 负责需求发布、能力发现、任务委托、组队、竞标和结果回传。
 
-V3 不自行设计通用涌现式协调协议。优先复用 A2A、HTTP、队列或未来成熟标准。
+Agentic Web 项目群不自行设计通用涌现式协调协议。优先复用 A2A、HTTP、队列或未来成熟标准。
 
 ### Artifact Plane
 
 负责 Session、Evidence、Capsule、Project、版本和 Lineage。
 
-V3 当前最独特、最值得自定义的是 Artifact Plane。
+Agentic Web 项目群当前最独特、最值得自定义的是 Artifact Plane。
 
 ```text
 用户目标
@@ -296,4 +299,4 @@ ProjectEventStore
 
 ## 一句话总结
 
-**V3 以 Runtime 产生真实 Session，以 Capsule 形成协议窄腰，以 Registry 分发能力，以 Post is Project 组织持续协作；垂直项目提供证据，客户端只负责不同视图。**
+**Agentic Web 项目群以 Runtime 产生真实 Session，以 Capsule 形成协议窄腰，以 Registry 分发能力，以 Post is Project 组织持续协作；垂直项目提供证据，客户端只负责不同视图。**

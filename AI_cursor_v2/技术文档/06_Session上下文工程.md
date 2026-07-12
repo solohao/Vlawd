@@ -2,13 +2,14 @@
 
 ---
 模块：技术文档/06_Session上下文工程
-当前版本：v2.0
+当前版本：v2.1
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.1 | 2026-07-12 | 新增本地 Session Evidence、Execution Summary、恢复锚点和第二天继续流程；明确 Session Graph 不等于 Agentic Web 的 Living Project |
 | v2.0 | 2026-06-17 | 新增模块：Session Graph 数据结构、记录引擎设计、任务面板三视图 |
 
 ---
@@ -69,7 +70,13 @@ Session
 │   ├─ fork_reason: string              # fork 原因（纠正/分叉/新任务）
 │   └─ merged_into: session_id | null   # 合并到哪个 Session
 ├─ memory_refs: [ memory_id, ... ]      # 关联的长期记忆
-├─ status: active | paused | completed | cancelled
+├─ status: pending | active | waiting_confirmation | paused | failed | completed | cancelled
+├─ recovery:                            # 可恢复锚点
+│   ├─ last_safe_chunk
+│   ├─ current_goal
+│   ├─ unresolved_questions
+│   └─ required_revalidation
+├─ execution_summary: summary_id | null
 └─ usage: { duration, action_count }    # 资源消耗
 ```
 
@@ -195,7 +202,7 @@ main_session = main_session.merge(completed_branch, result="后天27度多云")
 - 响应查询（"昨天搜过什么？"）
 - 判断哪些信息值得存入长期 Memory
 
-这些任务对 3B 模型绑绑有余，甚至部分用规则引擎就能做：
+这些任务对 3B 模型绰绰有余，甚至部分用规则引擎就能做：
 
 ```text
 chunk 生成 → 规则引擎（模板化记录）
@@ -325,6 +332,94 @@ Memory 查询：
 执行器 → 记录引擎：执行结果写入 Session
 Safety Policy → 记录引擎：安全决策留痕
 ```
+
+---
+
+## Session Evidence 与 Execution Summary（SESSION.EVID）
+
+V2 不把所有日志直接称为 Evidence。Evidence 是能够支持或反驳某个任务结论的可核验片段。
+
+```text
+Session：
+  完整事实日志
+
+Evidence：
+  从 Session 中选出的来源、动作结果、截图、错误或用户确认
+
+Execution Summary：
+  面向用户和恢复流程的任务摘要
+```
+
+最小 Execution Summary：
+
+```text
+goal
+status
+conclusions
+source_refs
+evidence_refs
+user_corrections
+failed_attempts
+unresolved_questions
+next_recommended_step
+environment
+model_and_provider
+duration_and_cost
+```
+
+生成规则：
+
+- 结论必须能够追溯到一个或多个 `source_ref` / `result` chunk；
+- 用户纠正和失败不得从摘要中静默删除；
+- 未验证推断与已验证事实分开；
+- 高风险动作记录提议、确认、执行结果和确认人；
+- 摘要可以重新生成，原始 Session chunk 不可被摘要覆盖。
+
+---
+
+## Session 延续与第二天继续（SESSION.RESUME）
+
+任务暂停、失败或未完成时，记录引擎保存恢复锚点：
+
+```text
+当前目标
+已完成步骤
+最近安全状态
+当前 Workspace / URL / 文件
+用户最后一次纠正
+未解决问题
+下次继续前必须重新验证的环境
+```
+
+重新打开流程：
+
+```text
+用户打开昨日 Session
+→ 展示目标、结论、来源、未解决问题
+→ 用户选择继续当前分支或创建新分支
+→ Runtime 重新观察页面和权限状态
+→ 对过期登录、页面变化和外部数据重新验证
+→ 从最近安全锚点生成下一步
+→ 新动作继续写入同一 lineage
+```
+
+恢复不是盲目重放旧动作。任何依赖外部页面、账号、时间或权限的步骤都必须先重新观察。
+
+---
+
+## 与 Agentic Web 共享对象的边界
+
+V2 Session 是 Vlawd 内部的运行时事实记录；它不是公开网络项目，也不直接等于 Capsule。
+
+```text
+Vlawd v2：
+  Session / Chunk / Evidence / Execution Summary
+
+未来跨项目层：
+  Capsule / Living Project / Registry
+```
+
+只有当至少两个真实垂直项目需要交换同类对象时，才由 `Agentic_Web/共享架构与协议/` 抽取跨 Runtime 契约。V2 当前只保证本地记录可追溯、可恢复、可导出，不提前实现完整网络协议。
 
 ---
 
