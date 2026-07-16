@@ -1,0 +1,247 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-07-16",
+  "principles": [
+    "界面图只用于设计沟通，不应被裁切为产品素材",
+    "简单几何图标优先 SVG/currentColor",
+    "栅格插画保留独立文件和明确主题",
+    "高风险状态必须同时使用颜色、图标和文字"
+  ],
+  "items": [
+    {
+      "name": "logo-ai-cursor-mark",
+      "path": "品牌/logo-ai-cursor-mark.svg",
+      "format": "svg",
+      "theme": "theme-free",
+      "role": "AI Cursor 品牌主标"
+    },
+    {
+      "name": "logo-agentic-web-mark",
+      "path": "品牌/logo-agentic-web-mark.svg",
+      "format": "svg",
+      "theme": "theme-free",
+      "role": "Agentic Web 项目网络标记"
+    },
+    {
+      "name": "icon-home",
+      "path": "图标/icon-home.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-workflow",
+      "path": "图标/icon-workflow.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-session",
+      "path": "图标/icon-session.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-graph",
+      "path": "图标/icon-graph.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-model",
+      "path": "图标/icon-model.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-device",
+      "path": "图标/icon-device.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-settings",
+      "path": "图标/icon-settings.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-shield",
+      "path": "图标/icon-shield.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-brain",
+      "path": "图标/icon-brain.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-notebook",
+      "path": "图标/icon-notebook.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-mic",
+      "path": "图标/icon-mic.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-pause",
+      "path": "图标/icon-pause.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-stop",
+      "path": "图标/icon-stop.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-hand",
+      "path": "图标/icon-hand.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-search",
+      "path": "图标/icon-search.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-project",
+      "path": "图标/icon-project.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-evidence",
+      "path": "图标/icon-evidence.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-run",
+      "path": "图标/icon-run.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-capsule",
+      "path": "图标/icon-capsule.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-forum",
+      "path": "图标/icon-forum.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-inbox",
+      "path": "图标/icon-inbox.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-lock",
+      "path": "图标/icon-lock.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-check",
+      "path": "图标/icon-check.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "icon-plus",
+      "path": "图标/icon-plus.svg",
+      "format": "svg",
+      "theme": "currentColor",
+      "role": "24px 线性界面图标"
+    },
+    {
+      "name": "bg-runtime-grid-dark",
+      "path": "背景/bg-runtime-grid-dark.svg",
+      "format": "svg",
+      "theme": "dark",
+      "role": "Runtime 与 Canvas 深色网格背景"
+    },
+    {
+      "name": "bg-project-network-light",
+      "path": "背景/bg-project-network-light.svg",
+      "format": "svg",
+      "theme": "light",
+      "role": "Project 与空态浅色点阵背景"
+    },
+    {
+      "name": "voice-waveform-listening",
+      "path": "背景/voice-waveform-listening.svg",
+      "format": "svg",
+      "theme": "theme-free",
+      "role": "静态 Listening 波形；动画由 CSS 实现"
+    },
+    {
+      "name": "agentic-project-network-dark",
+      "path": "插画/agentic-project-network-dark.png",
+      "format": "png",
+      "size": "1536x1024",
+      "theme": "dark",
+      "role": "Agentic Web Living Project Network 主视觉"
+    },
+    {
+      "name": "living-project-network-light",
+      "path": "插画/living-project-network-light.png",
+      "format": "png",
+      "size": "1536x1024",
+      "theme": "light",
+      "role": "Project、Explore 与空态主视觉"
+    },
+    {
+      "name": "safe-supervised-execution-dark",
+      "path": "插画/safe-supervised-execution-dark.png",
+      "format": "png",
+      "size": "1536x1024",
+      "theme": "dark",
+      "role": "安全监督、权限与接管说明"
+    },
+    {
+      "name": "conversation-entry-devices-dark",
+      "path": "插画/conversation-entry-devices-dark.png",
+      "format": "png",
+      "size": "1536x1024",
+      "theme": "dark",
+      "role": "对话入口与音频设备说明"
+    }
+  ]
+}

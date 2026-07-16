@@ -1,0 +1,89 @@
+{
+  "version": "1.0.0",
+  "color": {
+    "brand": {
+      "50": "#F5FBE3",
+      "100": "#EAF7C0",
+      "200": "#D8EF8C",
+      "300": "#C4E652",
+      "400": "#B8E51B",
+      "500": "#9FD000",
+      "600": "#84AB00",
+      "700": "#657F12"
+    },
+    "ink": {
+      "600": "#344038",
+      "700": "#252D27",
+      "800": "#1A201C",
+      "850": "#141916",
+      "900": "#0E1210",
+      "950": "#090D0B"
+    },
+    "paper": {
+      "canvas": "#F4F6F2",
+      "surface": "#FFFFFF",
+      "elevated": "#F7F9F6"
+    },
+    "semantic": {
+      "success": "#9FD000",
+      "warning": "#F3B83F",
+      "danger": "#F05F62",
+      "info": "#4C8DFF",
+      "experimental": "#9272F8"
+    }
+  },
+  "typography": {
+    "family": [
+      "Inter",
+      "PingFang SC",
+      "Microsoft YaHei",
+      "Segoe UI",
+      "sans-serif"
+    ],
+    "pageTitle": {
+      "size": 28,
+      "weight": 750,
+      "lineHeight": 1.25
+    },
+    "sectionTitle": {
+      "size": 16,
+      "weight": 700,
+      "lineHeight": 1.35
+    },
+    "body": {
+      "size": 13,
+      "weight": 450,
+      "lineHeight": 1.55
+    },
+    "label": {
+      "size": 11,
+      "weight": 600,
+      "lineHeight": 1.35
+    }
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64
+  ],
+  "radius": {
+    "control": 12,
+    "card": 18,
+    "panel": 22,
+    "modal": 24,
+    "capsule": 32
+  },
+  "motion": {
+    "fast": 120,
+    "standard": 180,
+    "slow": 320,
+    "reducedMotion": "no-looping-animation"
+  }
+}
