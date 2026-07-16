@@ -2,13 +2,14 @@
 
 ---
 模块：共享架构与协议/01_AgenticWeb分层架构
-当前版本：v1.1
+当前版本：v1.2
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.2 | 2026-07-16 | 增加可执行验证环境的跨层定位，明确 Post is Project、Runtime、Environment Broker 和 Evaluator 边界 |
 | v1.1 | 2026-07-12 | 改为跨项目共享架构，不再承担 Vlawd 产品实现设计 |
 | v1.0 | 2026-07-12 | 建立 L0-L7 分层、三平面模型和跨层控制面 |
 
@@ -55,10 +56,10 @@ L2 Session / Evidence
     目标、动作、纠正、结果、环境、失败和成本
 
 L1 Agent Runtime
-    Vlawd Runtime、Coding Agent、浏览器执行器、云端 Agent
+    Vlawd Runtime、Coding Agent、Deployment Runner、浏览器执行器、云端 Agent
 
 L0 基础设施
-    模型、GPU、云 API、OS、浏览器、音频和工具
+    模型、GPU、云 API、OS、浏览器、音频、容器、microVM 和工具
 ```
 
 贯穿所有层的控制面：
@@ -85,7 +86,8 @@ Cost
 - 操作系统与设备 API；
 - 浏览器、DOM、Accessibility Tree；
 - 音频设备与传输；
-- 文件、数据库和对象存储。
+- 文件、数据库和对象存储；
+- 容器、microVM、CI Runner 和云端隔离执行后端。
 
 上层不能把具体模型厂商写入核心对象语义。
 
@@ -99,9 +101,29 @@ Cost
 - 执行动作；
 - 管理任务状态；
 - 本地抢占与安全；
+- 在受控环境中配置、构建、启动和验证项目；
+- 申请、创建和回收短生命周期执行环境；
 - 生成 Session 和 Execution Report。
 
 Runtime 可以是 Vlawd、Coding Agent 或其他兼容客户端。
+
+### 可执行验证环境（ARCH.SANDBOX）
+
+可执行验证环境是跨 L0 和 L1 的逻辑能力，不是新的产品层：
+
+```text
+Repository Inspector
+→ Execution Plan
+→ Policy & Approval Gate
+→ Environment Broker
+→ Agent Runner
+→ Independent Evaluator
+→ Evidence Collector
+```
+
+它默认使用干净、隔离、短生命周期的环境。Post is Project 只保存执行意图、语义事件、报告和稳定发布，不直接持有组织级云凭据，也不负责底层 VM 生命周期。
+
+详细对象、Profile、安全规则和阶段门见 `03_可执行项目与部署验证.md`。
 
 ### L2 Session / Evidence（ARCH.EVIDENCE）
 
@@ -158,6 +180,8 @@ Runtime 可以是 Vlawd、Coding Agent 或其他兼容客户端。
 - 维护者权限；
 - 冲突和争议保留；
 - 稳定版本和实验分支；
+- validation、release、promotion 和 rollback 事件；
+- Execution Report 与环境兼容性投影；
 - 社区治理。
 
 ### L6 垂直项目（ARCH.VERTICAL）
@@ -165,6 +189,7 @@ Runtime 可以是 Vlawd、Coding Agent 或其他兼容客户端。
 提供具体领域语义：
 
 - Module Spec 的模块约束和测试；
+- 不同 Project 类型的 Execution Profile 和 Evaluator；
 - 高校论坛的问题、证据和课程来源；
 - 服务 Capsule 的价格、地区和退款；
 - 研究项目的假设、实验和反例。
@@ -194,7 +219,7 @@ Runtime 可以是 Vlawd、Coding Agent 或其他兼容客户端。
 
 ### Runtime Plane
 
-真正执行任务，包括 Vlawd、Coding Agent、浏览器执行器和模型服务。
+真正执行任务，包括 Vlawd、Coding Agent、Deployment Runner、浏览器执行器和模型服务。
 
 ### Coordination Plane
 
@@ -270,7 +295,10 @@ L0 Infra 可被 L1 替换，不向上定义产品语义
 - UI 私有状态成为唯一事实源；
 - Capsule 携带未声明权限的隐藏执行；
 - 模型输出绕过 Safety；
-- 平台热度覆盖真实运行 Evidence。
+- 平台热度覆盖真实运行 Evidence；
+- Post is Project 直接持有组织级云管理员凭据；
+- 把永久 VM 作为每个 Project 的默认资源；
+- 由执行 Agent 的自然语言自评作为唯一成功依据。
 
 ---
 
@@ -285,6 +313,8 @@ ArtifactExporter
 Evaluator
 PermissionChecker
 ProjectEventStore
+EnvironmentBroker
+DeploymentRunner
 ```
 
 只有满足以下任一条件才拆分独立服务：
