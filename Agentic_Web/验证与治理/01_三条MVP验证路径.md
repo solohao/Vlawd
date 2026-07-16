@@ -2,13 +2,14 @@
 
 ---
 模块：验证与治理/01_三条MVP验证路径
-当前版本：v1.1
+当前版本：v1.2
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.2 | 2026-07-16 | 为 Module Spec 增加真实部署 Conformance 扩展及其进入、停止和对照规则 |
 | v1.1 | 2026-07-12 | 改为跨项目路径选择文档；Vlawd 具体 Dogfood 验收回归 V2 |
 | v1.0 | 2026-07-12 | 定义 Vlawd、Module Spec、高校论坛三条验证路径及选择规则 |
 
@@ -111,12 +112,42 @@ Treatment：
 
 在至少三个不同上下文生成实现。
 
+### 部署 Conformance 扩展（VALID.DEPLOY）
+
+只有普通 Conformance Tests 已证明 Treatment 优于 Baseline，且所选模块具有真实运行语义后，才增加部署验证：
+
+```text
+精确 Project Revision
+→ 干净短生命周期 Sandbox
+→ Agent 构建、启动和修复
+→ 独立 Evaluator 执行 Health / Golden Test
+→ Execution Report / Evidence
+→ 失败分类
+→ Project Patch 或 Module Spec Patch
+→ 在 Holdout Project 回放
+```
+
+首次扩展只允许：
+
+- 三个低风险、无生产 Secret 的项目；
+- 一个隔离执行后端；
+- Prototype Profile；
+- 默认无公网和持久存储；
+- 30–60 分钟自动销毁；
+- 优先使用仓库已有 Dockerfile、Compose、Buildpacks 或 CI 配置。
+
+该扩展不是第四条并行产品路径，也不要求为每个 Project 创建永久 VM。
+
 ### 指标
 
 - 首次测试通过率；
 - 人工修改次数；
 - 安全和边界缺陷数；
 - 跨技术栈适配率；
+- 首次干净环境构建和启动成功率；
+- 重复部署成功率和环境不兼容率；
+- 部署耗时、资源、Token 和人工确认成本；
+- 未声明权限、Secret 和网络需求数；
 - 规范更新后多个案例是否同时改善；
 - 失败能否转化为通用规则或测试。
 
@@ -125,6 +156,8 @@ Treatment：
 - Treatment 稳定优于 Baseline；
 - 规范不是为单个测试硬编码；
 - 新 Evidence 能推动新版本；
+- 独立 Evaluator 能在精确 Revision 和环境上复现结果；
+- 至少一个 `spec_gap` Patch 能改善两个项目；
 - 其他 Agent 无额外解释即可使用。
 
 ### 停止或缩小信号
@@ -133,6 +166,9 @@ Treatment：
 - 维护成本高于重复生成成本；
 - 改进只对一个项目有效；
 - 自动测试无法表达真正质量；
+- Sandbox 平台开发成本高于实验收益；
+- 大多数部署失败只来自单个项目或外部服务；
+- 规范只能通过项目特例提高部署成功率；
 - 普通文档或库已经足够。
 
 ---
