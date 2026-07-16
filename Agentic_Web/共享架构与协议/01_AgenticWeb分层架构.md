@@ -2,13 +2,14 @@
 
 ---
 模块：共享架构与协议/01_AgenticWeb分层架构
-当前版本：v1.2
+当前版本：v1.3
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.3 | 2026-07-16 | 增加 Environment Interaction Adapter 跨 L0-L2 定位、能力路由和状态验证边界 |
 | v1.2 | 2026-07-16 | 增加可执行验证环境的跨层定位，明确 Post is Project、Runtime、Environment Broker 和 Evaluator 边界 |
 | v1.1 | 2026-07-12 | 改为跨项目共享架构，不再承担 Vlawd 产品实现设计 |
 | v1.0 | 2026-07-12 | 建立 L0-L7 分层、三平面模型和跨层控制面 |
@@ -84,7 +85,7 @@ Cost
 - 本地或云端模型；
 - GPU 和推理服务；
 - 操作系统与设备 API；
-- 浏览器、DOM、Accessibility Tree；
+- 浏览器、DOM、Accessibility Tree、UI Automation；
 - 音频设备与传输；
 - 文件、数据库和对象存储；
 - 容器、microVM、CI Runner 和云端隔离执行后端。
@@ -99,6 +100,7 @@ Cost
 - 感知环境；
 - 规划和调用工具；
 - 执行动作；
+- 在 API、CDP、Accessibility、视觉和原始输入之间选择最小权限执行路径；
 - 管理任务状态；
 - 本地抢占与安全；
 - 在受控环境中配置、构建、启动和验证项目；
@@ -125,6 +127,29 @@ Repository Inspector
 
 详细对象、Profile、安全规则和阶段门见 `03_可执行项目与部署验证.md`。
 
+### 可验证环境交互（ARCH.INTERACTION）
+
+可验证环境交互是跨 L0、L1 和 L2 的逻辑能力：
+
+```text
+L0 OS / Browser Primitives
+→ L1 Interaction Adapter
+→ L1 State / Resource / Action Verification
+→ L2 Session / Evidence
+```
+
+它必须保持以下边界：
+
+- 应用 API、MCP、CLI 和 CDP 优先于桌面坐标输入；
+- 每次观察生成状态作用域引用，旧状态不得静默复用；
+- 动作结果区分 `worked / didnt / unknown`；
+- postcondition 区分 `verified / preexisting / failed`；
+- 用户输入、暂停和接管独立于模型；
+- 目标 Executor 不存在时拒绝，不得 fallback；
+- 外部 Computer Use 项目是参考和基准，不拥有 Runtime 生命周期。
+
+详细契约、平台差异和验证路径见 `04_可验证环境交互与ComputerUse.md`；Vlawd 实现细节见 `AI_cursor_v2/技术文档/02_观察动作执行与留痕.md` 和 `05_任务工作区与光标调度.md`。
+
 ### L2 Session / Evidence（ARCH.EVIDENCE）
 
 负责保存真实发生的事实：
@@ -132,6 +157,7 @@ Repository Inspector
 - 用户原始目标；
 - 输入和约束；
 - 动作与工具调用；
+- 观察状态、资源 epoch、后继状态和 postcondition；
 - 用户纠正；
 - 环境和版本；
 - 成功、失败和取消；
@@ -299,6 +325,9 @@ L0 Infra 可被 L1 替换，不向上定义产品语义
 - Post is Project 直接持有组织级云管理员凭据；
 - 把永久 VM 作为每个 Project 的默认资源；
 - 由执行 Agent 的自然语言自评作为唯一成功依据。
+- 在已有结构化接口时默认使用高权限屏幕操作；
+- 将事件送达或点击无报错直接视为业务成功；
+- 由外部 Computer Use 扩展绕过 Runtime 的 Safety、Session 或用户接管。
 
 ---
 
@@ -315,6 +344,9 @@ PermissionChecker
 ProjectEventStore
 EnvironmentBroker
 DeploymentRunner
+EnvironmentInteractionAdapter
+ObservationStateStore
+PostconditionVerifier
 ```
 
 只有满足以下任一条件才拆分独立服务：

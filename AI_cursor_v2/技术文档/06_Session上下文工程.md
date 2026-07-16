@@ -2,13 +2,14 @@
 
 ---
 模块：技术文档/06_Session上下文工程
-当前版本：v2.1
+当前版本：v2.2
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.2 | 2026-07-16 | 补充环境交互 Evidence：Observation State、资源 epoch、后继状态、postcondition 和不确定结果 |
 | v2.1 | 2026-07-12 | 新增本地 Session Evidence、Execution Summary、恢复锚点和第二天继续流程；明确 Session Graph 不等于 Agentic Web 的 Living Project |
 | v2.0 | 2026-06-17 | 新增模块：Session Graph 数据结构、记录引擎设计、任务面板三视图 |
 
@@ -97,7 +98,13 @@ Session
   "metadata": {
     "confidence": 0.95,
     "screenshot_ref": "screen_001",
-    "element_ref": "element_3"
+    "element_ref": "element_3",
+    "observation_state_id": "state_001",
+    "resource_ref": "browser_page:target_A",
+    "resource_epoch": 7,
+    "successor_state_id": "state_002",
+    "outcome": "worked",
+    "verification": "verified"
   }
 }
 ```
@@ -374,6 +381,27 @@ duration_and_cost
 - 未验证推断与已验证事实分开；
 - 高风险动作记录提议、确认、执行结果和确认人；
 - 摘要可以重新生成，原始 Session chunk 不可被摘要覆盖。
+
+环境交互 Evidence 的最小关联：
+
+```text
+ActionProposal
+→ observation_state_id
+→ resource_ref + resource_epoch
+→ 用户确认或 Safety 决策
+→ 已执行步骤和 stopped_at
+→ successor_state_id
+→ postcondition verification
+→ diff / screenshot / structured result
+```
+
+记录原则：
+
+- `worked / didnt / unknown` 不压缩成单一布尔值；
+- `verified / preexisting / failed` 必须保留，避免把动作前已存在的状态算作成功；
+- 事件送达、API 返回 200 或输入注入无报错不能单独成为业务 Evidence；
+- 用户接管、焦点变化、旧状态拒绝和降级路径属于事实，不得从摘要隐藏；
+- Screenshot、UI Tree 和剪贴板按敏感等级与 TTL 保存，Evidence 优先引用最小结构化片段。
 
 ---
 
