@@ -26,13 +26,13 @@ export interface AuditLegend {
 }
 
 export const dashboardData = {
-  userName: "Lin",
-  greeting: "下午好，Lin",
-  subtitle: "AI Cursor · 你的桌面 AI 员工，随时待命，按指令执行任务。",
-  readiness: "AI 员工已就绪",
-  endpoint: { device: "Bose QC Ultra", state: "已连接" },
+  userName: "Jacob",
+  greeting: "下午好，Jacob",
+  subtitle: "AI Cursor · 统一界面原型，真实 Runtime 状态接入后将在这里投影。",
+  readiness: "UI Demo · 未连接 Runtime",
+  endpoint: { device: "选择对话设备", state: "尚未连接" },
   mode: { name: "受监督执行模式", hint: "AI 将在监督下执行任务" },
-  capsuleCaption: "理解目标 · 规划步骤 · 执行操作",
+  capsuleCaption: "界面演示 · 不代表真实执行",
   steps: [
     { label: "理解目标", state: "done" },
     { label: "规划步骤", state: "current" },
@@ -97,8 +97,8 @@ export const dashboardData = {
   statusCards: {
     safety: {
       title: "Safety Engine",
-      state: "运行中",
-      heading: "本地安全防护已激活",
+      state: "Demo",
+      heading: "等待 Runtime 接入",
       items: [
         { label: "风险检测", value: "已启用" },
         { label: "敏感数据保护", value: "已启用" },
@@ -107,7 +107,7 @@ export const dashboardData = {
     },
     brain: {
       title: "Execution Brain",
-      state: "就绪",
+      state: "未连接",
       rows: [
         { label: "模型", value: "Claude 3.5 Sonnet" },
         { label: "上下文窗口", value: "200K" }
@@ -115,7 +115,7 @@ export const dashboardData = {
     },
     notebook: {
       title: "Record Notebook",
-      state: "同步中",
+      state: "未连接",
       rows: [
         { label: "存储位置", value: "本地加密存储" },
         { label: "记录状态", value: "正常" }
@@ -259,10 +259,11 @@ export const modelCenterData = {
 };
 
 export const navItems = [
-  { id: "dashboard", label: "首页 / 工作台", icon: "home" },
-  { id: "workflows", label: "工作流", icon: "workflow" },
-  { id: "sessions", label: "Session 记录", icon: "list" },
-  { id: "knowledge", label: "知识库", icon: "grid" },
-  { id: "integrations", label: "集成中心", icon: "nodes" },
-  { id: "settings", label: "设置", icon: "settings" }
+  { id: "dashboard", label: "工作台", icon: "home", badge: null },
+  { id: "task", label: "任务空间", icon: "monitor", badge: "Demo" },
+  { id: "workflows", label: "工作流", icon: "workflow", badge: null },
+  { id: "sessions", label: "Session 记录", icon: "list", badge: null },
+  { id: "models", label: "模型中心", icon: "nodes", badge: null },
+  { id: "devices", label: "设备", icon: "headphones", badge: null },
+  { id: "settings", label: "设置", icon: "settings", badge: null }
 ] as const;

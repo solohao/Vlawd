@@ -40,7 +40,13 @@ function Pill({ children }: { children: ReactNode }) {
   );
 }
 
-export function DashboardPage() {
+interface DashboardPageProps {
+  onStartTask: () => void;
+  onOpenSessions: () => void;
+  onOpenModels: () => void;
+}
+
+export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: DashboardPageProps) {
   const d = dashboardData;
   return (
     <div className="flex gap-6 px-8 py-7">
@@ -54,7 +60,9 @@ export function DashboardPage() {
             </h1>
             <p className="mt-1.5 text-[13.5px] text-slate-400">{d.subtitle}</p>
           </div>
-          <Pill>{d.readiness}</Pill>
+          <button onClick={onOpenModels}>
+            <Pill>{d.readiness}</Pill>
+          </button>
         </header>
 
         {/* execution capsule */}
@@ -174,6 +182,7 @@ export function DashboardPage() {
             return (
               <button
                 key={q.title}
+                onClick={q.title === "开始新任务" ? onStartTask : undefined}
                 className={`${card} flex items-center gap-3 p-3.5 text-left transition-colors hover:border-brand-400/50`}
               >
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-400/15 text-brand-400">
@@ -193,7 +202,10 @@ export function DashboardPage() {
           {d.sessions.map((s) => (
             <SessionItem key={s.id} session={s} />
           ))}
-          <button className="flex w-full items-center justify-center gap-1.5 py-3.5 text-[13px] font-medium text-brand-300 hover:text-brand-200">
+          <button
+            onClick={onOpenSessions}
+            className="flex w-full items-center justify-center gap-1.5 py-3.5 text-[13px] font-medium text-brand-300 hover:text-brand-200"
+          >
             查看全部 Session <ArrowRight width={15} height={15} />
           </button>
         </section>
