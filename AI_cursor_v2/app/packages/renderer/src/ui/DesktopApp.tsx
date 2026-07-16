@@ -1,31 +1,68 @@
 import { useState } from "react";
 import { Sidebar } from "./Sidebar.js";
 import { MinimizeIcon } from "./icons.js";
+import { ConversationEntryPage } from "./pages/ConversationEntryPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
+import { DevicesPage } from "./pages/DevicesPage.js";
 import { ModelCenterPage } from "./pages/ModelCenterPage.js";
+import { SessionsPage } from "./pages/SessionsPage.js";
+import { SettingsPage } from "./pages/SettingsPage.js";
+import { TaskWorkspacePage } from "./pages/TaskWorkspacePage.js";
+import { WorkflowsPage } from "./pages/WorkflowsPage.js";
 
-type Page = "dashboard" | "model_center";
+export type DesktopPage =
+  | "dashboard"
+  | "conversation"
+  | "task"
+  | "sessions"
+  | "workflows"
+  | "models"
+  | "devices"
+  | "settings";
+
+const pageThemes: Record<DesktopPage, "dark" | "light"> = {
+  dashboard: "dark",
+  conversation: "dark",
+  task: "dark",
+  sessions: "light",
+  workflows: "light",
+  models: "light",
+  devices: "light",
+  settings: "light"
+};
 
 export function DesktopApp() {
-  const [page, setPage] = useState<Page>("dashboard");
+  const [page, setPage] = useState<DesktopPage>("dashboard");
 
-  const theme = page === "dashboard" ? "dark" : "light";
-  const activeNav = page === "dashboard" ? "dashboard" : "settings";
-
-  const navigate = (id: string) => {
-    if (id === "settings") setPage("model_center");
-    else setPage("dashboard");
-  };
+  const theme = pageThemes[page];
 
   const minimizeToOverlay = () => {
     window.aiCursorDesktop?.hideMainWindow();
   };
 
   return (
-    <div className={`flex h-screen w-screen overflow-hidden ${theme === "dark" ? "bg-ink-900" : "bg-[#f4f6f2]"}`}>
-      <Sidebar theme={theme} activeNav={activeNav} onNavigate={navigate} />
+    <div
+      className={`flex h-screen w-screen overflow-hidden transition-colors ${
+        theme === "dark" ? "bg-ink-900" : "bg-[#f4f6f2]"
+      }`}
+      data-theme={theme}
+    >
+      <Sidebar theme={theme} activeNav={page} onNavigate={(id) => setPage(id as DesktopPage)} />
       <main className="relative flex-1 overflow-y-auto">
-        {page === "dashboard" ? <DashboardPage /> : <ModelCenterPage />}
+        {page === "dashboard" && (
+          <DashboardPage
+            onStartTask={() => setPage("conversation")}
+            onOpenSessions={() => setPage("sessions")}
+            onOpenModels={() => setPage("models")}
+          />
+        )}
+        {page === "conversation" && <ConversationEntryPage onContinue={() => setPage("task")} />}
+        {page === "task" && <TaskWorkspacePage />}
+        {page === "sessions" && <SessionsPage />}
+        {page === "workflows" && <WorkflowsPage />}
+        {page === "models" && <ModelCenterPage />}
+        {page === "devices" && <DevicesPage />}
+        {page === "settings" && <SettingsPage />}
 
         <button
           onClick={minimizeToOverlay}

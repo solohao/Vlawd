@@ -3,8 +3,10 @@ import {
   ChevronDown,
   CloseIcon,
   GridIcon,
+  HeadphonesIcon,
   HomeIcon,
   ListIcon,
+  MonitorIcon,
   NodesIcon,
   SettingsIcon,
   WorkflowIcon
@@ -17,6 +19,8 @@ const iconMap = {
   list: ListIcon,
   grid: GridIcon,
   nodes: NodesIcon,
+  monitor: MonitorIcon,
+  headphones: HeadphonesIcon,
   settings: SettingsIcon
 };
 
@@ -50,7 +54,7 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
 
       <nav className="flex flex-1 flex-col gap-1 px-3">
         {navItems.map((item) => {
-          const Icon = iconMap[item.icon];
+          const Icon = iconMap[item.icon as keyof typeof iconMap];
           const isActive = activeNav === item.id;
           return (
             <button
@@ -62,6 +66,11 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
             >
               <Icon width={18} height={18} />
               <span>{item.label}</span>
+              {item.badge && !isActive && (
+                <span className="ml-auto rounded-md bg-brand-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-brand-500">
+                  {item.badge}
+                </span>
+              )}
               {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400" />}
             </button>
           );
@@ -75,13 +84,13 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
           }`}
         >
           <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-400 text-[12px] font-bold text-ink-900">
-            Lin
+            J
           </span>
           <span className="flex flex-col items-start leading-tight">
             <span className={`text-[13px] font-semibold ${dark ? "text-white" : "text-slate-800"}`}>
-              Lin
+              Jacob
             </span>
-            <span className="text-[11px] text-brand-500">Pro Plan</span>
+            <span className="text-[11px] text-brand-500">本地工作区</span>
           </span>
           <ChevronDown className={`ml-auto ${dark ? "text-slate-500" : "text-slate-400"}`} />
         </button>
