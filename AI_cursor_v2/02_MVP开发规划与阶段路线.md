@@ -2,13 +2,14 @@
 
 ---
 模块：02_MVP开发规划与阶段路线
-当前版本：v2.0
+当前版本：v2.1
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.1 | 2026-07-16 | 为 Cycle 2 增加状态作用域目标、严格资源校验和 postcondition；桌面 Computer Use 仍留在 MVP Gate 后的证据驱动扩展 |
 | v2.0 | 2026-07-12 | 重构为单一权威交付路线：产品 Cycle 决定顺序，风险门槛随能力启用，工程批次服务于当前体验；补充当前代码事实、三周期视频验收、MVP Gate 和 Phase 2 / Phase 3 证据门 |
 | v1.5 | 2026-07-12 | 将 Vlawd 专属 Golden Path、Task Workspace、可恢复 Session、Evidence、Dogfood 周期和回放验收并入 V2；市场与插件移出当前产品阶段，交由 Agentic Web 阶段门管理 |
 | v1.4 | 2026-06-27 | 战略再校准：新增 MODEL.PROBE 阶段归属；MODEL.HW 裁剪说明按 8GB 现实调整 |
@@ -115,6 +116,8 @@ Agentic_Web
 | 音频入口 | 设备类型、路由策略和 Mock audio session 已存在 | 工程骨架 |
 | 本地抢占 | 文本关键词检测和同步占位逻辑已存在 | 工程骨架 |
 | Agent Loop | Proposal → Safety → Executor → Session chunk 可在测试中运行 | 工程骨架 |
+| 动作结果 | 当前共享类型仍以布尔 `ok` 为主，尚未实现 state、successor、postcondition 和 Evidence 引用 | 工程骨架 |
+| Executor 路由 | 当前循环找不到 `target_view` 时仍可能回退到 `system`，与目标安全契约不一致 | 工程骨架 |
 | BrowserView | 当前是 VirtualBrowserViewExecutor，不是真实 WebContentsView / CDP | 工程骨架 |
 | Session | append-only JSONL chunk 已存在，缺少完整恢复语义 | 工程骨架 |
 | 桌面 Runtime | Electron 当前接入 MockDesktopRuntime | 工程骨架 |
@@ -345,10 +348,13 @@ local stop signal emitted → 调度器进入 paused
 | EXEC.DUAL | 只启用一个受限 BrowserView Executor；System Executor 保持关闭 |
 | EXEC.ARCH | Executor 绑定、失败和停止接口 |
 | OBS.SCREEN | BrowserView 页面与可见区域观察 |
+| OBS.STATE | 每次观察生成 state_id，页面 ref 只在当前状态有效 |
+| OBS.QUERY | 对当前状态执行 search / expand / inspect |
 | OBS.TARGET | 页面目标候选 |
 | ACTION.PROTO | 当前只读动作所需协议 |
 | ACTION.WV | open / search / scroll / read |
 | ACTION.PROPOSAL | 所有动作经过统一提案边界 |
+| ACTION.VERIFY | 后继状态与 postcondition 证明动作结果 |
 | VIS.MODE | visible_virtual |
 | SAFE.LEVEL | safe / confirmation_required / blocked 聚合 |
 | LEASE.TASK | 单个焦点任务 |
@@ -369,6 +375,10 @@ local stop signal emitted → 调度器进入 paused
 6. pause / cancel / confirm / reject / takeover / resume 有明确状态转换；
 7. BrowserView 只读白名单默认拒绝未知动作；
 8. 用户停止后，当前动作和后续队列都不再继续。
+9. ActionProposal 必须绑定 `observation_state_id`、目标资源和当前 epoch；
+10. 页面变化、用户接管或状态过期后，旧 ref 必须拒绝并重新观察；
+11. 事件已发送不能直接标记任务成功，必须验证 postcondition；
+12. 结果保留 `worked / didnt / unknown`，不得用布尔值隐藏不确定性。
 
 这些风险门槛属于 Cycle 2，不倒置为 Cycle 1 真实语音视频的前置。
 
@@ -377,11 +387,11 @@ local stop signal emitted → 调度器进入 paused
 | Build Slice | 交付 |
 |-------------|------|
 | C2-1 真实 BrowserView | Electron WebContentsView / BrowserView 与任务绑定 |
-| C2-2 观察与只读工具 | URL、DOM、滚动、阅读和摘录 |
+| C2-2 观察与只读工具 | URL、DOM、状态作用域 ref、渐进查询、滚动、阅读和摘录 |
 | C2-3 Proposal 强制边界 | Provider 输出统一解析、校验和拒绝未知动作 |
-| C2-4 Safety 与 Scheduler | 最高风险聚合、严格目标隔离和任务控制状态机 |
+| C2-4 Safety 与 Scheduler | 最高风险聚合、严格目标/资源/epoch 隔离和任务控制状态机 |
 | C2-5 Task Workspace | 真实进度、当前动作、来源和控制入口 |
-| C2-6 来源与结果 | 来源 URL、摘录和最终结论写入 Session |
+| C2-6 来源与结果 | 来源 URL、后继状态、postcondition、摘录和最终结论写入 Session |
 
 ### 6.7 明确不做
 
@@ -588,10 +598,29 @@ Phase 2 不一次性启动全部能力。按证据依次选择：
 - 失败恢复和 undo；
 - 历史 Session 回放。
 
+受限 System Executor 不是“直接安装一个 Computer Use 项目”。只有真实低风险任务反复需要无 API / MCP / CLI 的桌面应用时，才比较：
+
+```text
+Screenshot + 坐标 Baseline
+vs 独立外部参考实现
+vs Vlawd-native thin Environment Interaction Adapter
+```
+
+进入条件：
+
+- `OBS.STATE / OBS.QUERY / ACTION.VERIFY / LEASE.RESOURCE` 已在 BrowserView 路径证明；
+- pause、cancel 和 takeover 不依赖模型或外部 Runtime；
+- 目标 Executor 不存在时严格拒绝；
+- 可在一次性测试账户中注入旧状态、窗口移动、弹窗和用户接管；
+- 外部实现只作为参考、backend 研究或比较基准。
+
 涉及编号：
 
 ```text
 ACTION.PTR / ACTION.KBD / ACTION.CLIP / ACTION.WIN
+ACTION.DELIVERY / ACTION.VERIFY
+OBS.STATE / OBS.QUERY
+EXEC.INTERACT / LEASE.RESOURCE
 SEMANTIC.TEXT / SEMANTIC.FORM / SEMANTIC.VOICE2TEXT
 SAFE.LEVEL
 UX.SUPERVISE / UX.RECOVER
@@ -693,7 +722,7 @@ Phase 3 不自动包含 Marketplace、插件生态或公开 Agent 网络。
 | Cycle 2 | MVP.BROWSER、EXEC.DUAL、EXEC.ARCH、OBS.SCREEN、OBS.TARGET、ACTION.PROTO、ACTION.WV、ACTION.PROPOSAL、VIS.MODE、SAFE.LEVEL、LEASE.TASK、LEASE.WORK、UX.SUPERVISE、UI.TASK、TRACE.SESSION |
 | Cycle 3 | SESSION.STRUCT、SESSION.ENGINE、SESSION.PANEL、SESSION.MVP、SESSION.EVID、SESSION.RESUME、UX.CORRECT、UX.RECOVER、UI.SESSION、TRACE.SESSION |
 | MVP Gate | MVP.METRIC、VALID.HYPO、VALID.RISK、VALID.CRITERIA、VALID.CYCLE、VALID.REPLAY、VALID.POLISH |
-| Phase 2 | ACTION.PTR、ACTION.KBD、ACTION.CLIP、ACTION.WIN、SEMANTIC.TEXT、SEMANTIC.FORM、PERSON.PREF、PERSON.ALIAS、PERSON.RULE、PERSON.WORKFLOW、PERSON.WFGEN、PERSON.PROTOCOL、LEASE.CURSOR、LEASE.RULES、SAFE.MULTI、SESSION.GRAPH、WORK.SESSION、WORK.PANEL、WORK.MULTI、WORK.CONTROL、DUPLEX.BENCH |
+| Phase 2 | ACTION.PTR、ACTION.KBD、ACTION.CLIP、ACTION.WIN、ACTION.DELIVERY、ACTION.VERIFY、OBS.STATE、OBS.QUERY、EXEC.INTERACT、SEMANTIC.TEXT、SEMANTIC.FORM、PERSON.PREF、PERSON.ALIAS、PERSON.RULE、PERSON.WORKFLOW、PERSON.WFGEN、PERSON.PROTOCOL、LEASE.CURSOR、LEASE.RESOURCE、LEASE.RULES、SAFE.MULTI、SESSION.GRAPH、WORK.SESSION、WORK.PANEL、WORK.MULTI、WORK.CONTROL、DUPLEX.BENCH |
 | Phase 3 | SESSION.SYNC、SESSION.MEMORY、WORK.SCHEDULE、MODEL.CLOUD、DUPLEX.FALLBACK、MODEL.CANDIDATE |
 
 编号未出现在当前 Cycle，不代表设计被废弃，只代表它不是当前交付承诺。

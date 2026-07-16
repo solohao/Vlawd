@@ -2,13 +2,14 @@
 
 ---
 模块：验证与治理/01_三条MVP验证路径
-当前版本：v1.2
+当前版本：v1.3
 ---
 
 ## 变更记录
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.3 | 2026-07-16 | 为 Vlawd 增加可验证桌面交互扩展，定义外部参考、坐标 Baseline 和 Vlawd Adapter 的比较方法 |
 | v1.2 | 2026-07-16 | 为 Module Spec 增加真实部署 Conformance 扩展及其进入、停止和对照规则 |
 | v1.1 | 2026-07-12 | 改为跨项目路径选择文档；Vlawd 具体 Dogfood 验收回归 V2 |
 | v1.0 | 2026-07-12 | 定义 Vlawd、Module Spec、高校论坛三条验证路径及选择规则 |
@@ -81,6 +82,43 @@ Module Spec：
 - 真实执行长期不可靠。
 
 如果语音不成立，可以保留文本入口验证 Runtime 和 Session，不因模态失败否定整个系统。
+
+### 可验证桌面交互扩展（VALID.INTERACTION）
+
+该扩展不是当前 Golden Path。只有只读 BrowserView 任务稳定、用户接管可靠，并且真实工作反复被无 API / MCP / CLI 的桌面应用阻塞时才进入。
+
+比较三种实现：
+
+```text
+Baseline：Screenshot + 坐标
+Reference：独立外部 Computer Use 实现
+Treatment：Vlawd-native thin Interaction Adapter
+```
+
+关键指标：
+
+- 首次成功率；
+- 语义观察与语义动作覆盖率；
+- postcondition 验证率；
+- stale-state 拒绝率；
+- 错误目标率；
+- 前台接管和人工介入次数；
+- `worked / didnt / unknown` 分布；
+- Evidence 完整性、延迟和成本。
+
+成立信号：
+
+- 过期状态不会触发动作；
+- 事件送达不会被误报为业务成功；
+- Treatment 在可靠性或监督成本上稳定优于坐标 Baseline；
+- pause、cancel、takeover 和权限边界不依赖外部 Runtime。
+
+停止或缩小信号：
+
+- Accessibility / UIA 覆盖不足，绝大多数动作仍依赖前台坐标；
+- 视觉降级导致误操作或成本不可接受；
+- API、MCP、CLI 或人工操作已经更可靠；
+- 高权限、签名和跨平台维护成本超过用户价值。
 
 ---
 
