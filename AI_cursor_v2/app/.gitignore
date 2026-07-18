@@ -3,3 +3,4 @@ node_modules/
 .electron-user-data/
 dist/
 coverage/
+release/
