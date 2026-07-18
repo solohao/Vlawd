@@ -36,8 +36,16 @@
     "files": [
       "package.json",
       "dist/renderer/**/*",
-      "packages/*/dist/**/*",
-      "packages/renderer/assets/**/*"
+      "packages/main/dist/**/*",
+      "packages/renderer/assets/**/*",
+      {
+        "from": "packages/shared",
+        "to": "node_modules/@ai-cursor-v2/shared",
+        "filter": [
+          "dist/**/*",
+          "package.json"
+        ]
+      }
     ],
     "extraMetadata": {
       "main": "packages/main/dist/packages/main/src/electron/main.js"
