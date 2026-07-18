@@ -1,4 +1,11 @@
-import type { DesktopUiSnapshot, ModelRole } from "@ai-cursor-v2/shared";
+import type {
+  DesktopUiSnapshot,
+  DuplexConversationSnapshot,
+  DuplexProviderKind,
+  DuplexRuntimeEvent,
+  ModelRole,
+  SafetyPreemptionIntent
+} from "@ai-cursor-v2/shared";
 
 export interface OverlaySize {
   width: number;
@@ -18,6 +25,16 @@ export interface AiCursorDesktopApi {
   hideMainWindow(): Promise<void>;
   resizeOverlay(size: OverlaySize): Promise<void>;
   quitApp(): Promise<void>;
+
+  conversationSnapshot(): Promise<DuplexConversationSnapshot>;
+  conversationConnect(): Promise<DuplexConversationSnapshot>;
+  conversationUtterance(text: string): Promise<void>;
+  conversationBargeIn(): Promise<void>;
+  conversationPreempt(intent: SafetyPreemptionIntent): Promise<void>;
+  conversationResume(): Promise<void>;
+  conversationSetProvider(kind: DuplexProviderKind): Promise<DuplexConversationSnapshot>;
+  conversationCheckHealth(): Promise<boolean>;
+  onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
 }
 
 declare global {

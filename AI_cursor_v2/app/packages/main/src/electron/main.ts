@@ -2,8 +2,12 @@ import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen } 
 import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import type { ModelRole } from "@ai-cursor-v2/shared";
+import type { DuplexProviderKind, DuplexRuntimeEvent, ModelRole, SafetyPreemptionIntent } from "@ai-cursor-v2/shared";
 import { MockDesktopRuntime } from "../desktop/mock-desktop-runtime.js";
+import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
+import { createProvider } from "../model/provider-registry.js";
+import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
+import { JsonlSessionStorage } from "../session/jsonl-storage.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 // currentDir = <app>/packages/main/dist/packages/main/src/electron → up 7 = <app>
@@ -13,6 +17,24 @@ const userDataDir = join(appRoot, ".electron-user-data");
 
 mkdirSync(userDataDir, { recursive: true });
 app.setPath("userData", userDataDir);
+
+// ── Cycle 1 真实全双工入口运行时 ─────────────────────────────────────
+// 方案 B（pipeline）作为固定 Provider 先跑；方案 A（bayling-duplex）登记为可切换候选。
+const sessionLogPath = join(userDataDir, "sessions", `duplex_${Date.now()}.jsonl`);
+const duplexRuntime = new DuplexConversationRuntime({
+  provider: createProvider(defaultPipelineProviderConfig),
+  candidateProviders: [createProvider(findExecutionBrain("bayling-duplex"))],
+  storage: new JsonlSessionStorage(sessionLogPath)
+});
+
+function broadcastConversationEvent(event: DuplexRuntimeEvent): void {
+  for (const window of [mainWindow, overlayWindow]) {
+    if (window && !window.isDestroyed()) {
+      window.webContents.send("conversation:event", event);
+    }
+  }
+}
+duplexRuntime.on(broadcastConversationEvent);
 
 const OVERLAY_MARGIN = 24;
 const OVERLAY_DEFAULT = { width: 208, height: 84 };
@@ -184,6 +206,18 @@ ipcMain.handle("desktop:connectAudio", () => runtime.connectAudio());
 ipcMain.handle("desktop:pauseSession", () => runtime.pauseSession());
 ipcMain.handle("desktop:cancelSession", () => runtime.cancelSession());
 ipcMain.handle("desktop:executeRuntimeAction", () => runtime.executeRuntimeAction());
+
+// ── Cycle 1 会话通道 ────────────────────────────────────────────────
+ipcMain.handle("conversation:snapshot", () => duplexRuntime.getSnapshot());
+ipcMain.handle("conversation:connect", () => duplexRuntime.connect());
+ipcMain.handle("conversation:utterance", (_event, text: string) => duplexRuntime.submitUtterance(text));
+ipcMain.handle("conversation:bargeIn", () => duplexRuntime.bargeIn());
+ipcMain.handle("conversation:preempt", (_event, intent: SafetyPreemptionIntent) => duplexRuntime.preempt(intent));
+ipcMain.handle("conversation:resume", () => duplexRuntime.resume());
+ipcMain.handle("conversation:setProvider", (_event, kind: DuplexProviderKind) =>
+  duplexRuntime.setActiveProvider(kind)
+);
+ipcMain.handle("conversation:checkHealth", () => duplexRuntime.checkProviderHealth());
 
 ipcMain.handle("window:openMain", () => {
   const window = createMainWindow();

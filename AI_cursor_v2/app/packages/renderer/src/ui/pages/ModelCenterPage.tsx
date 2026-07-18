@@ -1,5 +1,7 @@
 import { modelCenterData } from "../demo-data.js";
 import type { RecommendCard, RoleModelCard } from "../demo-data.js";
+import { useConversation } from "../../runtime/useConversation.js";
+import type { DuplexProviderKind } from "@ai-cursor-v2/shared";
 import {
   ArrowRight,
   BrainIcon,
@@ -71,6 +73,8 @@ export function ModelCenterPage() {
             模型使用指南 <ArrowRight width={13} height={13} />
           </button>
         </div>
+
+        <Cycle1ProviderOnramp />
 
         <h2 className="mb-3 text-[14px] font-semibold text-slate-800">核心角色模型</h2>
         <div className="space-y-3">
@@ -162,6 +166,88 @@ export function ModelCenterPage() {
         </section>
       </aside>
     </div>
+  );
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  pipeline: "方案 B · 流式管线 (Qwen2.5)",
+  "bayling-duplex": "方案 A · 原生全双工 (BayLing)",
+  personaplex: "方案 A · PersonaPlex",
+  moshi: "方案 A · Moshi",
+  mock: "Mock（开发）"
+};
+
+function Cycle1ProviderOnramp() {
+  const convo = useConversation();
+  const { snapshot } = convo;
+  const all: DuplexProviderKind[] = [snapshot.activeProviderKind, ...snapshot.candidateProviderKinds];
+
+  return (
+    <section className="mb-6 rounded-2xl border border-brand-300 bg-brand-50/50 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
+            Cycle 1 · 执行大脑 Provider
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                snapshot.usingRealInference ? "bg-brand-500/15 text-brand-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {snapshot.usingRealInference ? "真实推理" : "离线回退"}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                snapshot.providerConnected ? "bg-brand-500/15 text-brand-700" : "bg-rose-100 text-rose-700"
+              }`}
+            >
+              {snapshot.providerConnected ? "已连接" : "未连接"}
+            </span>
+          </h2>
+          <p className="mt-1 text-[12.5px] text-slate-500">
+            先跑方案 B（Qwen2.5 流式管线），验证后可一键切换方案 A（原生全双工）。一次只跑一个。
+          </p>
+        </div>
+        <button
+          onClick={() => void convo.checkHealth()}
+          disabled={!convo.available}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+        >
+          <RefreshIcon width={14} height={14} /> 运行 / 健康检查
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {all.map((kind) => {
+          const active = kind === snapshot.activeProviderKind;
+          return (
+            <button
+              key={kind}
+              onClick={() => void convo.setProvider(kind)}
+              disabled={!convo.available || active}
+              className={`rounded-xl border px-3 py-2.5 text-left text-[12.5px] transition ${
+                active
+                  ? "border-brand-500 bg-white font-semibold text-slate-900"
+                  : "border-slate-200 bg-white/70 text-slate-600 hover:border-brand-300"
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-slate-300"}`} />
+                {PROVIDER_LABELS[kind] ?? kind}
+              </span>
+              <span className="mt-1 block text-[10.5px] text-slate-400">{active ? "当前热路径" : "点击切换"}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {!snapshot.usingRealInference && (
+        <p className="mt-3 rounded-lg bg-amber-100/70 px-3 py-2 text-[11.5px] leading-relaxed text-amber-800">
+          接入真实推理：本机安装 <strong>Ollama</strong> 后执行
+          <code className="mx-1 rounded bg-white/70 px-1">ollama pull qwen2.5:7b-instruct</code>
+          并保持 <code className="rounded bg-white/70 px-1">http://127.0.0.1:11434</code> 运行，然后点「运行 / 健康检查」。
+        </p>
+      )}
+    </section>
   );
 }
 

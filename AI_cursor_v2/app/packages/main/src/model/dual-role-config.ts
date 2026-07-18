@@ -8,7 +8,7 @@ import type {
   SafetyPreemptionConfig,
   WorkflowModelBinding
 } from "@ai-cursor-v2/shared";
-import { isAbsolute, parse, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 export const defaultSafetyPreemptionConfig: SafetyPreemptionConfig = {
   role: "safety_preemption",
@@ -30,7 +30,20 @@ export const defaultConversationEndpointPreference: ConversationEndpointPreferen
   allowComputerMicFallback: true
 };
 
+/** Cycle 1 默认的方案 B 流式管线 Provider（Qwen2.5 via 本地 OpenAI 兼容端点）。 */
+export const defaultPipelineProviderConfig: ProviderConfig = {
+  kind: "pipeline",
+  device: "cuda",
+  // Ollama 默认地址；用户可在模型中心改写。未连通时运行时回退离线 Echo。
+  endpoint: "http://127.0.0.1:11434/v1",
+  pipeline: {
+    llmBaseUrl: "http://127.0.0.1:11434/v1",
+    llmModel: "qwen2.5:7b-instruct"
+  }
+};
+
 export const executionBrainCatalog: ProviderConfig[] = [
+  defaultPipelineProviderConfig,
   {
     kind: "bayling-duplex",
     device: "cuda",
@@ -119,15 +132,23 @@ export const recordEngineCatalog: RecordEngineConfig[] = [
   }
 ];
 
+export function findExecutionBrain(kind: ProviderConfig["kind"]): ProviderConfig {
+  const config = executionBrainCatalog.find((candidate) => candidate.kind === kind);
+  if (!config) {
+    throw new Error(`Unknown execution brain provider: ${kind}`);
+  }
+  return config;
+}
+
 export const desktopModelPresets: DesktopModelPreset[] = [
   {
     id: "zh-real-time-supervision",
-    name: "中文实时监督推荐",
-    description: "BayLing-Duplex 作为执行大脑，标准记录引擎负责 Session 留痕，适合本地优先 MVP。",
-    recommendedFor: ["中文语音监督", "浏览器求职筛选", "本地优先 MVP"],
+    name: "Cycle 1 · 中文流式管线（推荐）",
+    description: "方案 B 流式管线（Qwen2.5 via 本地 OpenAI 兼容端点）作为执行大脑，标准记录引擎负责 Session 留痕，4060 可跑。",
+    recommendedFor: ["中文语音监督", "Cycle 1 真实全双工入口", "本地优先 MVP"],
     binding: {
       workflow_id: "default",
-      executionBrain: executionBrainCatalog[0],
+      executionBrain: findExecutionBrain("pipeline"),
       recordEngine: recordEngineCatalog[0],
       safetyPreemption: defaultSafetyPreemptionConfig,
       modelStorage: defaultModelStorageConfig,
@@ -135,14 +156,14 @@ export const desktopModelPresets: DesktopModelPreset[] = [
     }
   },
   {
-    id: "english-low-latency",
-    name: "英文低延迟验证",
-    description: "PersonaPlex 负责英文 full-duplex 体验，轻量记录引擎负责 Session 摘要和工作流候选。",
-    recommendedFor: ["英文演示", "低延迟打断验证", "FullDuplexBench 对照"],
+    id: "zh-native-fullduplex",
+    name: "方案 A · 原生全双工（候选）",
+    description: "BayLing-Duplex 原生全双工作为可切换候选；spike 达标后再设为日常 Baseline。",
+    recommendedFor: ["原生 barge-in 验证", "FullDuplexBench 对照", "候选择优"],
     binding: {
       workflow_id: "default",
-      executionBrain: executionBrainCatalog[1],
-      recordEngine: recordEngineCatalog[1],
+      executionBrain: findExecutionBrain("bayling-duplex"),
+      recordEngine: recordEngineCatalog[0],
       safetyPreemption: defaultSafetyPreemptionConfig,
       modelStorage: defaultModelStorageConfig,
       conversationEndpoint: defaultConversationEndpointPreference
@@ -155,7 +176,7 @@ export const desktopModelPresets: DesktopModelPreset[] = [
     recommendedFor: ["开发测试", "CI", "无 GPU 电脑"],
     binding: {
       workflow_id: "default",
-      executionBrain: executionBrainCatalog[3],
+      executionBrain: findExecutionBrain("mock"),
       recordEngine: recordEngineCatalog[0],
       safetyPreemption: defaultSafetyPreemptionConfig,
       modelStorage: defaultModelStorageConfig,
@@ -257,5 +278,7 @@ function applyDownloadsToRecordEngine(
 }
 
 function isWindowsSystemDrive(rootDir: string): boolean {
-  return parse(rootDir).root.toLowerCase().startsWith("c:");
+  // 独立于运行平台判断 Windows 系统盘：node:path 在 POSIX 上不会把 "C:/..." 视为盘符根，
+  // 因此直接匹配盘符前缀，保证在 Linux/CI 上也能给出正确告警。
+  return /^c:[\\/]/i.test(rootDir.trim());
 }

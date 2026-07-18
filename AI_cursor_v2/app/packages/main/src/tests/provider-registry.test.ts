@@ -27,11 +27,16 @@ describe("duplex model providers", () => {
 
   it("keeps real full-duplex model providers behind replaceable stubs", async () => {
     expect(recommendedLocalProviderConfigs.map((config) => config.kind)).toEqual([
+      "pipeline",
       "bayling-duplex",
       "personaplex",
       "moshi"
     ]);
-    const provider = createProvider(recommendedLocalProviderConfigs[0]);
+    const nativeCandidate = recommendedLocalProviderConfigs.find((config) => config.kind === "bayling-duplex");
+    if (!nativeCandidate) {
+      throw new Error("Expected a native full-duplex candidate in the catalog.");
+    }
+    const provider = createProvider(nativeCandidate);
     const events = [];
     for await (const event of provider.generate({ session_id: "stub", user_utterance: "测试" })) {
       events.push(event.type);
@@ -44,7 +49,7 @@ describe("duplex model providers", () => {
 
     expect(desktopModelPresets).toHaveLength(3);
     expect(binding.workflow_id).toBe("job_search");
-    expect(binding.executionBrain.kind).toBe("bayling-duplex");
+    expect(binding.executionBrain.kind).toBe("pipeline");
     expect(binding.recordEngine.kind).toBe("rule-jsonl");
     expect(recordEngineCatalog.map((config) => config.kind)).toEqual([
       "rule-jsonl",
@@ -55,7 +60,7 @@ describe("duplex model providers", () => {
   });
 
   it("resolves downloadable model artifacts under a user-selected storage root", () => {
-    const binding = bindPresetToWorkflow("zh-real-time-supervision", "job_search", {
+    const binding = bindPresetToWorkflow("zh-native-fullduplex", "job_search", {
       ...defaultModelStorageConfig,
       rootDir: "D:/ai-models"
     });
