@@ -8,6 +8,7 @@ import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { createProvider } from "../model/provider-registry.js";
 import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
 import { JsonlSessionStorage } from "../session/jsonl-storage.js";
+import { initAutoUpdater, checkForUpdatesManually } from "./auto-updater.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 // currentDir = <app>/packages/main/dist/packages/main/src/electron → up 7 = <app>
@@ -182,6 +183,11 @@ function createTray(): void {
       },
       { type: "separator" },
       {
+        label: "检查更新…",
+        click: () => checkForUpdatesManually(() => mainWindow)
+      },
+      { type: "separator" },
+      {
         label: "退出 AI Cursor",
         click: () => {
           isQuitting = true;
@@ -260,6 +266,9 @@ app.whenReady().then(() => {
   createTray();
   createMainWindow();
   createOverlayWindow();
+
+  // 打包安装后启用自动更新：启动静默检查，发现新版本后台下载并提示重启。
+  initAutoUpdater(() => mainWindow);
 
   // First run: if the execution brain isn't downloaded yet, surface the main
   // window so the user can pick & download a model in the Model Center.

@@ -23,7 +23,8 @@
     "dist": "npm run package:prepare && electron-builder",
     "dist:win": "npm run package:prepare && electron-builder --win",
     "dist:mac": "npm run package:prepare && electron-builder --mac",
-    "dist:linux": "npm run package:prepare && electron-builder --linux"
+    "dist:linux": "npm run package:prepare && electron-builder --linux",
+    "release:win": "npm run package:prepare && electron-builder --win --publish always"
   },
   "build": {
     "appId": "ai.vlawd.cursor",
@@ -33,6 +34,13 @@
       "buildResources": "packages/renderer/assets"
     },
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "solohao",
+        "repo": "Vlawd"
+      }
+    ],
     "files": [
       "package.json",
       "dist/renderer/**/*",
@@ -87,6 +95,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }
