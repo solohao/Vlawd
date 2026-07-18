@@ -2,8 +2,12 @@ import type { ActionProposal, DuplexModelEvent, DuplexModelInput, DuplexModelPro
 
 export class MockDuplexModelProvider implements DuplexModelProvider {
   readonly kind = "mock" as const;
+  readonly usingRealInference = false;
 
-  async *generate(input: DuplexModelInput): AsyncIterable<DuplexModelEvent> {
+  async *generate(input: DuplexModelInput, signal?: AbortSignal): AsyncIterable<DuplexModelEvent> {
+    if (signal?.aborted) {
+      return;
+    }
     yield { type: "state", state: "listening" };
     yield { type: "speech", text: "我会先可见地执行，并在高风险动作前停下来确认。" };
     yield { type: "state", state: "thinking" };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Sidebar } from "./Sidebar.js";
 import { MinimizeIcon } from "./icons.js";
-import { ConversationEntryPage } from "./pages/ConversationEntryPage.js";
+import { LiveConversationPage } from "./pages/LiveConversationPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevicesPage } from "./pages/DevicesPage.js";
 import { ModelCenterPage } from "./pages/ModelCenterPage.js";
@@ -56,7 +56,7 @@ export function DesktopApp() {
             onOpenModels={() => setPage("models")}
           />
         )}
-        {page === "conversation" && <ConversationEntryPage onContinue={() => setPage("task")} />}
+        {page === "conversation" && <LiveConversationPage />}
         {page === "task" && <TaskWorkspacePage />}
         {page === "sessions" && <SessionsPage />}
         {page === "workflows" && <WorkflowsPage />}

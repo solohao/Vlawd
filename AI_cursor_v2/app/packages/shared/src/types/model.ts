@@ -1,7 +1,7 @@
 import type { ActionProposal } from "./action.js";
 import type { ConversationEndpointPreference } from "./audio.js";
 
-export type DuplexModelKind = "mock" | "glm-4-voice" | "bayling-duplex" | "personaplex" | "moshi" | "cloud-planner";
+export type DuplexModelKind = "mock" | "pipeline" | "glm-4-voice" | "bayling-duplex" | "personaplex" | "moshi" | "cloud-planner";
 export type RecordEngineKind = "rule-jsonl" | "local-lightweight" | "cloud-assisted";
 export type ModelRole = "duplex_execution_brain" | "session_record_engine" | "safety_preemption";
 export type ModelArtifactSource = "huggingface" | "modelscope" | "local";
@@ -36,7 +36,15 @@ export type DuplexModelEvent =
 
 export interface DuplexModelProvider {
   readonly kind: DuplexModelKind;
-  generate(input: DuplexModelInput): AsyncIterable<DuplexModelEvent>;
+  /**
+   * `signal` 允许运行时在用户自然插话或本地抢占时取消当前生成；实现应把它透传到
+   * 底层推理请求。未实现取消的 Provider 可忽略该参数。
+   */
+  generate(input: DuplexModelInput, signal?: AbortSignal): AsyncIterable<DuplexModelEvent>;
+  /** 可选：轻量连通性检查，用于模型中心的健康检查/运行按钮。 */
+  healthCheck?(signal?: AbortSignal): Promise<boolean>;
+  /** 可选：Provider 是否连接真实推理（false = 离线回退，不能作为 Cycle 1 通过证据）。 */
+  readonly usingRealInference?: boolean;
 }
 
 export interface ProviderConfig {
@@ -47,6 +55,23 @@ export interface ProviderConfig {
   speechDecoderPath?: string;
   device?: "cpu" | "cuda" | "metal";
   downloads?: ModelDownloadArtifact[];
+  /**
+   * 方案 B 流式管线的子组件配置。LLM 走 OpenAI 兼容本地端点（Ollama / LM Studio /
+   * llama.cpp server），ASR/TTS 可选外挂本地服务；未填写则运行时使用离线回退。
+   */
+  pipeline?: PipelineProviderConfig;
+}
+
+export interface PipelineProviderConfig {
+  /** OpenAI 兼容的 chat/completions 基础地址，例如 http://127.0.0.1:11434/v1 (Ollama)。 */
+  llmBaseUrl?: string;
+  llmModel?: string;
+  llmApiKey?: string;
+  systemPrompt?: string;
+  /** 可选：本地流式 ASR（whisper 服务）地址，Cycle 1 未配置时 mic 走浏览器识别或文字。 */
+  asrEndpoint?: string;
+  /** 可选：本地 TTS（piper 等）地址，未配置时渲染层使用系统 SpeechSynthesis 发声。 */
+  ttsEndpoint?: string;
 }
 
 export interface RecordEngineConfig {

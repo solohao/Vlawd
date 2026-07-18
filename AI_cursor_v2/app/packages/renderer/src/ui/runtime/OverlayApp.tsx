@@ -54,7 +54,24 @@ interface OverlayAppProps {
 
 export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const [expanded, setExpanded] = useState(false);
+  const [liveState, setLiveState] = useState<ModelRuntimeState>(runtimeState);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Cycle 1：订阅主进程 Runtime 事件，实时投影运行状态到悬浮控制器。
+  useEffect(() => {
+    const desktop = api();
+    if (!desktop) {
+      return;
+    }
+    void desktop.conversationSnapshot().then((snapshot) => setLiveState(snapshot.runtimeState)).catch(() => undefined);
+    return desktop.onConversationEvent((event) => {
+      if (event.type === "state") {
+        setLiveState(event.state);
+      } else if (event.type === "snapshot") {
+        setLiveState(event.snapshot.runtimeState);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -75,13 +92,13 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     <div ref={ref} className="inline-block p-3">
       {expanded ? (
         <VoiceController
-          runtimeState={runtimeState}
+          runtimeState={liveState}
           draggable
           onCollapse={() => setExpanded(false)}
           onOpenSettings={() => api()?.openMainWindow()}
-          onPause={() => api()?.pauseSession()}
-          onCancel={() => api()?.cancelSession()}
-          onTakeover={() => api()?.executeRuntimeAction()}
+          onPause={() => api()?.conversationPreempt("pause")}
+          onCancel={() => api()?.conversationPreempt("cancel")}
+          onTakeover={() => api()?.openMainWindow()}
         />
       ) : (
         <OverlayMini onExpand={() => setExpanded(true)} />

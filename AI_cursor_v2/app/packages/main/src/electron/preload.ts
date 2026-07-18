@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DesktopUiSnapshot, ModelRole } from "@ai-cursor-v2/shared";
+import type {
+  DesktopUiSnapshot,
+  DuplexConversationSnapshot,
+  DuplexProviderKind,
+  DuplexRuntimeEvent,
+  ModelRole,
+  SafetyPreemptionIntent
+} from "@ai-cursor-v2/shared";
 
 export interface OverlaySize {
   width: number;
@@ -19,6 +26,23 @@ export interface AiCursorDesktopApi {
   hideMainWindow(): Promise<void>;
   resizeOverlay(size: OverlaySize): Promise<void>;
   quitApp(): Promise<void>;
+
+  // ── Cycle 1 真实全双工入口 ──────────────────────────────────────────
+  conversationSnapshot(): Promise<DuplexConversationSnapshot>;
+  conversationConnect(): Promise<DuplexConversationSnapshot>;
+  /** 用户一段发言（文字输入或 ASR 转写）。 */
+  conversationUtterance(text: string): Promise<void>;
+  /** VAD 检测到用户开口的即时打断信号（掐断 AI 语音输出）。 */
+  conversationBargeIn(): Promise<void>;
+  /** 本地硬抢占：停/暂停/取消/退回。 */
+  conversationPreempt(intent: SafetyPreemptionIntent): Promise<void>;
+  conversationResume(): Promise<void>;
+  /** 切换热路径 Provider（先 B 后 A）。 */
+  conversationSetProvider(kind: DuplexProviderKind): Promise<DuplexConversationSnapshot>;
+  /** 探测当前 Provider 连通性（模型中心健康检查/运行）。 */
+  conversationCheckHealth(): Promise<boolean>;
+  /** 订阅实时 Runtime 事件；返回取消订阅函数。 */
+  onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
 }
 
 const api: AiCursorDesktopApi = {
@@ -35,7 +59,25 @@ const api: AiCursorDesktopApi = {
   openMainWindow: () => ipcRenderer.invoke("window:openMain") as Promise<void>,
   hideMainWindow: () => ipcRenderer.invoke("window:hideMain") as Promise<void>,
   resizeOverlay: (size) => ipcRenderer.invoke("overlay:resize", size) as Promise<void>,
-  quitApp: () => ipcRenderer.invoke("app:quit") as Promise<void>
+  quitApp: () => ipcRenderer.invoke("app:quit") as Promise<void>,
+
+  conversationSnapshot: () =>
+    ipcRenderer.invoke("conversation:snapshot") as Promise<DuplexConversationSnapshot>,
+  conversationConnect: () =>
+    ipcRenderer.invoke("conversation:connect") as Promise<DuplexConversationSnapshot>,
+  conversationUtterance: (text) => ipcRenderer.invoke("conversation:utterance", text) as Promise<void>,
+  conversationBargeIn: () => ipcRenderer.invoke("conversation:bargeIn") as Promise<void>,
+  conversationPreempt: (intent) => ipcRenderer.invoke("conversation:preempt", intent) as Promise<void>,
+  conversationResume: () => ipcRenderer.invoke("conversation:resume") as Promise<void>,
+  conversationSetProvider: (kind) =>
+    ipcRenderer.invoke("conversation:setProvider", kind) as Promise<DuplexConversationSnapshot>,
+  conversationCheckHealth: () => ipcRenderer.invoke("conversation:checkHealth") as Promise<boolean>,
+  onConversationEvent: (listener) => {
+    const channel = "conversation:event";
+    const handler = (_event: unknown, payload: DuplexRuntimeEvent): void => listener(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  }
 };
 
 contextBridge.exposeInMainWorld("aiCursorDesktop", api);
