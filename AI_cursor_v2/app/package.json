@@ -38,7 +38,8 @@
       {
         "provider": "github",
         "owner": "solohao",
-        "repo": "Vlawd"
+        "repo": "Vlawd",
+        "releaseType": "release"
       }
     ],
     "files": [

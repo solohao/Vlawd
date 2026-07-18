@@ -1,0 +1,38 @@
+name: Release (Windows)
+
+# 推送形如 v0.1.1 的版本 tag 时，在 GitHub 的 Windows 云构建机上
+# 自动打包 Electron 桌面端并发布到 GitHub Releases（含 latest.yml，供客户端自动更新）。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-win:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: AI_cursor_v2/app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: AI_cursor_v2/app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish Windows release
+        env:
+          # electron-builder 用它把产物上传到 GitHub Releases；
+          # GITHUB_TOKEN 由 Actions 自动提供，无需额外配置 secret。
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release:win
