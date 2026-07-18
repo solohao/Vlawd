@@ -727,6 +727,8 @@ Phase 3 不自动包含 Marketplace、插件生态或公开 Agent 网络。
 
 编号未出现在当前 Cycle，不代表设计被废弃，只代表它不是当前交付承诺。
 
+`TOOL.*`（能力工具与适配器护城河，技文/11）整体属于 Post-MVP：在 MVP Gate 通过后于 Phase 2A（受控执行）按证据起步，成熟形态在 Agentic Web 阶段门（两个垂直案例抽出 Capsule Schema 后）。当前 Cycle 1–3 不实现，也不为其提前改造 Runtime。
+
 ---
 
 ## 12. 工程决策规则
