@@ -1,7 +1,6 @@
 import { modelCenterData } from "../demo-data.js";
 import type { RecommendCard, RoleModelCard } from "../demo-data.js";
 import { useConversation } from "../../runtime/useConversation.js";
-import type { DuplexProviderKind } from "@ai-cursor-v2/shared";
 import {
   ArrowRight,
   BrainIcon,
@@ -34,8 +33,31 @@ function StateDot({ tone, label }: { tone: string; label: string }) {
   );
 }
 
+const PROVIDER_LABELS: Record<string, string> = {
+  pipeline: "方案 B · Qwen2.5 流式管线",
+  "bayling-duplex": "方案 A · BayLing 原生全双工",
+  personaplex: "方案 A · PersonaPlex",
+  moshi: "方案 A · Moshi",
+  mock: "Mock（开发）"
+};
+
 export function ModelCenterPage() {
   const m = modelCenterData;
+  const convo = useConversation();
+  const { snapshot } = convo;
+
+  const brainState = !convo.available
+    ? { state: "未连接", tone: "idle" }
+    : snapshot.providerConnected && snapshot.usingRealInference
+      ? { state: "运行中", tone: "running" }
+      : snapshot.providerConnected
+        ? { state: "离线回退", tone: "available" }
+        : { state: "未连接", tone: "idle" };
+
+  const overview = m.overview.map((o) =>
+    o.label === "Execution Brain" ? { ...o, state: brainState.state, tone: brainState.tone } : o
+  );
+
   return (
     <div className="flex gap-6 px-8 py-7">
       <div className="min-w-0 flex-1">
@@ -74,19 +96,46 @@ export function ModelCenterPage() {
           </button>
         </div>
 
-        <Cycle1ProviderOnramp />
-
         <h2 className="mb-3 text-[14px] font-semibold text-slate-800">核心角色模型</h2>
         <div className="space-y-3">
           {m.roleModels.map((r) => (
-            <RoleCard key={r.role} role={r} />
+            <RoleCard
+              key={r.role}
+              role={
+                r.role === "brain" && convo.available
+                  ? {
+                      ...r,
+                      state: brainState.state,
+                      stateTone: brainState.tone === "running" ? "running" : "available",
+                      model: PROVIDER_LABELS[snapshot.activeProviderKind] ?? r.model,
+                      strip: {
+                        ...r.strip,
+                        text: snapshot.usingRealInference
+                          ? "已连接真实本地推理端点"
+                          : "离线回退语气（非真实推理）"
+                      }
+                    }
+                  : r
+              }
+              onTest={r.role === "brain" ? () => void convo.checkHealth() : undefined}
+            />
           ))}
         </div>
 
         <h2 className="mb-3 mt-7 text-[14px] font-semibold text-slate-800">模型推荐</h2>
         <div className="grid grid-cols-3 gap-3">
           {m.recommends.map((r) => (
-            <RecommendItem key={r.name} item={r} />
+            <RecommendItem
+              key={r.name}
+              item={r}
+              onSelect={
+                convo.available && /qwen/i.test(r.name)
+                  ? () => void convo.setProvider("pipeline")
+                  : convo.available && /llama|bayling/i.test(r.name)
+                    ? () => void convo.setProvider("bayling-duplex")
+                    : undefined
+              }
+            />
           ))}
         </div>
         <p className="mt-4 text-[12px] text-slate-400">{m.footerNote}</p>
@@ -97,7 +146,7 @@ export function ModelCenterPage() {
         <section className={`${panel} p-4`}>
           <p className="mb-3 text-[13px] font-semibold text-slate-800">模型状态总览</p>
           <div className="space-y-2.5">
-            {m.overview.map((o) => {
+            {overview.map((o) => {
               const Icon = roleIcon[o.label === "Execution Brain" ? "brain" : o.label === "Record Notebook" ? "notebook" : "safety"];
               return (
                 <div key={o.label} className="flex items-center gap-2">
@@ -169,89 +218,7 @@ export function ModelCenterPage() {
   );
 }
 
-const PROVIDER_LABELS: Record<string, string> = {
-  pipeline: "方案 B · 流式管线 (Qwen2.5)",
-  "bayling-duplex": "方案 A · 原生全双工 (BayLing)",
-  personaplex: "方案 A · PersonaPlex",
-  moshi: "方案 A · Moshi",
-  mock: "Mock（开发）"
-};
-
-function Cycle1ProviderOnramp() {
-  const convo = useConversation();
-  const { snapshot } = convo;
-  const all: DuplexProviderKind[] = [snapshot.activeProviderKind, ...snapshot.candidateProviderKinds];
-
-  return (
-    <section className="mb-6 rounded-2xl border border-brand-300 bg-brand-50/50 p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-            Cycle 1 · 执行大脑 Provider
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                snapshot.usingRealInference ? "bg-brand-500/15 text-brand-700" : "bg-amber-100 text-amber-700"
-              }`}
-            >
-              {snapshot.usingRealInference ? "真实推理" : "离线回退"}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                snapshot.providerConnected ? "bg-brand-500/15 text-brand-700" : "bg-rose-100 text-rose-700"
-              }`}
-            >
-              {snapshot.providerConnected ? "已连接" : "未连接"}
-            </span>
-          </h2>
-          <p className="mt-1 text-[12.5px] text-slate-500">
-            先跑方案 B（Qwen2.5 流式管线），验证后可一键切换方案 A（原生全双工）。一次只跑一个。
-          </p>
-        </div>
-        <button
-          onClick={() => void convo.checkHealth()}
-          disabled={!convo.available}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-[12.5px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
-        >
-          <RefreshIcon width={14} height={14} /> 运行 / 健康检查
-        </button>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        {all.map((kind) => {
-          const active = kind === snapshot.activeProviderKind;
-          return (
-            <button
-              key={kind}
-              onClick={() => void convo.setProvider(kind)}
-              disabled={!convo.available || active}
-              className={`rounded-xl border px-3 py-2.5 text-left text-[12.5px] transition ${
-                active
-                  ? "border-brand-500 bg-white font-semibold text-slate-900"
-                  : "border-slate-200 bg-white/70 text-slate-600 hover:border-brand-300"
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-slate-300"}`} />
-                {PROVIDER_LABELS[kind] ?? kind}
-              </span>
-              <span className="mt-1 block text-[10.5px] text-slate-400">{active ? "当前热路径" : "点击切换"}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {!snapshot.usingRealInference && (
-        <p className="mt-3 rounded-lg bg-amber-100/70 px-3 py-2 text-[11.5px] leading-relaxed text-amber-800">
-          接入真实推理：本机安装 <strong>Ollama</strong> 后执行
-          <code className="mx-1 rounded bg-white/70 px-1">ollama pull qwen2.5:7b-instruct</code>
-          并保持 <code className="rounded bg-white/70 px-1">http://127.0.0.1:11434</code> 运行，然后点「运行 / 健康检查」。
-        </p>
-      )}
-    </section>
-  );
-}
-
-function RoleCard({ role }: { role: RoleModelCard }) {
+function RoleCard({ role, onTest }: { role: RoleModelCard; onTest?: () => void }) {
   const Icon = roleIcon[role.role];
   return (
     <section className="rounded-2xl border border-slate-200 bg-white">
@@ -293,7 +260,10 @@ function RoleCard({ role }: { role: RoleModelCard }) {
               <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50">
                 配置
               </button>
-              <button className="rounded-lg bg-brand-400/20 px-3 py-1.5 text-[12.5px] font-medium text-brand-700 hover:bg-brand-400/30">
+              <button
+                onClick={onTest}
+                className="rounded-lg bg-brand-400/20 px-3 py-1.5 text-[12.5px] font-medium text-brand-700 hover:bg-brand-400/30"
+              >
                 测试
               </button>
             </>
@@ -319,7 +289,7 @@ function RoleCard({ role }: { role: RoleModelCard }) {
   );
 }
 
-function RecommendItem({ item }: { item: RecommendCard }) {
+function RecommendItem({ item, onSelect }: { item: RecommendCard; onSelect?: () => void }) {
   return (
     <div className={`rounded-2xl border bg-white p-4 ${item.selected ? "border-brand-400" : "border-slate-200"}`}>
       <div className="mb-2 flex items-center justify-between">
@@ -347,7 +317,10 @@ function RecommendItem({ item }: { item: RecommendCard }) {
             <CheckIcon width={13} height={13} /> 已选择
           </span>
         ) : (
-          <button className="rounded-lg border border-slate-200 px-3 py-1 text-[12px] text-slate-600 hover:bg-slate-50">
+          <button
+            onClick={onSelect}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-[12px] text-slate-600 hover:bg-slate-50"
+          >
             选择
           </button>
         )}

@@ -22,7 +22,7 @@ export type DesktopPage =
 
 const pageThemes: Record<DesktopPage, "dark" | "light"> = {
   dashboard: "dark",
-  conversation: "dark",
+  conversation: "light",
   task: "dark",
   sessions: "light",
   workflows: "light",
@@ -56,7 +56,7 @@ export function DesktopApp() {
             onOpenModels={() => setPage("models")}
           />
         )}
-        {page === "conversation" && <LiveConversationPage />}
+        {page === "conversation" && <LiveConversationPage onBack={() => setPage("dashboard")} />}
         {page === "task" && <TaskWorkspacePage />}
         {page === "sessions" && <SessionsPage />}
         {page === "workflows" && <WorkflowsPage />}
