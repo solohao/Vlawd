@@ -11,12 +11,18 @@ import { JsonlSessionStorage } from "../session/jsonl-storage.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 // currentDir = <app>/packages/main/dist/packages/main/src/electron → up 7 = <app>
+// 打包后 currentDir 位于 resources/app.asar 内，同样的向上层级指向 asar 根，
+// 渲染层与图标资源仍能从 asar 内读取；仅可写的用户数据目录需要改用系统标准位置。
 const appRoot = resolve(currentDir, "../../../../../../..");
 const runtime = new MockDesktopRuntime();
-const userDataDir = join(appRoot, ".electron-user-data");
 
+if (!app.isPackaged) {
+  // 开发模式：把用户数据放在仓库内，便于查看生成的 Session JSONL。
+  app.setPath("userData", join(appRoot, ".electron-user-data"));
+}
+// 打包运行时沿用 Electron 默认 userData（系统可写目录）。
+const userDataDir = app.getPath("userData");
 mkdirSync(userDataDir, { recursive: true });
-app.setPath("userData", userDataDir);
 
 // ── Cycle 1 真实全双工入口运行时 ─────────────────────────────────────
 // 方案 B（pipeline）作为固定 Provider 先跑；方案 A（bayling-duplex）登记为可切换候选。

@@ -1,8 +1,11 @@
 {
   "name": "ai-cursor-v2-app",
   "version": "0.1.0",
+  "description": "AI Cursor V2 (Vlawd) 本地优先全双工桌面 AI 员工",
+  "author": "Vlawd",
   "private": true,
   "type": "module",
+  "main": "packages/main/dist/packages/main/src/electron/main.js",
   "workspaces": [
     "packages/*"
   ],
@@ -14,7 +17,52 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "demo": "npm run build && tsx packages/main/src/demo.ts",
-    "verify": "npm run typecheck && npm test && npm run demo && npm run build:renderer"
+    "verify": "npm run typecheck && npm test && npm run demo && npm run build:renderer",
+    "package:prepare": "npm run build && npm run build:renderer",
+    "dist:dir": "npm run package:prepare && electron-builder --dir",
+    "dist": "npm run package:prepare && electron-builder",
+    "dist:win": "npm run package:prepare && electron-builder --win",
+    "dist:mac": "npm run package:prepare && electron-builder --mac",
+    "dist:linux": "npm run package:prepare && electron-builder --linux"
+  },
+  "build": {
+    "appId": "ai.vlawd.cursor",
+    "productName": "AI Cursor V2",
+    "directories": {
+      "output": "release",
+      "buildResources": "packages/renderer/assets"
+    },
+    "asar": true,
+    "files": [
+      "package.json",
+      "dist/renderer/**/*",
+      "packages/*/dist/**/*",
+      "packages/renderer/assets/**/*"
+    ],
+    "extraMetadata": {
+      "main": "packages/main/dist/packages/main/src/electron/main.js"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    }
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
@@ -23,6 +71,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.0.3",
     "electron": "^39.8.5",
+    "electron-builder": "^25.1.8",
     "tailwindcss": "^4.3.1",
     "tsx": "^4.20.4",
     "typescript": "^6.0.3",
