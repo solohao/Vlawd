@@ -3,7 +3,7 @@ import type {
   DuplexModelInput,
   DuplexModelProvider
 } from "@ai-cursor-v2/shared";
-import type { LlmAdapter, LlmMessage } from "./llm-adapter.js";
+import { EchoLlmAdapter, type LlmAdapter, type LlmMessage } from "./llm-adapter.js";
 
 const DEFAULT_SYSTEM_PROMPT = [
   "你是 Vlawd 的本地全双工桌面助手。",
@@ -21,14 +21,22 @@ const DEFAULT_SYSTEM_PROMPT = [
  */
 export class PipelineDuplexModelProvider implements DuplexModelProvider {
   readonly kind = "pipeline" as const;
-  readonly usingRealInference: boolean;
+  private realInference: boolean;
+  private readonly fallback: LlmAdapter;
 
   constructor(
     private readonly llm: LlmAdapter,
     private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-    private readonly history: LlmMessage[] = []
+    private readonly history: LlmMessage[] = [],
+    fallback?: LlmAdapter
   ) {
-    this.usingRealInference = llm.usingRealInference;
+    this.realInference = llm.usingRealInference;
+    this.fallback = fallback ?? new EchoLlmAdapter();
+  }
+
+  /** 反映最近一次生成实际走的是真实端点还是离线回退。 */
+  get usingRealInference(): boolean {
+    return this.realInference;
   }
 
   async *generate(input: DuplexModelInput, signal?: AbortSignal): AsyncIterable<DuplexModelEvent> {
@@ -41,30 +49,63 @@ export class PipelineDuplexModelProvider implements DuplexModelProvider {
     ];
 
     let spoke = false;
-    try {
-      for await (const delta of this.llm.stream(messages, signal)) {
-        if (signal?.aborted) {
-          break;
+    let realFailed = false;
+    if (this.llm.usingRealInference) {
+      try {
+        for await (const delta of this.llm.stream(messages, signal)) {
+          if (signal?.aborted) {
+            return;
+          }
+          if (!delta) {
+            continue;
+          }
+          if (!spoke) {
+            spoke = true;
+            yield { type: "state", state: "speaking" };
+          }
+          yield { type: "speech", text: delta };
         }
-        if (!delta) {
-          continue;
+        this.realInference = true;
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
         }
-        if (!spoke) {
-          spoke = true;
-          yield { type: "state", state: "speaking" };
-        }
-        yield { type: "speech", text: delta };
+        realFailed = true;
       }
-    } catch (error) {
-      if (isAbortError(error)) {
-        return;
+    }
+
+    // 未配置真实端点，或真实端点在开口前不可用：回退到离线 Echo（明确标注非真实推理）。
+    if (!spoke) {
+      this.realInference = false;
+      if (realFailed) {
+        yield {
+          type: "uncertainty",
+          reason: "本地推理端点不可用，已切到离线回退语气（非真实推理）。配置并运行本地 Qwen2.5 后即为真实推理。",
+          confidence: 0.2
+        };
       }
-      yield {
-        type: "uncertainty",
-        reason: `本地推理端点不可用：${describeError(error)}`,
-        confidence: 0.1
-      };
-      return;
+      try {
+        for await (const delta of this.fallback.stream(messages, signal)) {
+          if (signal?.aborted) {
+            return;
+          }
+          if (!delta) {
+            continue;
+          }
+          if (!spoke) {
+            spoke = true;
+            yield { type: "state", state: "speaking" };
+          }
+          yield { type: "speech", text: delta };
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+      }
+    } else if (realFailed) {
+      // 已经开口后真实端点中断：不重复回退，仅提示。
+      yield { type: "uncertainty", reason: "本地推理连接中断。", confidence: 0.2 };
     }
 
     if (!signal?.aborted) {
@@ -73,14 +114,12 @@ export class PipelineDuplexModelProvider implements DuplexModelProvider {
   }
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
-    return this.llm.healthCheck(signal);
+    const connected = await this.llm.healthCheck(signal);
+    this.realInference = connected && this.llm.usingRealInference;
+    return connected;
   }
 }
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
