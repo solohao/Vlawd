@@ -74,8 +74,9 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
   const [draft, setDraft] = useState("");
   const [deviceFilter, setDeviceFilter] = useState<"all" | "headset" | "mic" | "speaker">("all");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [entered, setEntered] = useState(false);
 
-  const connected = convo.available && !!snapshot.sessionId;
+  const connected = entered && convo.available && !!snapshot.sessionId;
   const active = connected && (snapshot.runtimeState === "speaking" || snapshot.runtimeState === "listening" || snapshot.runtimeState === "thinking");
 
   useEffect(() => {
@@ -88,23 +89,31 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
       .catch(() => undefined);
   }, [convo.micActive]);
 
+  const realInference = snapshot.providerConnected && snapshot.usingRealInference;
   const readyLabel = !convo.available
     ? { text: "未连接 Runtime（浏览器预览）", tone: "idle" as const }
-    : snapshot.usingRealInference
+    : realInference
       ? { text: "AI 员工已就绪", tone: "ready" as const }
       : { text: "离线回退模式", tone: "warn" as const };
 
   const startVoice = async () => {
+    setEntered(true);
     await convo.connect();
     if (convo.micSupported && !convo.micActive) {
       await convo.toggleMic();
     }
   };
 
+  const startManual = async () => {
+    setEntered(true);
+    await convo.connect();
+  };
+
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
+    setEntered(true);
     if (!connected) await convo.connect();
     await convo.submit(text);
   };
@@ -271,7 +280,7 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
                   icon={<MonitorIcon width={18} height={18} />}
                   name="手动输入"
                   sub="通过键盘手动指令"
-                  action={<button onClick={() => void convo.connect()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50">选择</button>}
+                  action={<button onClick={() => void startManual()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50">选择</button>}
                 />
               </div>
               <div className="mt-3 text-center text-[12px] text-slate-400">
@@ -363,6 +372,7 @@ function LiveConversationPanel({
   latestByKind: Map<string, DuplexLatencySample>;
 }) {
   const { snapshot } = convo;
+  const realInference = snapshot.providerConnected && snapshot.usingRealInference;
   return (
     <div className="space-y-4">
       <section className={`${card} flex min-h-[360px] flex-col p-4`}>
@@ -371,10 +381,10 @@ function LiveConversationPanel({
             <span className="text-[14px] font-semibold text-slate-800">实时对话</span>
             <span
               className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                snapshot.usingRealInference ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700"
+                realInference ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700"
               }`}
             >
-              {snapshot.usingRealInference ? "真实推理" : "离线回退"}
+              {realInference ? "真实推理" : "离线回退"}
             </span>
           </div>
           <div className="flex items-center gap-2">

@@ -110,7 +110,7 @@ export function ModelCenterPage() {
                       model: PROVIDER_LABELS[snapshot.activeProviderKind] ?? r.model,
                       strip: {
                         ...r.strip,
-                        text: snapshot.usingRealInference
+                        text: snapshot.providerConnected && snapshot.usingRealInference
                           ? "已连接真实本地推理端点"
                           : "离线回退语气（非真实推理）"
                       }
