@@ -23,6 +23,13 @@ const EMPTY_BACKEND: ModelBackendState = {
 const EMPTY_SNAPSHOT: ModelCenterSnapshot = {
   generatedAt: "",
   environment: null,
+  ollamaInstall: {
+    supported: false,
+    installed: false,
+    installerFound: false,
+    phase: "idle",
+    updatedAt: ""
+  },
   backend: EMPTY_BACKEND,
   activeBackend: "ollama",
   backends: [EMPTY_BACKEND],
@@ -52,6 +59,9 @@ export interface ModelCenterController {
   setCustomEndpoint(config: CustomEndpointConfig): Promise<void>;
   openStorageLocation(): Promise<void>;
   openInstallGuide(): Promise<void>;
+  detectOllamaInstaller(): Promise<void>;
+  locateOllamaInstaller(): Promise<void>;
+  installOllama(): Promise<void>;
 }
 
 export function useModelCenter(): ModelCenterController {
@@ -69,6 +79,8 @@ export function useModelCenter(): ModelCenterController {
     // 首次进入即做一次环境探测与后端检测。
     void api.modelProbeEnvironment().then(setSnapshot).catch(() => undefined);
     void api.modelRefreshBackend().then(setSnapshot).catch(() => undefined);
+    // 首次进入即检测代管安装 Ollama 的状态（是否已安装 / 本机是否已有安装器）。
+    void api.modelDetectOllamaInstaller().then(setSnapshot).catch(() => undefined);
     return () => unsubscribe();
   }, [available]);
 
@@ -100,6 +112,9 @@ export function useModelCenter(): ModelCenterController {
     (config: CustomEndpointConfig) => run(() => desktopApi().modelSetCustomEndpoint(config)),
     [run]
   );
+  const detectOllamaInstaller = useCallback(() => run(() => desktopApi().modelDetectOllamaInstaller()), [run]);
+  const locateOllamaInstaller = useCallback(() => run(() => desktopApi().modelLocateOllamaInstaller()), [run]);
+  const installOllama = useCallback(() => run(() => desktopApi().modelInstallOllama()), [run]);
 
   const cancelPull = useCallback(async () => {
     if (available) {
@@ -134,7 +149,10 @@ export function useModelCenter(): ModelCenterController {
       setBackend,
       setCustomEndpoint,
       openStorageLocation,
-      openInstallGuide
+      openInstallGuide,
+      detectOllamaInstaller,
+      locateOllamaInstaller,
+      installOllama
     }),
     [
       available,
@@ -150,7 +168,10 @@ export function useModelCenter(): ModelCenterController {
       setBackend,
       setCustomEndpoint,
       openStorageLocation,
-      openInstallGuide
+      openInstallGuide,
+      detectOllamaInstaller,
+      locateOllamaInstaller,
+      installOllama
     ]
   );
 }

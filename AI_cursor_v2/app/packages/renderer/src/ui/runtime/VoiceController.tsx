@@ -48,19 +48,19 @@ export function VoiceController({
   const noDrag = draggable ? "no-drag" : "";
   return (
     <div className="w-[392px] select-none">
-      <div className="rounded-2xl border border-ink-700 bg-ink-900/95 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+      <div className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-[0_20px_48px_rgba(15,23,42,0.18)] backdrop-blur-xl">
         {/* header (drag handle) */}
         <div className={`mb-3 flex items-center justify-between ${headerDrag}`}>
           <div className="flex items-center gap-2">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-400">
               <span className="h-2 w-2 rounded-full bg-ink-900" />
             </span>
-            <span className="text-[13px] font-semibold text-white">AI Cursor</span>
-            <span className="rounded bg-brand-400/20 px-1.5 py-0.5 text-[9px] font-bold text-brand-400">V2</span>
+            <span className="text-[13px] font-semibold text-slate-900">AI Cursor</span>
+            <span className="rounded bg-brand-400/20 px-1.5 py-0.5 text-[9px] font-bold text-brand-600">V2</span>
           </div>
           <button
             onClick={onCollapse}
-            className={`${noDrag} text-slate-500 hover:text-slate-300`}
+            className={`${noDrag} text-slate-400 hover:text-slate-700`}
             aria-label="collapse"
           >
             <CloseIcon width={16} height={16} />
@@ -71,12 +71,12 @@ export function VoiceController({
         <div className="flex items-center gap-3">
           <AiEmployeeMascot size={52} variant="runtime" />
           <Waveform side="left" />
-          <span className="text-[18px] font-medium text-white">{token.label}…</span>
+          <span className="text-[18px] font-medium text-slate-900">{token.label}…</span>
           <div className="ml-auto flex items-center gap-3">
             <Waveform side="right" />
             <button
               onClick={onOpenSettings}
-              className={`${noDrag} text-slate-500 hover:text-slate-300`}
+              className={`${noDrag} text-slate-400 hover:text-slate-700`}
               aria-label="open settings"
             >
               <GearIcon width={16} height={16} />
@@ -85,9 +85,9 @@ export function VoiceController({
         </div>
 
         {/* meta row */}
-        <div className="mt-3 flex items-center gap-4 text-[12px] text-slate-400">
+        <div className="mt-3 flex items-center gap-4 text-[12px] text-slate-500">
           <span className="inline-flex items-center gap-1.5">
-            <HeadphonesIcon className="text-slate-500" />
+            <HeadphonesIcon className="text-slate-400" />
             {device}
           </span>
           <span className="inline-flex items-center gap-1.5">
@@ -100,13 +100,13 @@ export function VoiceController({
         <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2">
           <button
             onClick={onPause}
-            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-ink-700 py-2.5 text-[13px] font-medium text-slate-200 hover:bg-ink-600`}
+            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-200`}
           >
             <PauseIcon /> 暂停
           </button>
           <button
             onClick={onCancel}
-            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-ink-700 py-2.5 text-[13px] font-medium text-rose-300 hover:bg-ink-600`}
+            className={`${noDrag} flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-2.5 text-[13px] font-medium text-rose-600 hover:bg-slate-200`}
           >
             <CloseIcon width={15} height={15} /> 取消
           </button>
@@ -121,12 +121,12 @@ export function VoiceController({
       </div>
 
       {/* detached prompt bubble */}
-      <div className="mt-2 ml-6 w-[300px] rounded-2xl rounded-tl-md border border-ink-700 bg-ink-850/95 p-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="mt-2 ml-6 w-[300px] rounded-2xl rounded-tl-md border border-slate-200 bg-slate-50/95 p-3.5 shadow-[0_14px_36px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="flex items-center justify-between">
-          <p className="text-[13px] text-slate-200">我在听，请说出你的指令…</p>
+          <p className="text-[13px] text-slate-700">我在听，请说出你的指令…</p>
           <Waveform side="right" />
         </div>
-        <p className="mt-1.5 text-[11.5px] text-slate-500">例如：「帮我整理这份文档」、「查找上周的邮件」</p>
+        <p className="mt-1.5 text-[11.5px] text-slate-400">例如：「帮我整理这份文档」、「查找上周的邮件」</p>
       </div>
     </div>
   );

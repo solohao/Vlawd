@@ -1,3 +1,5 @@
+import { aiEmployeeAvatarCompact, aiEmployeeAvatarWithBase } from "../app/assets.js";
+
 interface LogoProps {
   theme: "dark" | "light";
 }
@@ -32,8 +34,7 @@ interface MascotProps {
 }
 
 export function AiEmployeeMascot({ size = 120, variant = "presence", className = "" }: MascotProps) {
-  const src =
-    variant === "runtime" ? "/ai-employee-avatar-compact.png" : "/ai-employee-avatar-with-base.png";
+  const src = variant === "runtime" ? aiEmployeeAvatarCompact : aiEmployeeAvatarWithBase;
   return (
     <div className={`relative grid place-items-center ${className}`} style={{ width: size, height: size }}>
       <span
