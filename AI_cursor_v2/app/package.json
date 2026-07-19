@@ -1,6 +1,6 @@
 {
   "name": "ai-cursor-v2-app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI Cursor V2 (Vlawd) 本地优先全双工桌面 AI 员工",
   "author": "Vlawd",
   "private": true,
