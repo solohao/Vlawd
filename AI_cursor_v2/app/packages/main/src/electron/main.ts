@@ -1,12 +1,19 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, shell } from "electron";
 import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import type { DuplexProviderKind, DuplexRuntimeEvent, ModelRole, SafetyPreemptionIntent } from "@ai-cursor-v2/shared";
+import type {
+  DuplexProviderKind,
+  DuplexRuntimeEvent,
+  ModelCenterSnapshot,
+  ModelRole,
+  SafetyPreemptionIntent
+} from "@ai-cursor-v2/shared";
 import { MockDesktopRuntime } from "../desktop/mock-desktop-runtime.js";
 import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { createProvider } from "../model/provider-registry.js";
 import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
+import { ModelCenterService } from "../model/model-center-service.js";
 import { JsonlSessionStorage } from "../session/jsonl-storage.js";
 import { initAutoUpdater, checkForUpdatesManually } from "./auto-updater.js";
 
@@ -42,6 +49,17 @@ function broadcastConversationEvent(event: DuplexRuntimeEvent): void {
   }
 }
 duplexRuntime.on(broadcastConversationEvent);
+
+// ── 模型中心：包装版 Ollama 后端 + 环境探测 + 存储配置 ─────────────────
+const modelCenter = new ModelCenterService({ runtime: duplexRuntime });
+function broadcastModelCenter(snapshot: ModelCenterSnapshot): void {
+  for (const window of [mainWindow, overlayWindow]) {
+    if (window && !window.isDestroyed()) {
+      window.webContents.send("model:snapshot", snapshot);
+    }
+  }
+}
+modelCenter.on(broadcastModelCenter);
 
 const OVERLAY_MARGIN = 24;
 const OVERLAY_DEFAULT = { width: 208, height: 84 };
@@ -230,6 +248,32 @@ ipcMain.handle("conversation:setProvider", (_event, kind: DuplexProviderKind) =>
   duplexRuntime.setActiveProvider(kind)
 );
 ipcMain.handle("conversation:checkHealth", () => duplexRuntime.checkProviderHealth());
+
+// ── 模型中心通道 ────────────────────────────────────────────────────
+ipcMain.handle("model:snapshot", () => modelCenter.getSnapshot());
+ipcMain.handle("model:probe", () => modelCenter.probe());
+ipcMain.handle("model:refreshBackend", () => modelCenter.refreshBackend());
+ipcMain.handle("model:chooseStorageRoot", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择模型下载目录（将通过 OLLAMA_MODELS 生效）",
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return modelCenter.getSnapshot();
+  }
+  return modelCenter.setStorageRoot(result.filePaths[0]);
+});
+ipcMain.handle("model:pull", (_event, model: string) => modelCenter.pull(model));
+ipcMain.handle("model:cancelPull", () => modelCenter.cancelPull());
+ipcMain.handle("model:remove", (_event, model: string) => modelCenter.removeModel(model));
+ipcMain.handle("model:useAsBrain", (_event, model: string) => modelCenter.useModelAsBrain(model));
+ipcMain.handle("model:openStorageLocation", async () => {
+  const dir = modelCenter.getModelsDir();
+  if (dir) {
+    await shell.openPath(dir);
+  }
+});
+ipcMain.handle("model:openInstallGuide", () => shell.openExternal(modelCenter.getInstallGuidanceUrl()));
 
 ipcMain.handle("window:openMain", () => {
   const window = createMainWindow();
