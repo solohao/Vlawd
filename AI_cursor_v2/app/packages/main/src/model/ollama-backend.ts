@@ -1,0 +1,300 @@
+import { spawn } from "node:child_process";
+import type {
+  ModelPullPhase,
+  ModelPullProgress,
+  OllamaModelInfo
+} from "@ai-cursor-v2/shared";
+
+const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
+const INSTALL_GUIDANCE_URL = "https://ollama.com/download";
+
+interface OllamaTagsResponse {
+  models?: Array<{ name?: string; size?: number; modified_at?: string }>;
+}
+
+interface OllamaVersionResponse {
+  version?: string;
+}
+
+interface OllamaPullChunk {
+  status?: string;
+  digest?: string;
+  total?: number;
+  completed?: number;
+  error?: string;
+}
+
+export function parseOllamaTags(body: OllamaTagsResponse): OllamaModelInfo[] {
+  if (!Array.isArray(body.models)) {
+    return [];
+  }
+  const models: OllamaModelInfo[] = [];
+  for (const entry of body.models) {
+    if (!entry?.name) {
+      continue;
+    }
+    models.push({
+      name: entry.name,
+      sizeBytes: typeof entry.size === "number" ? entry.size : 0,
+      modifiedAt: entry.modified_at
+    });
+  }
+  return models;
+}
+
+function phaseFromStatus(status: string): ModelPullPhase {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("success")) {
+    return "success";
+  }
+  if (normalized.includes("verifying") || normalized.includes("writing manifest")) {
+    return "verifying";
+  }
+  if (normalized.includes("pulling manifest") || normalized.includes("resolv")) {
+    return "resolving";
+  }
+  if (normalized.includes("pulling") || normalized.includes("downloading")) {
+    return "downloading";
+  }
+  return "downloading";
+}
+
+/**
+ * 聚合 Ollama `/api/pull` 的流式 NDJSON 进度。
+ *
+ * Ollama 按"层(digest)"逐层报告 total/completed，因此需要跨层累加得到总进度。
+ * 该累加器保持纯逻辑，便于单测。
+ */
+export class PullProgressAccumulator {
+  private readonly layers = new Map<string, { total: number; completed: number }>();
+  private lastStatus = "";
+
+  constructor(private readonly model: string) {}
+
+  ingest(chunk: OllamaPullChunk): ModelPullProgress {
+    if (chunk.error) {
+      return this.snapshot({ phase: "error", status: chunk.error, message: chunk.error });
+    }
+    const status = chunk.status ?? this.lastStatus;
+    this.lastStatus = status;
+
+    if (chunk.digest && typeof chunk.total === "number") {
+      this.layers.set(chunk.digest, {
+        total: chunk.total,
+        completed: typeof chunk.completed === "number" ? chunk.completed : 0
+      });
+    }
+
+    return this.snapshot({ phase: phaseFromStatus(status), status });
+  }
+
+  private snapshot(partial: { phase: ModelPullPhase; status: string; message?: string }): ModelPullProgress {
+    let totalBytes = 0;
+    let completedBytes = 0;
+    for (const layer of this.layers.values()) {
+      totalBytes += layer.total;
+      completedBytes += Math.min(layer.completed, layer.total);
+    }
+    const percent =
+      partial.phase === "success"
+        ? 100
+        : totalBytes > 0
+          ? Math.min(100, Math.round((completedBytes / totalBytes) * 100))
+          : 0;
+    return {
+      model: this.model,
+      phase: partial.phase,
+      status: partial.status,
+      completedBytes,
+      totalBytes,
+      percent,
+      message: partial.message,
+      updatedAt: new Date().toISOString()
+    };
+  }
+}
+
+export interface OllamaDetectResult {
+  status: "running" | "installed_not_running" | "not_installed";
+  version?: string;
+  installedModels: OllamaModelInfo[];
+}
+
+/**
+ * 包装版 Ollama 后端：环境探测 / 流式 pull / list / remove / health / serve。
+ *
+ * App 只负责调用 Ollama 的本地 API 与命令；模型下载、缓存、运行都交给 Ollama。
+ * 通过 `OLLAMA_MODELS` 环境变量让用户自由选择下载目录（仅当由本 App 启动 serve 时可控）。
+ */
+export class OllamaBackend {
+  readonly id = "ollama" as const;
+  readonly baseUrl = DEFAULT_BASE_URL;
+  readonly openaiEndpoint = `${DEFAULT_BASE_URL}/v1`;
+  readonly installGuidanceUrl = INSTALL_GUIDANCE_URL;
+
+  async detect(signal?: AbortSignal): Promise<OllamaDetectResult> {
+    const version = await this.version(signal);
+    if (version !== null) {
+      const installedModels = await this.listModels(signal).catch(() => []);
+      return { status: "running", version, installedModels };
+    }
+    const binaryPresent = await this.binaryInstalled();
+    return {
+      status: binaryPresent ? "installed_not_running" : "not_installed",
+      installedModels: []
+    };
+  }
+
+  async version(signal?: AbortSignal): Promise<string | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/version`, { signal });
+      if (!response.ok) {
+        return null;
+      }
+      const body = (await response.json()) as OllamaVersionResponse;
+      return body.version ?? "unknown";
+    } catch {
+      return null;
+    }
+  }
+
+  async listModels(signal?: AbortSignal): Promise<OllamaModelInfo[]> {
+    const response = await fetch(`${this.baseUrl}/api/tags`, { signal });
+    if (!response.ok) {
+      throw new Error(`Ollama /api/tags responded ${response.status}`);
+    }
+    return parseOllamaTags((await response.json()) as OllamaTagsResponse);
+  }
+
+  async health(signal?: AbortSignal): Promise<boolean> {
+    return (await this.version(signal)) !== null;
+  }
+
+  async remove(model: string, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/delete`, {
+      method: "DELETE",
+      signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: model })
+    });
+    if (!response.ok) {
+      throw new Error(`删除模型失败：Ollama 返回 ${response.status}`);
+    }
+  }
+
+  async pull(
+    model: string,
+    onProgress: (progress: ModelPullProgress) => void,
+    signal?: AbortSignal
+  ): Promise<ModelPullProgress> {
+    const accumulator = new PullProgressAccumulator(model);
+    const response = await fetch(`${this.baseUrl}/api/pull`, {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: model, stream: true })
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`拉取模型失败：Ollama 返回 ${response.status} ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let last: ModelPullProgress = {
+      model,
+      phase: "resolving",
+      status: "pulling manifest",
+      completedBytes: 0,
+      totalBytes: 0,
+      percent: 0,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) {
+            continue;
+          }
+          let chunk: OllamaPullChunk;
+          try {
+            chunk = JSON.parse(line) as OllamaPullChunk;
+          } catch {
+            continue;
+          }
+          last = accumulator.ingest(chunk);
+          onProgress(last);
+          if (chunk.error) {
+            throw new Error(chunk.error);
+          }
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+
+    if (last.phase !== "success") {
+      last = { ...last, phase: "success", percent: 100, updatedAt: new Date().toISOString() };
+      onProgress(last);
+    }
+    return last;
+  }
+
+  /** 检测本机是否安装 Ollama 可执行文件（未运行时用）。 */
+  async binaryInstalled(): Promise<boolean> {
+    const command = process.platform === "win32" ? "where" : "which";
+    try {
+      const found = await new Promise<boolean>((resolve) => {
+        const child = spawn(command, ["ollama"]);
+        child.on("error", () => resolve(false));
+        child.on("close", (code) => resolve(code === 0));
+      });
+      return found;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 若 Ollama 已安装但未运行，用指定的模型目录启动后台 serve 进程。
+   * 通过 `OLLAMA_MODELS` 把模型缓存指到用户选择的目录。
+   * 返回 true 表示由本 App 启动成功。
+   */
+  async ensureServing(modelsDir: string | undefined, signal?: AbortSignal): Promise<boolean> {
+    if ((await this.version(signal)) !== null) {
+      // 已有进程在跑（可能是用户自己启动的），不重复启动。
+      return false;
+    }
+    if (!(await this.binaryInstalled())) {
+      return false;
+    }
+    const env = { ...process.env };
+    if (modelsDir && modelsDir.trim()) {
+      env.OLLAMA_MODELS = modelsDir;
+    }
+    const child = spawn("ollama", ["serve"], { env, detached: true, stdio: "ignore" });
+    child.unref();
+
+    // 轮询等待 API 就绪（最多约 6 秒）。
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await delay(300);
+      if ((await this.version(signal)) !== null) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

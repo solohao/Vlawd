@@ -3,6 +3,7 @@ import type {
   DuplexConversationSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
+  ModelCenterSnapshot,
   ModelRole,
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
@@ -35,6 +36,18 @@ export interface AiCursorDesktopApi {
   conversationSetProvider(kind: DuplexProviderKind): Promise<DuplexConversationSnapshot>;
   conversationCheckHealth(): Promise<boolean>;
   onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
+
+  modelSnapshot(): Promise<ModelCenterSnapshot>;
+  modelProbeEnvironment(): Promise<ModelCenterSnapshot>;
+  modelRefreshBackend(): Promise<ModelCenterSnapshot>;
+  modelChooseStorageRoot(): Promise<ModelCenterSnapshot>;
+  modelPull(model: string): Promise<ModelCenterSnapshot>;
+  modelCancelPull(): Promise<ModelCenterSnapshot>;
+  modelRemove(model: string): Promise<ModelCenterSnapshot>;
+  modelUseAsBrain(model: string): Promise<ModelCenterSnapshot>;
+  modelOpenStorageLocation(): Promise<void>;
+  modelOpenInstallGuide(): Promise<void>;
+  onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
 }
 
 declare global {

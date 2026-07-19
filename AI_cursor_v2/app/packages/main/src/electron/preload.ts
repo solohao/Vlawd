@@ -4,6 +4,7 @@ import type {
   DuplexConversationSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
+  ModelCenterSnapshot,
   ModelRole,
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
@@ -43,6 +44,20 @@ export interface AiCursorDesktopApi {
   conversationCheckHealth(): Promise<boolean>;
   /** 订阅实时 Runtime 事件；返回取消订阅函数。 */
   onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
+
+  // ── 模型中心（包装版 Ollama 后端）────────────────────────────────────
+  modelSnapshot(): Promise<ModelCenterSnapshot>;
+  modelProbeEnvironment(): Promise<ModelCenterSnapshot>;
+  modelRefreshBackend(): Promise<ModelCenterSnapshot>;
+  modelChooseStorageRoot(): Promise<ModelCenterSnapshot>;
+  modelPull(model: string): Promise<ModelCenterSnapshot>;
+  modelCancelPull(): Promise<ModelCenterSnapshot>;
+  modelRemove(model: string): Promise<ModelCenterSnapshot>;
+  modelUseAsBrain(model: string): Promise<ModelCenterSnapshot>;
+  modelOpenStorageLocation(): Promise<void>;
+  modelOpenInstallGuide(): Promise<void>;
+  /** 订阅模型中心快照（含下载进度）；返回取消订阅函数。 */
+  onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
 }
 
 const api: AiCursorDesktopApi = {
@@ -75,6 +90,23 @@ const api: AiCursorDesktopApi = {
   onConversationEvent: (listener) => {
     const channel = "conversation:event";
     const handler = (_event: unknown, payload: DuplexRuntimeEvent): void => listener(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
+  modelSnapshot: () => ipcRenderer.invoke("model:snapshot") as Promise<ModelCenterSnapshot>,
+  modelProbeEnvironment: () => ipcRenderer.invoke("model:probe") as Promise<ModelCenterSnapshot>,
+  modelRefreshBackend: () => ipcRenderer.invoke("model:refreshBackend") as Promise<ModelCenterSnapshot>,
+  modelChooseStorageRoot: () => ipcRenderer.invoke("model:chooseStorageRoot") as Promise<ModelCenterSnapshot>,
+  modelPull: (model) => ipcRenderer.invoke("model:pull", model) as Promise<ModelCenterSnapshot>,
+  modelCancelPull: () => ipcRenderer.invoke("model:cancelPull") as Promise<ModelCenterSnapshot>,
+  modelRemove: (model) => ipcRenderer.invoke("model:remove", model) as Promise<ModelCenterSnapshot>,
+  modelUseAsBrain: (model) => ipcRenderer.invoke("model:useAsBrain", model) as Promise<ModelCenterSnapshot>,
+  modelOpenStorageLocation: () => ipcRenderer.invoke("model:openStorageLocation") as Promise<void>,
+  modelOpenInstallGuide: () => ipcRenderer.invoke("model:openInstallGuide") as Promise<void>,
+  onModelSnapshot: (listener) => {
+    const channel = "model:snapshot";
+    const handler = (_event: unknown, payload: ModelCenterSnapshot): void => listener(payload);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   }
