@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
+  ModelBackendKind,
   ModelBackendState,
   ModelCatalogItem,
   ModelPullProgress
@@ -53,14 +54,27 @@ const PROVIDER_LABELS: Record<string, string> = {
   mock: "Mock（开发）"
 };
 
+const BACKEND_LABELS: Record<ModelBackendKind, string> = {
+  ollama: "Ollama",
+  lmstudio: "LM Studio",
+  custom: "自定义端点"
+};
+
+const BACKEND_HINTS: Record<ModelBackendKind, string> = {
+  ollama: "本地下载器 + 自选目录（OLLAMA_MODELS）",
+  lmstudio: "连接 LM Studio 本地服务器（:1234）",
+  custom: "任意 OpenAI 兼容端点（vLLM / llama.cpp / Jan）"
+};
+
 function backendState(backend: ModelBackendState): { label: string; tone: Tone } {
+  const notRunningLabel = backend.backend === "ollama" ? "未安装" : "未连接";
   switch (backend.status) {
     case "running":
-      return { label: "运行中", tone: "running" };
+      return { label: backend.backend === "ollama" ? "运行中" : "已连接", tone: "running" };
     case "installed_not_running":
       return { label: "未启动", tone: "available" };
     case "not_installed":
-      return { label: "未安装", tone: "idle" };
+      return { label: notRunningLabel, tone: "idle" };
     default:
       return { label: "检测中", tone: "idle" };
   }
@@ -111,9 +125,11 @@ export function ModelCenterPage() {
           </div>
           <span className="inline-flex items-center gap-1.5 text-[12.5px] text-slate-500">
             <span className={`h-1.5 w-1.5 rounded-full ${backendInfo.tone === "running" ? "bg-brand-500" : "bg-slate-300"}`} />
-            Ollama {backendInfo.label}
+            {BACKEND_LABELS[snap.activeBackend]} {backendInfo.label}
           </span>
         </header>
+
+        <BackendSelector snap={snap} model={model} />
 
         <BackendBanner backend={backend} model={model} />
 
@@ -154,6 +170,8 @@ export function ModelCenterPage() {
             onPull={(id) => void model.pull(id)}
             onUse={(id) => void model.useAsBrain(id)}
             footerNote={m.footerNote}
+            showCatalog={backend.supportsPull}
+            backendLabel={BACKEND_LABELS[snap.activeBackend]}
           />
         )}
 
@@ -163,11 +181,13 @@ export function ModelCenterPage() {
             catalog={snap.catalog}
             activePull={snap.activePull}
             busy={model.busy}
+            customEndpoint={snap.customEndpoint}
             onPull={(id) => void model.pull(id)}
             onCancel={() => void model.cancelPull()}
             onRemove={(id) => void model.removeModel(id)}
             onUse={(id) => void model.useAsBrain(id)}
             onInstall={() => void model.openInstallGuide()}
+            onSaveCustomEndpoint={(cfg) => void model.setCustomEndpoint(cfg)}
           />
         )}
 
@@ -205,13 +225,25 @@ export function ModelCenterPage() {
             <QuickAction
               icon={RefreshIcon}
               title="检查模型状态"
-              desc="重新检测 Ollama 与已安装模型"
+              desc="重新检测全部后端与已安装模型"
               onClick={() => void model.refreshBackend()}
             />
             <QuickAction
               icon={ImportIcon}
-              title="安装 / 更新 Ollama"
-              desc="打开 Ollama 官方下载页"
+              title={
+                snap.activeBackend === "ollama"
+                  ? "安装 / 更新 Ollama"
+                  : snap.activeBackend === "lmstudio"
+                    ? "LM Studio 使用指南"
+                    : "OpenAI 兼容端点文档"
+              }
+              desc={
+                snap.activeBackend === "ollama"
+                  ? "打开 Ollama 官方下载页"
+                  : snap.activeBackend === "lmstudio"
+                    ? "如何开启本地服务器"
+                    : "自定义端点接入说明"
+              }
               onClick={() => void model.openInstallGuide()}
             />
             <QuickAction
@@ -269,7 +301,7 @@ function BackendBanner({ backend, model }: { backend: ModelBackendState; model: 
           ) : null}
         </div>
         <div className="flex shrink-0 gap-2">
-          {notInstalled ? (
+          {notInstalled && backend.backend === "ollama" ? (
             <button
               onClick={() => void model.openInstallGuide()}
               className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-brand-600"
@@ -290,6 +322,86 @@ function BackendBanner({ backend, model }: { backend: ModelBackendState; model: 
   );
 }
 
+function BackendSelector({
+  snap,
+  model
+}: {
+  snap: ReturnType<typeof useModelCenter>["snapshot"];
+  model: ReturnType<typeof useModelCenter>;
+}) {
+  const kinds: ModelBackendKind[] = ["ollama", "lmstudio", "custom"];
+  return (
+    <div className="mb-4">
+      <p className="mb-2 text-[12px] font-medium text-slate-500">运行后端（选择模型来源，只需保持一个引擎在跑）</p>
+      <div className="grid grid-cols-3 gap-2">
+        {kinds.map((kind) => {
+          const state = snap.backends.find((b) => b.backend === kind);
+          const info = state ? backendState(state) : { label: "检测中", tone: "idle" as Tone };
+          const active = snap.activeBackend === kind;
+          return (
+            <button
+              key={kind}
+              onClick={() => void model.setBackend(kind)}
+              className={`rounded-xl border p-3 text-left transition ${
+                active ? "border-brand-400 bg-brand-400/5" : "border-slate-200 bg-white hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-semibold text-slate-800">{BACKEND_LABELS[kind]}</span>
+                <StateDot tone={info.tone} label={info.label} />
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-slate-400">{BACKEND_HINTS[kind]}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CustomEndpointForm({
+  customEndpoint,
+  onSave
+}: {
+  customEndpoint: { baseUrl: string; model: string };
+  onSave: (cfg: { baseUrl: string; model: string }) => void;
+}) {
+  const [baseUrl, setBaseUrl] = useState(customEndpoint.baseUrl);
+  const [modelName, setModelName] = useState(customEndpoint.model);
+  useEffect(() => {
+    setBaseUrl(customEndpoint.baseUrl);
+    setModelName(customEndpoint.model);
+  }, [customEndpoint.baseUrl, customEndpoint.model]);
+  return (
+    <section className={`${panel} p-4`}>
+      <p className="mb-1 text-[13px] font-semibold text-slate-800">自定义 OpenAI 兼容端点</p>
+      <p className="mb-3 text-[11.5px] text-slate-400">
+        填入本地/自建服务地址（会自动补 /v1）与模型名，连接后可在下方设为执行大脑。
+      </p>
+      <div className="space-y-2">
+        <input
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder="http://127.0.0.1:8000/v1"
+          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700 outline-none focus:border-brand-400"
+        />
+        <input
+          value={modelName}
+          onChange={(e) => setModelName(e.target.value)}
+          placeholder="模型名，例如 qwen2.5-7b-instruct"
+          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700 outline-none focus:border-brand-400"
+        />
+        <button
+          onClick={() => onSave({ baseUrl, model: modelName })}
+          className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-brand-600"
+        >
+          连接并检测
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ConfigTab({
   brain,
   onTestBrain,
@@ -300,7 +412,9 @@ function ConfigTab({
   busy,
   onPull,
   onUse,
-  footerNote
+  footerNote,
+  showCatalog,
+  backendLabel
 }: {
   brain: { state: string; tone: Tone; model: string };
   onTestBrain: () => void;
@@ -312,6 +426,8 @@ function ConfigTab({
   onPull: (id: string) => void;
   onUse: (id: string) => void;
   footerNote: string;
+  showCatalog: boolean;
+  backendLabel: string;
 }) {
   return (
     <>
@@ -355,20 +471,28 @@ function ConfigTab({
         />
       </div>
 
-      <h2 className="mb-3 mt-7 text-[14px] font-semibold text-slate-800">模型推荐</h2>
-      <div className="grid grid-cols-3 gap-3">
-        {catalog.map((item) => (
-          <RecommendItem
-            key={item.id}
-            item={item}
-            progress={activePull && activePull.model === item.id ? activePull : null}
-            busy={busy}
-            onPull={() => onPull(item.id)}
-            onUse={() => onUse(item.id)}
-          />
-        ))}
-      </div>
-      <p className="mt-4 text-[12px] text-slate-400">{footerNote}</p>
+      {showCatalog ? (
+        <>
+          <h2 className="mb-3 mt-7 text-[14px] font-semibold text-slate-800">模型推荐</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {catalog.map((item) => (
+              <RecommendItem
+                key={item.id}
+                item={item}
+                progress={activePull && activePull.model === item.id ? activePull : null}
+                busy={busy}
+                onPull={() => onPull(item.id)}
+                onUse={() => onUse(item.id)}
+              />
+            ))}
+          </div>
+          <p className="mt-4 text-[12px] text-slate-400">{footerNote}</p>
+        </>
+      ) : (
+        <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[12.5px] text-slate-600">
+          {backendLabel} 的模型由其自身管理，本 App 不在此下载。请在「下载管理」标签查看已加载的模型并「设为大脑」。
+        </div>
+      )}
     </>
   );
 }
@@ -378,30 +502,49 @@ function DownloadTab({
   catalog,
   activePull,
   busy,
+  customEndpoint,
   onPull,
   onCancel,
   onRemove,
   onUse,
-  onInstall
+  onInstall,
+  onSaveCustomEndpoint
 }: {
   backend: ModelBackendState;
   catalog: ModelCatalogItem[];
   activePull: ModelPullProgress | null;
   busy: boolean;
+  customEndpoint: { baseUrl: string; model: string };
   onPull: (id: string) => void;
   onCancel: () => void;
   onRemove: (id: string) => void;
   onUse: (id: string) => void;
   onInstall: () => void;
+  onSaveCustomEndpoint: (cfg: { baseUrl: string; model: string }) => void;
 }) {
   const downloading = activePull && (activePull.phase === "downloading" || activePull.phase === "resolving" || activePull.phase === "verifying");
+  const supportsPull = backend.supportsPull;
+  const installedLabel = supportsPull ? "已安装模型" : "已加载 / 可用模型";
   return (
     <div className="space-y-4">
-      {backend.status !== "running" ? (
+      {backend.backend === "custom" ? (
+        <CustomEndpointForm customEndpoint={customEndpoint} onSave={onSaveCustomEndpoint} />
+      ) : null}
+
+      {backend.status !== "running" && supportsPull ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-[12.5px] text-amber-700">
           Ollama 未运行，无法下载模型。请先在右侧「安装 / 更新 Ollama」，或选择模型下载目录后由本 App 自动启动。
           <button onClick={onInstall} className="ml-2 font-medium underline">
             前往安装
+          </button>
+        </div>
+      ) : null}
+
+      {backend.status !== "running" && backend.backend === "lmstudio" ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-[12.5px] text-amber-700">
+          未连接到 LM Studio 本地服务器（默认 127.0.0.1:1234）。请在 LM Studio 中启动本地服务器并加载模型。
+          <button onClick={onInstall} className="ml-2 font-medium underline">
+            查看指南
           </button>
         </div>
       ) : null}
@@ -436,23 +579,31 @@ function DownloadTab({
 
       <section className={`${panel} p-4`}>
         <p className="mb-3 text-[13px] font-semibold text-slate-800">
-          已安装模型（{backend.installedModels.length}）
+          {installedLabel}（{backend.installedModels.length}）
         </p>
         {backend.installedModels.length === 0 ? (
-          <p className="text-[12px] text-slate-400">暂无已下载模型，从下方目录选择模型开始下载。</p>
+          <p className="text-[12px] text-slate-400">
+            {supportsPull
+              ? "暂无已下载模型，从下方目录选择模型开始下载。"
+              : "未发现可用模型。请在该后端中加载 / 启动一个模型后点击「重新检测」。"}
+          </p>
         ) : (
           <div className="space-y-2">
             {backend.installedModels.map((installed) => (
               <div key={installed.name} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
                 <span className="text-[12.5px] text-slate-700">{installed.name}</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-[11.5px] text-slate-400">{formatGB(installed.sizeBytes / 1024 ** 3)}</span>
+                  {installed.sizeBytes > 0 ? (
+                    <span className="text-[11.5px] text-slate-400">{formatGB(installed.sizeBytes / 1024 ** 3)}</span>
+                  ) : null}
                   <button onClick={() => onUse(installed.name)} className="text-[12px] font-medium text-brand-600 hover:text-brand-700">
                     设为大脑
                   </button>
-                  <button onClick={() => onRemove(installed.name)} className="text-[12px] text-slate-400 hover:text-rose-600">
-                    删除
-                  </button>
+                  {supportsPull ? (
+                    <button onClick={() => onRemove(installed.name)} className="text-[12px] text-slate-400 hover:text-rose-600">
+                      删除
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -460,6 +611,7 @@ function DownloadTab({
         )}
       </section>
 
+      {supportsPull ? (
       <section className={`${panel} p-4`}>
         <p className="mb-3 text-[13px] font-semibold text-slate-800">可下载模型</p>
         <div className="space-y-2">
@@ -492,6 +644,7 @@ function DownloadTab({
           ))}
         </div>
       </section>
+      ) : null}
     </div>
   );
 }
@@ -501,14 +654,21 @@ function LogsTab({ model }: { model: ReturnType<typeof useModelCenter> }) {
   const env = snap.environment;
   const backend = snap.backend;
   const rows: { label: string; value: string }[] = [
-    { label: "Ollama 状态", value: backend.message },
-    { label: "原生端点", value: backend.endpoint },
-    { label: "OpenAI 兼容端点", value: backend.openaiEndpoint },
-    { label: "模型目录", value: backend.modelsDir ?? "（跟随已运行的 Ollama 默认目录）" },
-    { label: "进程管理", value: backend.managedByApp ? "由本 App 启动（OLLAMA_MODELS 生效）" : "外部/默认" },
+    { label: "激活后端", value: BACKEND_LABELS[snap.activeBackend] },
+    { label: "后端状态", value: backend.message },
+    { label: "端点", value: backend.endpoint },
+    { label: "OpenAI 兼容端点", value: backend.openaiEndpoint || "（未配置）" }
+  ];
+  if (backend.backend === "ollama") {
+    rows.push(
+      { label: "模型目录", value: backend.modelsDir ?? "（跟随已运行的 Ollama 默认目录）" },
+      { label: "进程管理", value: backend.managedByApp ? "由本 App 启动（OLLAMA_MODELS 生效）" : "外部/默认" }
+    );
+  }
+  rows.push(
     { label: "活动 Provider", value: PROVIDER_LABELS[snap.activeProviderKind] ?? snap.activeProviderKind },
     { label: "真实推理", value: snap.providerConnected && snap.usingRealInference ? "是（已验证连接）" : "否（离线回退，未验证连接）" }
-  ];
+  );
   if (env) {
     rows.push(
       { label: "平台", value: `${env.platform} / ${env.arch} · ${env.cpuCores} 核` },

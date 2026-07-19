@@ -1,6 +1,8 @@
 import { join } from "node:path";
 import type {
+  CustomEndpointConfig,
   EnvironmentProbe,
+  ModelBackendKind,
   ModelBackendState,
   ModelCatalogItem,
   ModelCenterSnapshot,
@@ -9,8 +11,11 @@ import type {
   OllamaModelInfo
 } from "@ai-cursor-v2/shared";
 import type { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
+import { CustomEndpointBackend } from "./custom-backend.js";
 import { defaultModelStorageConfig, validateModelStorageConfig } from "./dual-role-config.js";
 import { probeEnvironment } from "./environment-probe.js";
+import { LMStudioBackend } from "./lmstudio-backend.js";
+import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
 import { OllamaBackend } from "./ollama-backend.js";
 import { ollamaModelCatalog } from "./ollama-catalog.js";
 import { createProvider } from "./provider-registry.js";
@@ -22,29 +27,46 @@ export interface ModelCenterServiceOptions {
   backend?: OllamaBackend;
 }
 
+const BACKEND_ORDER: ModelBackendKind[] = ["ollama", "lmstudio", "custom"];
+const DEFAULT_CUSTOM_ENDPOINT: CustomEndpointConfig = { baseUrl: "", model: "" };
+
 /**
  * 模型中心主进程编排器。
  *
- * 拥有：模型存储配置、环境探测缓存、Ollama 后端状态、当前 pull 进度、以及"设为执行大脑"
- * 时对会话运行时 Provider 的重建。所有 Ollama 命令细节封装在 OllamaBackend 内，
- * 不散落到 IPC 或 React 页面。语音全双工后端（VoiceServerBackend）作为后续实现留位。
+ * 拥有：模型存储配置、环境探测缓存、多个后端（Ollama / LM Studio / 自定义端点）的状态、
+ * 当前 pull 进度、以及"设为执行大脑"时对会话运行时 Provider 的重建。
+ * 各后端命令细节封装在各自 Backend 内，不散落到 IPC 或 React 页面。
+ * 语音全双工后端（VoiceServerBackend）作为后续实现留位。
  */
 export class ModelCenterService {
   private readonly runtime: DuplexConversationRuntime;
-  private readonly backend: OllamaBackend;
+  private readonly ollama: OllamaBackend;
+  private readonly lmstudio: LMStudioBackend;
+  private readonly custom: CustomEndpointBackend;
+  private readonly backends: Record<ModelBackendKind, ModelBackend>;
   private readonly listeners = new Set<ModelCenterListener>();
 
   private storage: ModelStorageConfig = { ...defaultModelStorageConfig, rootDir: "" };
   private environment: EnvironmentProbe | null = null;
-  private backendState: ModelBackendState;
+  private activeBackend: ModelBackendKind = "ollama";
+  private customEndpoint: CustomEndpointConfig = { ...DEFAULT_CUSTOM_ENDPOINT };
+  private backendStates: Record<ModelBackendKind, ModelBackendState>;
+  private ollamaManagedByApp = false;
   private activePull: ModelPullProgress | null = null;
   private pullController: AbortController | null = null;
   private activeBrainModel = "";
 
   constructor(options: ModelCenterServiceOptions) {
     this.runtime = options.runtime;
-    this.backend = options.backend ?? new OllamaBackend();
-    this.backendState = this.emptyBackendState("尚未检测本地 Ollama。");
+    this.ollama = options.backend ?? new OllamaBackend();
+    this.lmstudio = new LMStudioBackend();
+    this.custom = new CustomEndpointBackend(this.customEndpoint);
+    this.backends = { ollama: this.ollama, lmstudio: this.lmstudio, custom: this.custom };
+    this.backendStates = {
+      ollama: this.emptyState("ollama", "尚未检测本地 Ollama。"),
+      lmstudio: this.emptyState("lmstudio", "尚未检测 LM Studio 本地服务器。"),
+      custom: this.emptyState("custom", "尚未配置自定义端点。")
+    };
   }
 
   on(listener: ModelCenterListener): () => void {
@@ -57,7 +79,10 @@ export class ModelCenterService {
     return {
       generatedAt: new Date().toISOString(),
       environment: this.environment,
-      backend: this.backendState,
+      backend: this.backendStates[this.activeBackend],
+      activeBackend: this.activeBackend,
+      backends: BACKEND_ORDER.map((kind) => this.backendStates[kind]),
+      customEndpoint: this.customEndpoint,
       storage: this.storage,
       storageWarnings: this.storage.rootDir.trim() ? validateModelStorageConfig(this.storage) : [],
       activePull: this.activePull,
@@ -74,37 +99,58 @@ export class ModelCenterService {
     return this.publish();
   }
 
+  /** 检测全部后端的实时状态。 */
   async refreshBackend(): Promise<ModelCenterSnapshot> {
-    const result = await this.backend.detect();
-    const message =
-      result.status === "running"
-        ? `Ollama 运行中（v${result.version}），已安装 ${result.installedModels.length} 个模型。`
-        : result.status === "installed_not_running"
-          ? "已安装 Ollama 但未运行，选择下载目录后可由本 App 启动。"
-          : "未检测到 Ollama，请先安装。";
-    this.backendState = {
-      backend: "ollama",
+    await Promise.all(BACKEND_ORDER.map((kind) => this.detectBackend(kind)));
+    return this.publish();
+  }
+
+  /** 切换当前激活的后端；切换后重新检测该后端。 */
+  async setBackend(kind: ModelBackendKind): Promise<ModelCenterSnapshot> {
+    this.activeBackend = kind;
+    await this.detectBackend(kind);
+    return this.publish();
+  }
+
+  /** 配置并检测自定义 OpenAI 兼容端点。 */
+  async setCustomEndpoint(config: CustomEndpointConfig): Promise<ModelCenterSnapshot> {
+    this.customEndpoint = { baseUrl: config.baseUrl.trim(), model: config.model.trim() };
+    this.custom.configure(this.customEndpoint);
+    await this.detectBackend("custom");
+    return this.publish();
+  }
+
+  private async detectBackend(kind: ModelBackendKind): Promise<void> {
+    const backend = this.backends[kind];
+    const result: BackendDetectResult = await backend.detect().catch((error) => ({
+      status: "not_installed" as const,
+      version: undefined,
+      installedModels: [] as OllamaModelInfo[],
+      message: error instanceof Error ? error.message : String(error)
+    }));
+    this.backendStates[kind] = {
+      backend: kind,
       status: result.status,
+      supportsPull: backend.supportsPull,
       version: result.version,
-      endpoint: this.backend.baseUrl,
-      openaiEndpoint: this.backend.openaiEndpoint,
-      modelsDir: this.modelsDir(),
-      managedByApp: this.backendState.managedByApp,
+      endpoint: backend.baseUrl,
+      openaiEndpoint: backend.openaiEndpoint,
+      modelsDir: kind === "ollama" ? this.modelsDir() : undefined,
+      managedByApp: kind === "ollama" ? this.ollamaManagedByApp : false,
       installedModels: result.installedModels,
-      installGuidanceUrl: this.backend.installGuidanceUrl,
-      message,
+      installGuidanceUrl: backend.installGuidanceUrl,
+      message: result.message,
       checkedAt: new Date().toISOString()
     };
-    return this.publish();
   }
 
   async setStorageRoot(rootDir: string): Promise<ModelCenterSnapshot> {
     this.storage = { ...this.storage, rootDir, source: "user-selected" };
     // 选目录后若 Ollama 已安装但未运行，尝试用该目录启动，使 OLLAMA_MODELS 生效。
-    if (this.backendState.status !== "running") {
-      const started = await this.backend.ensureServing(this.modelsDir());
+    if (this.backendStates.ollama.status !== "running") {
+      const started = await this.ollama.ensureServing(this.modelsDir());
       if (started) {
-        this.backendState = { ...this.backendState, managedByApp: true };
+        this.ollamaManagedByApp = true;
       }
     }
     await this.probe();
@@ -112,17 +158,24 @@ export class ModelCenterService {
   }
 
   async pull(model: string): Promise<ModelCenterSnapshot> {
+    if (this.activeBackend !== "ollama") {
+      throw new Error(
+        this.activeBackend === "lmstudio"
+          ? "LM Studio 的模型请在 LM Studio 应用内下载/加载；本 App 只负责连接。"
+          : "自定义端点的模型由该服务自行管理，本 App 只负责连接。"
+      );
+    }
     if (this.pullController) {
       throw new Error("已有下载任务进行中，请先等待或取消。");
     }
     // 确保后端可用；未运行则尝试用当前目录启动。
-    if (this.backendState.status !== "running") {
-      const started = await this.backend.ensureServing(this.modelsDir());
+    if (this.backendStates.ollama.status !== "running") {
+      const started = await this.ollama.ensureServing(this.modelsDir());
       if (started) {
-        this.backendState = { ...this.backendState, managedByApp: true };
+        this.ollamaManagedByApp = true;
       }
-      await this.refreshBackend();
-      if (this.backendState.status !== "running") {
+      await this.detectBackend("ollama");
+      if (!this.isRunning("ollama")) {
         throw new Error("Ollama 未运行，无法下载。请先安装并启动 Ollama。");
       }
     }
@@ -141,7 +194,7 @@ export class ModelCenterService {
     this.publish();
 
     try {
-      const final = await this.backend.pull(
+      const final = await this.ollama.pull(
         model,
         (progress) => {
           this.activePull = progress;
@@ -180,7 +233,10 @@ export class ModelCenterService {
   }
 
   async removeModel(model: string): Promise<ModelCenterSnapshot> {
-    await this.backend.remove(model);
+    if (this.activeBackend !== "ollama") {
+      throw new Error("只有 Ollama 后端支持在本 App 内删除模型。");
+    }
+    await this.ollama.remove(model);
     if (this.activeBrainModel === model) {
       this.activeBrainModel = "";
     }
@@ -188,15 +244,17 @@ export class ModelCenterService {
   }
 
   /**
-   * 设为执行大脑：用选定的已下载模型重建方案 B 管线 Provider，切到热路径并做健康检查。
+   * 设为执行大脑：用选定模型 + 当前激活后端的 OpenAI 端点重建方案 B 管线 Provider，
+   * 切到热路径并做健康检查。三个后端共用同一套推理流，不重复造。
    */
   async useModelAsBrain(model: string): Promise<ModelCenterSnapshot> {
+    const backend = this.backends[this.activeBackend];
     const provider = createProvider({
       kind: "pipeline",
-      endpoint: this.backend.openaiEndpoint,
+      endpoint: backend.openaiEndpoint,
       device: this.environment?.gpus.length ? "cuda" : "cpu",
       pipeline: {
-        llmBaseUrl: this.backend.openaiEndpoint,
+        llmBaseUrl: backend.openaiEndpoint,
         llmModel: model
       }
     });
@@ -207,11 +265,15 @@ export class ModelCenterService {
   }
 
   getInstallGuidanceUrl(): string {
-    return this.backend.installGuidanceUrl;
+    return this.backends[this.activeBackend].installGuidanceUrl;
   }
 
   getModelsDir(): string | undefined {
     return this.modelsDir();
+  }
+
+  private isRunning(kind: ModelBackendKind): boolean {
+    return this.backendStates[kind].status === "running";
   }
 
   private modelsDir(): string | undefined {
@@ -222,7 +284,8 @@ export class ModelCenterService {
   }
 
   private buildCatalog(): ModelCatalogItem[] {
-    const installed = new Set(this.backendState.installedModels.map((m) => m.name));
+    // 内置推荐目录仅对 Ollama 有意义；其余后端由 installedModels 驱动 UI。
+    const installed = new Set(this.backendStates.ollama.installedModels.map((m) => m.name));
     const recommended = this.environment?.recommendedBrainModel;
     return ollamaModelCatalog.map((entry) => ({
       ...entry,
@@ -232,18 +295,30 @@ export class ModelCenterService {
     }));
   }
 
-  private emptyBackendState(message: string): ModelBackendState {
+  private emptyState(kind: ModelBackendKind, message: string): ModelBackendState {
+    const backend = this.backends?.[kind] ?? this.resolveBackendForInit(kind);
     return {
-      backend: "ollama",
+      backend: kind,
       status: "unknown",
-      endpoint: this.backend.baseUrl,
-      openaiEndpoint: this.backend.openaiEndpoint,
+      supportsPull: backend.supportsPull,
+      endpoint: backend.baseUrl,
+      openaiEndpoint: backend.openaiEndpoint,
       managedByApp: false,
       installedModels: [],
-      installGuidanceUrl: this.backend.installGuidanceUrl,
+      installGuidanceUrl: backend.installGuidanceUrl,
       message,
       checkedAt: new Date().toISOString()
     };
+  }
+
+  private resolveBackendForInit(kind: ModelBackendKind): ModelBackend {
+    if (kind === "ollama") {
+      return this.ollama;
+    }
+    if (kind === "lmstudio") {
+      return this.lmstudio;
+    }
+    return this.custom;
   }
 
   private publish(): ModelCenterSnapshot {

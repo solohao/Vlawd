@@ -1,9 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  CustomEndpointConfig,
   DesktopUiSnapshot,
   DuplexConversationSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
+  ModelBackendKind,
   ModelCenterSnapshot,
   ModelRole,
   SafetyPreemptionIntent
@@ -54,6 +56,10 @@ export interface AiCursorDesktopApi {
   modelCancelPull(): Promise<ModelCenterSnapshot>;
   modelRemove(model: string): Promise<ModelCenterSnapshot>;
   modelUseAsBrain(model: string): Promise<ModelCenterSnapshot>;
+  /** 切换当前激活的模型后端（ollama / lmstudio / custom）。 */
+  modelSetBackend(kind: ModelBackendKind): Promise<ModelCenterSnapshot>;
+  /** 配置并检测自定义 OpenAI 兼容端点。 */
+  modelSetCustomEndpoint(config: CustomEndpointConfig): Promise<ModelCenterSnapshot>;
   modelOpenStorageLocation(): Promise<void>;
   modelOpenInstallGuide(): Promise<void>;
   /** 订阅模型中心快照（含下载进度）；返回取消订阅函数。 */
@@ -102,6 +108,9 @@ const api: AiCursorDesktopApi = {
   modelCancelPull: () => ipcRenderer.invoke("model:cancelPull") as Promise<ModelCenterSnapshot>,
   modelRemove: (model) => ipcRenderer.invoke("model:remove", model) as Promise<ModelCenterSnapshot>,
   modelUseAsBrain: (model) => ipcRenderer.invoke("model:useAsBrain", model) as Promise<ModelCenterSnapshot>,
+  modelSetBackend: (kind) => ipcRenderer.invoke("model:setBackend", kind) as Promise<ModelCenterSnapshot>,
+  modelSetCustomEndpoint: (config) =>
+    ipcRenderer.invoke("model:setCustomEndpoint", config) as Promise<ModelCenterSnapshot>,
   modelOpenStorageLocation: () => ipcRenderer.invoke("model:openStorageLocation") as Promise<void>,
   modelOpenInstallGuide: () => ipcRenderer.invoke("model:openInstallGuide") as Promise<void>,
   onModelSnapshot: (listener) => {

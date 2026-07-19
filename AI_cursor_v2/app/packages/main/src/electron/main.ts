@@ -3,8 +3,10 @@ import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import type {
+  CustomEndpointConfig,
   DuplexProviderKind,
   DuplexRuntimeEvent,
+  ModelBackendKind,
   ModelCenterSnapshot,
   ModelRole,
   SafetyPreemptionIntent
@@ -267,6 +269,10 @@ ipcMain.handle("model:pull", (_event, model: string) => modelCenter.pull(model))
 ipcMain.handle("model:cancelPull", () => modelCenter.cancelPull());
 ipcMain.handle("model:remove", (_event, model: string) => modelCenter.removeModel(model));
 ipcMain.handle("model:useAsBrain", (_event, model: string) => modelCenter.useModelAsBrain(model));
+ipcMain.handle("model:setBackend", (_event, kind: ModelBackendKind) => modelCenter.setBackend(kind));
+ipcMain.handle("model:setCustomEndpoint", (_event, config: CustomEndpointConfig) =>
+  modelCenter.setCustomEndpoint(config)
+);
 ipcMain.handle("model:openStorageLocation", async () => {
   const dir = modelCenter.getModelsDir();
   if (dir) {
