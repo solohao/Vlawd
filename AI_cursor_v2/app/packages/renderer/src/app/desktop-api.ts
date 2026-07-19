@@ -1,8 +1,10 @@
 import type {
+  CustomEndpointConfig,
   DesktopUiSnapshot,
   DuplexConversationSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
+  ModelBackendKind,
   ModelCenterSnapshot,
   ModelRole,
   SafetyPreemptionIntent
@@ -45,6 +47,8 @@ export interface AiCursorDesktopApi {
   modelCancelPull(): Promise<ModelCenterSnapshot>;
   modelRemove(model: string): Promise<ModelCenterSnapshot>;
   modelUseAsBrain(model: string): Promise<ModelCenterSnapshot>;
+  modelSetBackend(kind: ModelBackendKind): Promise<ModelCenterSnapshot>;
+  modelSetCustomEndpoint(config: CustomEndpointConfig): Promise<ModelCenterSnapshot>;
   modelOpenStorageLocation(): Promise<void>;
   modelOpenInstallGuide(): Promise<void>;
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;

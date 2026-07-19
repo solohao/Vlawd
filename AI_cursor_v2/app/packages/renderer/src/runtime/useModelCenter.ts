@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ModelBackendState, ModelCenterSnapshot } from "@ai-cursor-v2/shared";
+import type {
+  CustomEndpointConfig,
+  ModelBackendKind,
+  ModelBackendState,
+  ModelCenterSnapshot
+} from "@ai-cursor-v2/shared";
 import { desktopApi } from "../app/desktop-api.js";
 
 const EMPTY_BACKEND: ModelBackendState = {
   backend: "ollama",
   status: "unknown",
+  supportsPull: true,
   endpoint: "http://127.0.0.1:11434",
   openaiEndpoint: "http://127.0.0.1:11434/v1",
   managedByApp: false,
@@ -18,6 +24,9 @@ const EMPTY_SNAPSHOT: ModelCenterSnapshot = {
   generatedAt: "",
   environment: null,
   backend: EMPTY_BACKEND,
+  activeBackend: "ollama",
+  backends: [EMPTY_BACKEND],
+  customEndpoint: { baseUrl: "", model: "" },
   storage: { rootDir: "", managedSubdir: "ai-cursor-v2-models", preferNonSystemDrive: true, source: "default" },
   storageWarnings: [],
   activePull: null,
@@ -39,6 +48,8 @@ export interface ModelCenterController {
   cancelPull(): Promise<void>;
   removeModel(model: string): Promise<void>;
   useAsBrain(model: string): Promise<void>;
+  setBackend(kind: ModelBackendKind): Promise<void>;
+  setCustomEndpoint(config: CustomEndpointConfig): Promise<void>;
   openStorageLocation(): Promise<void>;
   openInstallGuide(): Promise<void>;
 }
@@ -84,6 +95,11 @@ export function useModelCenter(): ModelCenterController {
   const pull = useCallback((model: string) => run(() => desktopApi().modelPull(model)), [run]);
   const removeModel = useCallback((model: string) => run(() => desktopApi().modelRemove(model)), [run]);
   const useAsBrain = useCallback((model: string) => run(() => desktopApi().modelUseAsBrain(model)), [run]);
+  const setBackend = useCallback((kind: ModelBackendKind) => run(() => desktopApi().modelSetBackend(kind)), [run]);
+  const setCustomEndpoint = useCallback(
+    (config: CustomEndpointConfig) => run(() => desktopApi().modelSetCustomEndpoint(config)),
+    [run]
+  );
 
   const cancelPull = useCallback(async () => {
     if (available) {
@@ -115,6 +131,8 @@ export function useModelCenter(): ModelCenterController {
       cancelPull,
       removeModel,
       useAsBrain,
+      setBackend,
+      setCustomEndpoint,
       openStorageLocation,
       openInstallGuide
     }),
@@ -129,6 +147,8 @@ export function useModelCenter(): ModelCenterController {
       cancelPull,
       removeModel,
       useAsBrain,
+      setBackend,
+      setCustomEndpoint,
       openStorageLocation,
       openInstallGuide
     ]

@@ -10,13 +10,27 @@ import type { DuplexProviderKind } from "./runtime.js";
  * 语音全双工后端（Python 模型 server）作为 Phase 5.4 的独立实现留位。
  */
 
-export type ModelBackendKind = "ollama";
+/**
+ * 支持的模型后端：
+ * - `ollama`：包装版 Ollama（本地下载器 + OLLAMA_MODELS）。
+ * - `lmstudio`：LM Studio 本地 OpenAI 兼容服务器（默认 :1234）；下载/加载由 LM Studio 自身负责。
+ * - `custom`：任意 OpenAI 兼容端点（vLLM / llama.cpp server / Jan / LocalAI 等），手填地址与模型名。
+ */
+export type ModelBackendKind = "ollama" | "lmstudio" | "custom";
 
 export type OllamaBackendStatus =
   | "unknown"
   | "not_installed"
   | "installed_not_running"
   | "running";
+
+/** 后端状态与通用能力标识，统一 Ollama / LM Studio / 自定义端点。 */
+export type ModelBackendStatus = OllamaBackendStatus;
+
+export interface CustomEndpointConfig {
+  baseUrl: string;
+  model: string;
+}
 
 export interface GpuInfo {
   name: string;
@@ -56,7 +70,9 @@ export interface OllamaModelInfo {
 
 export interface ModelBackendState {
   backend: ModelBackendKind;
-  status: OllamaBackendStatus;
+  status: ModelBackendStatus;
+  /** 该后端是否支持在 App 内直接下载模型（仅 Ollama 为 true）。 */
+  supportsPull: boolean;
   version?: string;
   /** 原生 API 根地址（127.0.0.1:11434）。 */
   endpoint: string;
@@ -114,7 +130,14 @@ export interface ModelCatalogItem extends ModelCatalogEntry {
 export interface ModelCenterSnapshot {
   generatedAt: string;
   environment: EnvironmentProbe | null;
+  /** 当前选中的后端状态（= backends 中 activeBackend 对应项）。 */
   backend: ModelBackendState;
+  /** 当前选中的后端类型。 */
+  activeBackend: ModelBackendKind;
+  /** 全部后端的实时状态，供 UI 展示可用性与选择。 */
+  backends: ModelBackendState[];
+  /** 自定义 OpenAI 兼容端点配置。 */
+  customEndpoint: CustomEndpointConfig;
   storage: ModelStorageConfig;
   storageWarnings: string[];
   activePull: ModelPullProgress | null;

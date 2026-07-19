@@ -4,6 +4,7 @@ import type {
   ModelPullProgress,
   OllamaModelInfo
 } from "@ai-cursor-v2/shared";
+import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
 const INSTALL_GUIDANCE_URL = "https://ollama.com/download";
@@ -114,10 +115,8 @@ export class PullProgressAccumulator {
   }
 }
 
-export interface OllamaDetectResult {
+export interface OllamaDetectResult extends BackendDetectResult {
   status: "running" | "installed_not_running" | "not_installed";
-  version?: string;
-  installedModels: OllamaModelInfo[];
 }
 
 /**
@@ -126,8 +125,10 @@ export interface OllamaDetectResult {
  * App 只负责调用 Ollama 的本地 API 与命令；模型下载、缓存、运行都交给 Ollama。
  * 通过 `OLLAMA_MODELS` 环境变量让用户自由选择下载目录（仅当由本 App 启动 serve 时可控）。
  */
-export class OllamaBackend {
+export class OllamaBackend implements ModelBackend {
   readonly id = "ollama" as const;
+  readonly kind = "ollama" as const;
+  readonly supportsPull = true;
   readonly baseUrl = DEFAULT_BASE_URL;
   readonly openaiEndpoint = `${DEFAULT_BASE_URL}/v1`;
   readonly installGuidanceUrl = INSTALL_GUIDANCE_URL;
@@ -136,12 +137,20 @@ export class OllamaBackend {
     const version = await this.version(signal);
     if (version !== null) {
       const installedModels = await this.listModels(signal).catch(() => []);
-      return { status: "running", version, installedModels };
+      return {
+        status: "running",
+        version,
+        installedModels,
+        message: `Ollama 运行中（v${version}），已安装 ${installedModels.length} 个模型。`
+      };
     }
     const binaryPresent = await this.binaryInstalled();
     return {
       status: binaryPresent ? "installed_not_running" : "not_installed",
-      installedModels: []
+      installedModels: [],
+      message: binaryPresent
+        ? "已安装 Ollama 但未运行，选择下载目录后可由本 App 启动。"
+        : "未检测到 Ollama，请先安装。"
     };
   }
 
