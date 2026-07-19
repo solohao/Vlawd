@@ -51,6 +51,9 @@ export interface AiCursorDesktopApi {
   modelSetCustomEndpoint(config: CustomEndpointConfig): Promise<ModelCenterSnapshot>;
   modelOpenStorageLocation(): Promise<void>;
   modelOpenInstallGuide(): Promise<void>;
+  modelDetectOllamaInstaller(): Promise<ModelCenterSnapshot>;
+  modelLocateOllamaInstaller(): Promise<ModelCenterSnapshot>;
+  modelInstallOllama(): Promise<ModelCenterSnapshot>;
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
 }
 

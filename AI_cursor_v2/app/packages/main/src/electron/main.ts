@@ -107,12 +107,19 @@ function createMainWindow(): BrowserWindow {
 
   void loadView(window, "main");
 
+  // 主窗口与悬浮窗是互斥的两种形态：最小化 / 关闭主窗口都收起到浅色胶囊悬浮窗，
+  // 而不是让两个窗口同时可见。真正退出走托盘。
+  window.on("minimize", () => {
+    // 'minimize' 不可取消：先让系统最小化，再隐藏主窗口并切到浅色胶囊悬浮窗，
+    // 两者互斥可见，避免留在任务栏。
+    if (!isQuitting) {
+      showOverlay();
+    }
+  });
   window.on("close", (event) => {
-    // Closing the main window only hides it — the app keeps running as the
-    // floating overlay (its primary working form). Quit happens via the tray.
     if (!isQuitting) {
       event.preventDefault();
-      window.hide();
+      showOverlay();
     }
   });
   window.on("closed", () => {
@@ -121,6 +128,30 @@ function createMainWindow(): BrowserWindow {
 
   mainWindow = window;
   return window;
+}
+
+/** 显示主窗口并收起悬浮窗（两者互斥）。 */
+function showMainWindow(): BrowserWindow {
+  const window = createMainWindow();
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.show();
+  window.focus();
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.hide();
+  }
+  return window;
+}
+
+/** 显示浅色胶囊悬浮窗并隐藏主窗口（两者互斥）。 */
+function showOverlay(): BrowserWindow {
+  const overlay = createOverlayWindow();
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+    mainWindow.hide();
+  }
+  overlay.show();
+  return overlay;
 }
 
 function positionOverlayTopRight(window: BrowserWindow): void {
@@ -139,6 +170,7 @@ function createOverlayWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: OVERLAY_DEFAULT.width,
     height: OVERLAY_DEFAULT.height,
+    show: false,
     frame: false,
     transparent: true,
     resizable: false,
@@ -182,25 +214,12 @@ function createTray(): void {
   tray = new Tray(image);
   tray.setToolTip("AI Cursor V2");
   const showMain = (): void => {
-    const window = createMainWindow();
-    window.show();
-    window.focus();
+    showMainWindow();
   };
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "打开主界面", click: showMain },
-      { label: "隐藏主界面", click: () => mainWindow?.hide() },
-      {
-        label: "显示 / 隐藏悬浮窗",
-        click: () => {
-          const window = createOverlayWindow();
-          if (window.isVisible()) {
-            window.hide();
-          } else {
-            window.show();
-          }
-        }
-      },
+      { label: "收起到悬浮窗", click: () => showOverlay() },
       { type: "separator" },
       {
         label: "检查更新…",
@@ -281,14 +300,35 @@ ipcMain.handle("model:openStorageLocation", async () => {
 });
 ipcMain.handle("model:openInstallGuide", () => shell.openExternal(modelCenter.getInstallGuidanceUrl()));
 
+ipcMain.handle("model:detectInstaller", () => modelCenter.detectOllamaInstaller());
+
+ipcMain.handle("model:locateInstaller", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择 Ollama 安装器（OllamaSetup.exe）",
+    properties: ["openFile"],
+    filters: [{ name: "安装程序", extensions: ["exe"] }]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return modelCenter.getSnapshot();
+  }
+  return modelCenter.setInstallerPath(result.filePaths[0]);
+});
+
+ipcMain.handle("model:installOllama", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择 Ollama 安装位置（留空则用默认目录）",
+    properties: ["openDirectory", "createDirectory"]
+  });
+  const installDir = result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths[0];
+  return modelCenter.installOllama(installDir);
+});
+
 ipcMain.handle("window:openMain", () => {
-  const window = createMainWindow();
-  window.show();
-  window.focus();
+  showMainWindow();
 });
 
 ipcMain.handle("window:hideMain", () => {
-  mainWindow?.hide();
+  showOverlay();
 });
 
 ipcMain.handle("overlay:resize", (_event, size: { width: number; height: number }) => {
@@ -307,29 +347,17 @@ ipcMain.handle("app:quit", () => {
   app.quit();
 });
 
-function executionBrainReady(): boolean {
-  const brain = runtime.getSnapshot().modelDownloads.find((d) => d.role === "duplex_execution_brain");
-  return brain?.status === "downloaded" || brain?.status === "healthy";
-}
-
 app.whenReady().then(() => {
   createTray();
-  createMainWindow();
+  // 主窗口是启动时可见的形态；悬浮窗预创建但保持隐藏，最小化时才切过去。
+  showMainWindow();
   createOverlayWindow();
 
   // 打包安装后启用自动更新：启动静默检查，发现新版本后台下载并提示重启。
   initAutoUpdater(() => mainWindow);
 
-  // First run: if the execution brain isn't downloaded yet, surface the main
-  // window so the user can pick & download a model in the Model Center.
-  if (!executionBrainReady()) {
-    const window = createMainWindow();
-    window.show();
-    window.focus();
-  }
-
   if (process.env.AI_CURSOR_DEV_SMOKE === "1") {
-    createMainWindow().show();
+    showMainWindow();
     setTimeout(() => {
       isQuitting = true;
       app.quit();
@@ -338,7 +366,7 @@ app.whenReady().then(() => {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+      showMainWindow();
       createOverlayWindow();
     }
   });

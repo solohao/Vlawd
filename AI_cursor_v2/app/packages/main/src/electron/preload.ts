@@ -62,6 +62,12 @@ export interface AiCursorDesktopApi {
   modelSetCustomEndpoint(config: CustomEndpointConfig): Promise<ModelCenterSnapshot>;
   modelOpenStorageLocation(): Promise<void>;
   modelOpenInstallGuide(): Promise<void>;
+  /** 检测代管安装 Ollama 的状态（是否已安装 / 本机是否已有安装器）。 */
+  modelDetectOllamaInstaller(): Promise<ModelCenterSnapshot>;
+  /** 让用户手动指定 Ollama 安装器（OllamaSetup.exe）。 */
+  modelLocateOllamaInstaller(): Promise<ModelCenterSnapshot>;
+  /** 选择安装目录并静默安装 Ollama（一键安装）。 */
+  modelInstallOllama(): Promise<ModelCenterSnapshot>;
   /** 订阅模型中心快照（含下载进度）；返回取消订阅函数。 */
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
 }
@@ -113,6 +119,11 @@ const api: AiCursorDesktopApi = {
     ipcRenderer.invoke("model:setCustomEndpoint", config) as Promise<ModelCenterSnapshot>,
   modelOpenStorageLocation: () => ipcRenderer.invoke("model:openStorageLocation") as Promise<void>,
   modelOpenInstallGuide: () => ipcRenderer.invoke("model:openInstallGuide") as Promise<void>,
+  modelDetectOllamaInstaller: () =>
+    ipcRenderer.invoke("model:detectInstaller") as Promise<ModelCenterSnapshot>,
+  modelLocateOllamaInstaller: () =>
+    ipcRenderer.invoke("model:locateInstaller") as Promise<ModelCenterSnapshot>,
+  modelInstallOllama: () => ipcRenderer.invoke("model:installOllama") as Promise<ModelCenterSnapshot>,
   onModelSnapshot: (listener) => {
     const channel = "model:snapshot";
     const handler = (_event: unknown, payload: ModelCenterSnapshot): void => listener(payload);

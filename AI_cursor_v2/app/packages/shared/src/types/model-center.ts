@@ -127,9 +127,41 @@ export interface ModelCatalogItem extends ModelCatalogEntry {
   recommended: boolean;
 }
 
+/** 代管安装 Ollama 的流程阶段。 */
+export type OllamaInstallPhase =
+  | "idle"
+  | "detecting"
+  | "installing"
+  | "installed"
+  | "error";
+
+/**
+ * "一键准备 Ollama" 的状态。
+ *
+ * 单入口自动分支：已安装 → 直接可用；未安装但本机已有安装器 → 只选盘静默安装；
+ * 未安装且没有安装器 → 需用户指定安装器或前往官网下载。
+ */
+export interface OllamaInstallState {
+  /** 是否支持由本 App 代管安装（当前仅 Windows）。 */
+  supported: boolean;
+  /** 是否已检测到 Ollama 可执行文件（已安装）。 */
+  installed: boolean;
+  /** 是否在本机常见目录/用户指定处找到 OllamaSetup 安装器。 */
+  installerFound: boolean;
+  /** 找到或用户指定的安装器绝对路径。 */
+  installerPath?: string;
+  /** 上次静默安装到的目录（供展示）。 */
+  installDir?: string;
+  phase: OllamaInstallPhase;
+  message?: string;
+  updatedAt: string;
+}
+
 export interface ModelCenterSnapshot {
   generatedAt: string;
   environment: EnvironmentProbe | null;
+  /** 代管安装 Ollama 的检测/安装状态。 */
+  ollamaInstall: OllamaInstallState;
   /** 当前选中的后端状态（= backends 中 activeBackend 对应项）。 */
   backend: ModelBackendState;
   /** 当前选中的后端类型。 */

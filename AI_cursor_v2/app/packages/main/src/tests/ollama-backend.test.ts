@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { PullProgressAccumulator, parseOllamaTags } from "../model/ollama-backend.js";
+import {
+  PullProgressAccumulator,
+  buildOllamaInstallArgs,
+  parseOllamaTags,
+  pickOllamaInstaller
+} from "../model/ollama-backend.js";
 import { parseNvidiaSmi } from "../model/environment-probe.js";
 import { recommendFromResources } from "../model/ollama-catalog.js";
 
@@ -46,6 +51,38 @@ describe("PullProgressAccumulator", () => {
     const progress = acc.ingest({ error: "model not found" });
     expect(progress.phase).toBe("error");
     expect(progress.message).toBe("model not found");
+  });
+});
+
+describe("pickOllamaInstaller", () => {
+  it("prefers the exact OllamaSetup.exe (case-insensitive)", () => {
+    expect(pickOllamaInstaller(["notes.txt", "OllamaSetup.exe", "ollama-0.5.exe"])).toBe("OllamaSetup.exe");
+    expect(pickOllamaInstaller(["ollamasetup.exe"])).toBe("ollamasetup.exe");
+  });
+
+  it("falls back to any ollama*.exe", () => {
+    expect(pickOllamaInstaller(["ollama-windows-amd64.exe", "other.exe"])).toBe("ollama-windows-amd64.exe");
+  });
+
+  it("returns null when no installer present", () => {
+    expect(pickOllamaInstaller(["setup.exe", "readme.md"])).toBeNull();
+    expect(pickOllamaInstaller([])).toBeNull();
+  });
+});
+
+describe("buildOllamaInstallArgs", () => {
+  it("includes /DIR when an install directory is given", () => {
+    expect(buildOllamaInstallArgs("D:\\Ollama")).toEqual([
+      "/DIR=D:\\Ollama",
+      "/VERYSILENT",
+      "/SUPPRESSMSGBOXES",
+      "/NORESTART"
+    ]);
+  });
+
+  it("omits /DIR when no directory (default location)", () => {
+    expect(buildOllamaInstallArgs()).toEqual(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]);
+    expect(buildOllamaInstallArgs("   ")).toEqual(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]);
   });
 });
 

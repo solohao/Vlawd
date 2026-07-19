@@ -8,6 +8,7 @@ import type {
   ModelCenterSnapshot,
   ModelPullProgress,
   ModelStorageConfig,
+  OllamaInstallState,
   OllamaModelInfo
 } from "@ai-cursor-v2/shared";
 import type { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
@@ -55,6 +56,13 @@ export class ModelCenterService {
   private activePull: ModelPullProgress | null = null;
   private pullController: AbortController | null = null;
   private activeBrainModel = "";
+  private ollamaInstall: OllamaInstallState = {
+    supported: process.platform === "win32",
+    installed: false,
+    installerFound: false,
+    phase: "idle",
+    updatedAt: new Date().toISOString()
+  };
 
   constructor(options: ModelCenterServiceOptions) {
     this.runtime = options.runtime;
@@ -79,6 +87,7 @@ export class ModelCenterService {
     return {
       generatedAt: new Date().toISOString(),
       environment: this.environment,
+      ollamaInstall: this.ollamaInstall,
       backend: this.backendStates[this.activeBackend],
       activeBackend: this.activeBackend,
       backends: BACKEND_ORDER.map((kind) => this.backendStates[kind]),
@@ -155,6 +164,101 @@ export class ModelCenterService {
     }
     await this.probe();
     return this.refreshBackend();
+  }
+
+  /**
+   * 检测代管安装 Ollama 的当前状态：是否已安装、本机是否已有安装器。
+   * 单入口自动分支的第一步，UI 依据结果决定展示"直接可用 / 选盘安装 / 指定安装器"。
+   */
+  async detectOllamaInstaller(): Promise<ModelCenterSnapshot> {
+    this.setInstallState({ phase: "detecting", message: "正在检测 Ollama 与本机安装器…" });
+    const supported = process.platform === "win32";
+    const installed = await this.ollama.binaryInstalled();
+    const extra = this.storage.rootDir.trim() ? [this.storage.rootDir] : [];
+    const found = supported && !installed ? this.ollama.findInstaller(extra) : null;
+    const installerPath = found ?? this.ollamaInstall.installerPath;
+    this.setInstallState({
+      supported,
+      installed,
+      installerFound: !!installerPath,
+      installerPath,
+      phase: installed ? "installed" : "idle",
+      message: installed
+        ? "已检测到 Ollama，可直接使用。"
+        : !supported
+          ? "当前系统不支持代管安装，请前往官网手动安装。"
+          : installerPath
+            ? `已找到安装器：${installerPath}`
+            : "未找到已下载的安装器，可手动指定或前往官网下载。"
+    });
+    return this.refreshBackend();
+  }
+
+  /** 记录用户手动指定的安装器路径。 */
+  setInstallerPath(installerPath: string): ModelCenterSnapshot {
+    this.setInstallState({
+      installerPath,
+      installerFound: true,
+      phase: "idle",
+      message: `已选择安装器：${installerPath}`
+    });
+    return this.getSnapshot();
+  }
+
+  /**
+   * 一键安装：用本机已有（或用户指定）的安装器，把 Ollama 静默安装到 `installDir`。
+   * 装完自动检测后端，并在配置了模型目录时尝试用 `OLLAMA_MODELS` 启动。
+   */
+  async installOllama(installDir?: string): Promise<ModelCenterSnapshot> {
+    if (process.platform !== "win32") {
+      this.setInstallState({ phase: "error", message: "代管安装当前仅支持 Windows。" });
+      return this.getSnapshot();
+    }
+    if (await this.ollama.binaryInstalled()) {
+      this.setInstallState({ installed: true, phase: "installed", message: "Ollama 已安装，无需重复安装。" });
+      return this.refreshBackend();
+    }
+    const extra = this.storage.rootDir.trim() ? [this.storage.rootDir] : [];
+    const installerPath = this.ollamaInstall.installerPath ?? this.ollama.findInstaller(extra);
+    if (!installerPath) {
+      this.setInstallState({
+        installerFound: false,
+        phase: "error",
+        message: "未找到 Ollama 安装器，请先指定安装器文件或前往官网下载。"
+      });
+      return this.getSnapshot();
+    }
+    this.setInstallState({
+      installerPath,
+      installerFound: true,
+      installDir,
+      phase: "installing",
+      message: installDir ? `正在静默安装到 ${installDir}…` : "正在静默安装（默认目录）…"
+    });
+    try {
+      await this.ollama.installSilently(installerPath, installDir);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setInstallState({ phase: "error", message: `安装失败：${message}` });
+      return this.getSnapshot();
+    }
+    this.setInstallState({
+      installed: true,
+      installDir,
+      phase: "installed",
+      message: installDir ? `已安装到 ${installDir}。` : "安装完成。"
+    });
+    // 装完尝试用当前模型目录启动，使 OLLAMA_MODELS 生效。
+    const started = await this.ollama.ensureServing(this.modelsDir());
+    if (started) {
+      this.ollamaManagedByApp = true;
+    }
+    return this.refreshBackend();
+  }
+
+  private setInstallState(patch: Partial<OllamaInstallState>): void {
+    this.ollamaInstall = { ...this.ollamaInstall, ...patch, updatedAt: new Date().toISOString() };
+    this.publish();
   }
 
   async pull(model: string): Promise<ModelCenterSnapshot> {

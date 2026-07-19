@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type {
   ModelPullPhase,
   ModelPullProgress,
@@ -8,6 +11,40 @@ import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
 const INSTALL_GUIDANCE_URL = "https://ollama.com/download";
+
+/** 从一批文件名中挑出 Ollama 的 Windows 安装器（大小写不敏感）。纯逻辑，便于单测。 */
+export function pickOllamaInstaller(fileNames: string[]): string | null {
+  const lower = fileNames.map((name) => ({ name, key: name.toLowerCase() }));
+  const exact = lower.find((f) => f.key === "ollamasetup.exe");
+  if (exact) {
+    return exact.name;
+  }
+  const fuzzy = lower.find((f) => f.key.startsWith("ollama") && f.key.endsWith(".exe"));
+  return fuzzy ? fuzzy.name : null;
+}
+
+/**
+ * 构造 Ollama（Inno Setup）安装器的静默安装参数。
+ * `/DIR` 指定程序安装目录；`/VERYSILENT` 无界面；其余抑制弹窗与重启。
+ */
+export function buildOllamaInstallArgs(installDir?: string): string[] {
+  const args = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"];
+  if (installDir && installDir.trim()) {
+    args.unshift(`/DIR=${installDir}`);
+  }
+  return args;
+}
+
+/** 代管安装 Ollama 时搜索安装器的常见目录（Windows）。 */
+export function ollamaInstallerSearchDirs(extraDirs: string[] = []): string[] {
+  const home = homedir();
+  return [
+    ...extraDirs,
+    join(home, "Downloads"),
+    join(home, "Desktop"),
+    home
+  ].filter((dir) => dir.trim().length > 0);
+}
 
 interface OllamaTagsResponse {
   models?: Array<{ name?: string; size?: number; modified_at?: string }>;
@@ -301,6 +338,55 @@ export class OllamaBackend implements ModelBackend {
       }
     }
     return false;
+  }
+
+  /**
+   * 在常见目录里查找已下载的 Ollama 安装器（`OllamaSetup.exe`）。
+   * `extraDirs` 可传入用户在模型中心选择的下载目录，优先搜索。
+   * 返回安装器绝对路径或 null。
+   */
+  findInstaller(extraDirs: string[] = []): string | null {
+    for (const dir of ollamaInstallerSearchDirs(extraDirs)) {
+      let entries: string[];
+      try {
+        if (!existsSync(dir)) {
+          continue;
+        }
+        entries = readdirSync(dir);
+      } catch {
+        continue;
+      }
+      const match = pickOllamaInstaller(entries);
+      if (match) {
+        return join(dir, match);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 用已下载的安装器把 Ollama 静默安装到指定目录（Windows / Inno Setup）。
+   * 相当于把 `OllamaSetup.exe /DIR="D:\Ollama" /VERYSILENT` 封装进 App。
+   */
+  async installSilently(installerPath: string, installDir?: string): Promise<void> {
+    if (process.platform !== "win32") {
+      throw new Error("代管安装当前仅支持 Windows。");
+    }
+    if (!existsSync(installerPath)) {
+      throw new Error(`未找到安装器：${installerPath}`);
+    }
+    const args = buildOllamaInstallArgs(installDir);
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(installerPath, args, { windowsHide: true });
+      child.on("error", (error) => reject(error));
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`安装器退出码 ${code ?? "未知"}。`));
+        }
+      });
+    });
   }
 }
 

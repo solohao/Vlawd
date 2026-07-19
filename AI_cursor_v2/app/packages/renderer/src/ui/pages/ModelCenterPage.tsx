@@ -239,12 +239,16 @@ export function ModelCenterPage() {
               }
               desc={
                 snap.activeBackend === "ollama"
-                  ? "打开 Ollama 官方下载页"
+                  ? "自动检测并静默安装到指定目录"
                   : snap.activeBackend === "lmstudio"
                     ? "如何开启本地服务器"
                     : "自定义端点接入说明"
               }
-              onClick={() => void model.openInstallGuide()}
+              onClick={() =>
+                snap.activeBackend === "ollama"
+                  ? void model.installOllama()
+                  : void model.openInstallGuide()
+              }
             />
             <QuickAction
               icon={CompatIcon}
@@ -301,22 +305,59 @@ function BackendBanner({ backend, model }: { backend: ModelBackendState; model: 
           ) : null}
         </div>
         <div className="flex shrink-0 gap-2">
-          {notInstalled && backend.backend === "ollama" ? (
-            <button
-              onClick={() => void model.openInstallGuide()}
-              className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-brand-600"
-            >
-              安装 Ollama
-            </button>
-          ) : (
-            <button
-              onClick={() => void model.refreshBackend()}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50"
-            >
-              重新检测
-            </button>
-          )}
+          <button
+            onClick={() => void model.refreshBackend()}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50"
+          >
+            重新检测
+          </button>
         </div>
+      </div>
+
+      {notInstalled && backend.backend === "ollama" ? <OllamaInstallPanel model={model} /> : null}
+    </div>
+  );
+}
+
+function OllamaInstallPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const install = model.snapshot.ollamaInstall;
+  const installing = install.phase === "installing";
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-[12.5px] font-medium text-slate-700">一键准备 Ollama</p>
+      <p className="mt-0.5 text-[11.5px] text-slate-400">
+        {!install.supported
+          ? "当前系统暂不支持代管安装，请前往官网手动安装。"
+          : install.installerFound
+            ? `已找到安装器：${install.installerPath}。点击安装并选择目标盘（如 D:\\Ollama），本 App 会静默安装。`
+            : "未在下载目录找到 OllamaSetup.exe。可手动指定安装器，或前往官网下载后再来安装。"}
+      </p>
+      {install.message && (install.phase === "installing" || install.phase === "error") ? (
+        <p className={`mt-1.5 text-[11.5px] ${install.phase === "error" ? "text-rose-600" : "text-slate-500"}`}>
+          {install.message}
+        </p>
+      ) : null}
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <button
+          disabled={!install.supported || installing}
+          onClick={() => void model.installOllama()}
+          className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+        >
+          {installing ? "安装中…" : "选择目录并安装"}
+        </button>
+        <button
+          disabled={installing}
+          onClick={() => void model.locateOllamaInstaller()}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+        >
+          指定安装器
+        </button>
+        <button
+          onClick={() => void model.openInstallGuide()}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50"
+        >
+          官网下载
+        </button>
       </div>
     </div>
   );
