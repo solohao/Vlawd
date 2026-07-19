@@ -21,9 +21,9 @@ export type DesktopPage =
   | "settings";
 
 const pageThemes: Record<DesktopPage, "dark" | "light"> = {
-  dashboard: "dark",
+  dashboard: "light",
   conversation: "light",
-  task: "dark",
+  task: "light",
   sessions: "light",
   workflows: "light",
   models: "light",
