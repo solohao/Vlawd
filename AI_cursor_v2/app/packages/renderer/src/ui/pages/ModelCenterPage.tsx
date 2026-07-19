@@ -507,7 +507,7 @@ function LogsTab({ model }: { model: ReturnType<typeof useModelCenter> }) {
     { label: "模型目录", value: backend.modelsDir ?? "（跟随已运行的 Ollama 默认目录）" },
     { label: "进程管理", value: backend.managedByApp ? "由本 App 启动（OLLAMA_MODELS 生效）" : "外部/默认" },
     { label: "活动 Provider", value: PROVIDER_LABELS[snap.activeProviderKind] ?? snap.activeProviderKind },
-    { label: "真实推理", value: snap.usingRealInference ? "是" : "否（离线回退）" }
+    { label: "真实推理", value: snap.providerConnected && snap.usingRealInference ? "是（已验证连接）" : "否（离线回退，未验证连接）" }
   ];
   if (env) {
     rows.push(
