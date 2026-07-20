@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
-import { aiEmployeeAvatarCompact } from "../../app/assets.js";
+import { aiEmployeeSpriteTransparent } from "../../app/assets.js";
+import { runtimeStateToken } from "../../brand/ai-employee.js";
 import { ExpandIcon, GearIcon } from "../icons.js";
 import { VoiceController } from "./VoiceController.js";
 
@@ -8,43 +9,53 @@ function api() {
   return typeof window !== "undefined" ? window.aiCursorDesktop : undefined;
 }
 
-function OverlayMini({ onExpand }: { onExpand: () => void }) {
+function OverlayMini({
+  runtimeState,
+  onExpand
+}: {
+  runtimeState: ModelRuntimeState;
+  onExpand: () => void;
+}) {
+  const token = runtimeStateToken(runtimeState);
+
   return (
-    <div className="drag flex items-center gap-2.5 rounded-full border border-slate-200 bg-white/95 px-2.5 py-2 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur-xl select-none">
+    <div className="drag group relative h-[76px] w-[76px] select-none">
+      <span
+        className="pointer-events-none absolute inset-[7px] rounded-full bg-brand-400/25 blur-xl"
+        style={{ animation: "ai-glow 3s ease-in-out infinite" }}
+      />
       <button
         onClick={onExpand}
-        className="no-drag relative grid h-9 w-9 place-items-center"
-        aria-label="expand voice controller"
+        className="no-drag relative grid h-[76px] w-[76px] place-items-center rounded-full transition-transform duration-200 group-hover:scale-[1.04]"
+        aria-label={`expand voice controller, current state ${token.label}`}
       >
         <span
-          className="absolute inset-0 rounded-full bg-brand-400/30 blur-md"
+          className="pointer-events-none absolute inset-[5px] rounded-full border border-brand-400/45"
           style={{ animation: "ai-glow 3s ease-in-out infinite" }}
         />
-        <img src={aiEmployeeAvatarCompact} alt="" className="relative h-8 w-8 object-contain" />
+        <img
+          src={aiEmployeeSpriteTransparent}
+          alt=""
+          className="relative h-[68px] w-[68px] object-contain drop-shadow-[0_10px_18px_rgba(15,23,42,0.22)]"
+        />
       </button>
-      <div className="flex h-4 items-center gap-[2.5px]">
-        {[0.4, 0.85, 0.5, 1, 0.6].map((h, i) => (
-          <span
-            key={i}
-            className="w-[2.5px] rounded-full bg-brand-400"
-            style={{ height: `${h * 100}%`, animation: `ai-pulse 1s ease-in-out ${i * 0.12}s infinite` }}
-          />
-        ))}
+      <div className="pointer-events-none absolute -right-1 top-1 flex translate-x-1 gap-1 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100">
+        <button
+          onClick={() => api()?.openMainWindow()}
+          className="no-drag grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white/90 text-slate-400 shadow-[0_6px_16px_rgba(15,23,42,0.14)] backdrop-blur-xl hover:text-slate-700"
+          aria-label="open settings"
+        >
+          <GearIcon width={13} height={13} />
+        </button>
+        <button
+          onClick={onExpand}
+          className="no-drag grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white/90 text-slate-400 shadow-[0_6px_16px_rgba(15,23,42,0.14)] backdrop-blur-xl hover:text-slate-700"
+          aria-label="expand"
+        >
+          <ExpandIcon width={13} height={13} />
+        </button>
       </div>
-      <button
-        onClick={() => api()?.openMainWindow()}
-        className="no-drag rounded-full p-1 text-slate-400 hover:text-slate-700"
-        aria-label="open settings"
-      >
-        <GearIcon width={15} height={15} />
-      </button>
-      <button
-        onClick={onExpand}
-        className="no-drag rounded-full p-1 text-slate-400 hover:text-slate-700"
-        aria-label="expand"
-      >
-        <ExpandIcon width={14} height={14} />
-      </button>
+      <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-brand-400 shadow-[0_2px_8px_rgba(164,209,0,0.6)]" />
     </div>
   );
 }
@@ -102,7 +113,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
           onTakeover={() => api()?.openMainWindow()}
         />
       ) : (
-        <OverlayMini onExpand={() => setExpanded(true)} />
+        <OverlayMini runtimeState={liveState} onExpand={() => setExpanded(true)} />
       )}
     </div>
   );
