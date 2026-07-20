@@ -19,7 +19,10 @@ function OverlayMini({
   const token = runtimeStateToken(runtimeState);
 
   return (
-    <div className="drag group relative h-[76px] w-[76px] select-none">
+    <div
+      className="drag group relative h-[76px] w-[76px] select-none"
+      data-sprite-state={runtimeState}
+    >
       <span
         className="pointer-events-none absolute inset-[7px] rounded-full bg-brand-400/25 blur-xl"
         style={{ animation: "ai-glow 3s ease-in-out infinite" }}
@@ -36,7 +39,7 @@ function OverlayMini({
         <img
           src={aiEmployeeSpriteTransparent}
           alt=""
-          className="relative h-[68px] w-[68px] object-contain drop-shadow-[0_10px_18px_rgba(15,23,42,0.22)]"
+          className="overlay-sprite relative h-[68px] w-[68px] object-contain drop-shadow-[0_10px_18px_rgba(15,23,42,0.22)]"
         />
       </button>
       <div className="pointer-events-none absolute -right-1 top-1 flex translate-x-1 gap-1 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100">
