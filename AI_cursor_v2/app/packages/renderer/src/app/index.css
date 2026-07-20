@@ -52,9 +52,9 @@ html[data-view="runtime"] #root {
    填色式开发进度可视化（Coloring-book development）
    默认整屏"去色"为浅灰（未处理态）；完成并验证功能单元后再逐步
    恢复主题色。详见 技术文档/12_填色式开发进度可视化.md。
-   仅作用于主窗口视图，避免影响透明的运行时悬浮窗。
+   主窗口与透明的运行时悬浮窗统一遵循同一进度状态。
    ============================================================ */
-html[data-view="main"][data-paint="on"] #root {
+html[data-paint="on"] #root {
   filter: grayscale(1) contrast(0.62) brightness(1.14);
 }
 
