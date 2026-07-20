@@ -23,19 +23,11 @@ function OverlayMini({
       className="drag group relative h-[76px] w-[76px] select-none"
       data-sprite-state={runtimeState}
     >
-      <span
-        className="pointer-events-none absolute inset-[7px] rounded-full bg-brand-400/25 blur-xl"
-        style={{ animation: "ai-glow 3s ease-in-out infinite" }}
-      />
       <button
         onClick={onExpand}
         className="no-drag relative grid h-[76px] w-[76px] place-items-center rounded-full transition-transform duration-200 group-hover:scale-[1.04]"
         aria-label={`expand voice controller, current state ${token.label}`}
       >
-        <span
-          className="pointer-events-none absolute inset-[5px] rounded-full border border-brand-400/45"
-          style={{ animation: "ai-glow 3s ease-in-out infinite" }}
-        />
         <img
           src={aiEmployeeSpriteTransparent}
           alt=""
