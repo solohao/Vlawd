@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { DesktopApp } from "../ui/DesktopApp.js";
 import { OverlayApp } from "../ui/runtime/OverlayApp.js";
+import { initPaintMode } from "./paint-mode.js";
 import "./index.css";
 
 const container = document.getElementById("root");
@@ -12,6 +13,7 @@ if (!container) {
 
 const view = window.location.hash.includes("runtime") ? "runtime" : "main";
 document.documentElement.setAttribute("data-view", view);
+initPaintMode();
 
 async function resolveRuntimeState(): Promise<ModelRuntimeState> {
   const api = window.aiCursorDesktop;
