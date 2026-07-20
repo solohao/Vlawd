@@ -108,3 +108,110 @@ html[data-paint="on"] #root {
     transform: rotate(360deg);
   }
 }
+
+@keyframes sprite-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(1deg);
+  }
+}
+
+@keyframes sprite-think {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(2deg) scale(1.025);
+  }
+}
+
+@keyframes sprite-speak {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+  50% {
+    transform: scaleY(1.045) translateY(-2px);
+  }
+}
+
+@keyframes sprite-act {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(2deg);
+  }
+  75% {
+    transform: translateY(-1px) rotate(-2deg);
+  }
+}
+
+@keyframes sprite-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px) rotate(-2deg);
+  }
+  75% {
+    transform: translateX(2px) rotate(2deg);
+  }
+}
+
+@keyframes sprite-complete {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.08) translateY(-2px);
+  }
+}
+
+.overlay-sprite {
+  transform-origin: 50% 85%;
+  will-change: transform;
+}
+
+[data-sprite-state="listening"] .overlay-sprite {
+  animation: sprite-float 3.6s ease-in-out infinite;
+}
+
+[data-sprite-state="thinking"] .overlay-sprite,
+[data-sprite-state="waiting_confirm"] .overlay-sprite {
+  animation: sprite-think 1.8s ease-in-out infinite;
+}
+
+[data-sprite-state="speaking"] .overlay-sprite {
+  animation: sprite-speak 0.72s ease-in-out infinite;
+}
+
+[data-sprite-state="acting"] .overlay-sprite {
+  animation: sprite-act 1.15s ease-in-out infinite;
+}
+
+[data-sprite-state="interrupted"] .overlay-sprite {
+  animation: sprite-shake 0.42s ease-in-out 2;
+}
+
+[data-sprite-state="complete"] .overlay-sprite {
+  animation: sprite-complete 1.2s ease-out;
+}
+
+[data-sprite-state="paused"] .overlay-sprite {
+  filter: grayscale(0.7) saturate(0.55) drop-shadow(0 8px 14px rgba(15, 23, 42, 0.16));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-sprite,
+  [data-sprite-state] .overlay-sprite {
+    animation: none !important;
+  }
+}
