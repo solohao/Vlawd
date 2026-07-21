@@ -30,8 +30,10 @@ export interface AiCursorDesktopApi {
   resizeOverlay(size: OverlaySize): Promise<void>;
   /** 光标进入/离开吉祥物本体时切换鼠标穿透（true=可点击，false=穿透到桌面）。 */
   setOverlayInteractive(interactive: boolean): Promise<void>;
-  /** 自定义拖拽：把悬浮窗移动到目标屏幕坐标。 */
-  moveOverlay(pos: { x: number; y: number }): Promise<void>;
+  /** 开始拖拽：主进程用系统光标坐标定时跟随移动悬浮窗。 */
+  startOverlayDrag(): Promise<void>;
+  /** 结束拖拽。 */
+  endOverlayDrag(): Promise<void>;
   /** 读取悬浮窗当前屏幕边界（拖拽起点用）。 */
   getOverlayBounds(): Promise<{ x: number; y: number; width: number; height: number } | null>;
   quitApp(): Promise<void>;
@@ -94,7 +96,8 @@ const api: AiCursorDesktopApi = {
   resizeOverlay: (size) => ipcRenderer.invoke("overlay:resize", size) as Promise<void>,
   setOverlayInteractive: (interactive) =>
     ipcRenderer.invoke("overlay:setInteractive", interactive) as Promise<void>,
-  moveOverlay: (pos) => ipcRenderer.invoke("overlay:move", pos) as Promise<void>,
+  startOverlayDrag: () => ipcRenderer.invoke("overlay:dragStart") as Promise<void>,
+  endOverlayDrag: () => ipcRenderer.invoke("overlay:dragEnd") as Promise<void>,
   getOverlayBounds: () =>
     ipcRenderer.invoke("overlay:getBounds") as Promise<
       { x: number; y: number; width: number; height: number } | null
