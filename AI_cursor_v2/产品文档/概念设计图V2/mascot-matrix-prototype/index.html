@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vlawd 精灵 · 表情A · 6×6 过渡矩阵 v9</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;background:#23272f;color:#e8ecf3}
+  header{padding:14px 20px;border-bottom:1px solid #3c4152}
+  header h1{font-size:16px;margin:0 0 4px}
+  header p{margin:0;font-size:12px;color:#9aa3b5;max-width:900px;line-height:1.6}
+  .wrap{display:flex;gap:26px;padding:22px;flex-wrap:wrap;align-items:flex-start}
+  .panel{background:#2c313b;border:1px solid #3c4152;border-radius:14px;padding:18px}
+  h3{font-size:13px;margin:0 0 12px;color:#cfd6e4}
+  #svg{width:300px;height:300px;display:block;margin:0 auto}
+  .float{animation:float 3.2s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  #svg{transform-origin:256px 300px}
+  .breathe{animation:breathe 3.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:translateY(0) scale(1) rotate(0deg)}50%{transform:translateY(-2px) scale(1.015) rotate(.5deg)}}
+  #gPupil{opacity:0;transition:opacity .2s}
+  #gPupil.think{opacity:1}
+  .cap{text-align:center;font-size:13px;color:#cfd6e4;margin-top:8px}
+  .sub{text-align:center;font-size:11px;color:#8b93a6;margin-top:2px}
+  table{border-collapse:collapse}
+  td,th{border:1px solid #3c4152;text-align:center}
+  th{background:#343a45;color:#cfd6e4;font-size:11px;padding:6px 8px;font-weight:600}
+  th.corner{background:#2c313b}
+  td.cell{width:46px;height:38px;cursor:pointer;font-size:11px;color:#8b93a6;background:#20242b}
+  td.cell:hover{background:#3a4150;color:#e8ecf3}
+  td.diag{background:#2a3320;color:#9fce5a}
+  td.cell.active{background:#8bc34a;color:#1c2230;font-weight:700}
+  .rowh{background:#343a45;color:#cfd6e4;font-size:11px;padding:0 8px;font-weight:600;white-space:nowrap}
+  .legend{font-size:11px;color:#8b93a6;margin-top:12px;line-height:1.7;max-width:360px}
+  .btns{margin-top:10px;text-align:center}
+  button{background:#454b5e;color:#e8ecf3;border:1px solid #565d72;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:12px;margin:2px}
+</style></head>
+<body>
+<header>
+  <h1>Vlawd 桌面精灵 · 表情图 A · 6×6 状态过渡矩阵 (v9)</h1>
+  <p>五官=从表情图 A 忠实抠出的真实轮廓；底图已抹掉原就绪五官（inpaint），不再透出旧脸。行=起始态、列=目标态，点格子播放"行→列"过渡（当前用交叉淡入，保真优先）。</p>
+</header>
+<div class="wrap">
+  <div class="panel" style="text-align:center">
+    <h3>过渡预览</h3>
+    <svg id="svg" viewBox="0 0 512 512">
+      <defs>
+        <linearGradient id="grn" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#d6f75a"/><stop offset="1" stop-color="#7cb342"/>
+        </linearGradient>
+        <!-- 路线 b：果冻像素贴图作为填充（随矢量轮廓 morph） -->
+        <pattern id="jelly" patternUnits="userSpaceOnUse" width="512" height="512">
+          <image href="jelly_tex.png" x="0" y="0" width="512" height="512"/>
+        </pattern>
+        <!-- 果冻质感：外发光 bloom + 边缘轮廓光 -->
+        <filter id="jellyfx" x="-60%" y="-60%" width="220%" height="220%">
+          <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#c8ff4d" flood-opacity="0.55"/>
+        </filter>
+        <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="1.0" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <image href="clean_body.png" x="0" y="0" width="512" height="512"/>
+      <g id="gA" filter="url(#jellyfx)"><g id="eyesA"><path class="eL" fill="url(#jelly)"/><path class="eR" fill="url(#jelly)"/></g><path class="mo" fill="url(#jelly)"/></g>
+      <g id="gB" filter="url(#jellyfx)" opacity="0"><g id="eyesB"><path class="eL" fill="url(#jelly)"/><path class="eR" fill="url(#jelly)"/></g><path class="mo" fill="url(#jelly)"/></g>
+      <g id="gPupil"><path class="pu" fill="#141414"/><path class="pu" fill="#141414"/></g>
+    </svg>
+    <div class="cap" id="cap">就绪 (待机)</div>
+    <div class="sub" id="sub">点右侧矩阵播放过渡</div>
+    <div class="btns"><button id="loopBtn">▶ 自动巡演</button></div>
+  </div>
+  <div class="panel">
+    <h3>状态过渡矩阵（点格子：行 → 列）</h3>
+    <table id="matrix"></table>
+    <div class="legend">
+      • 绿色对角线 = 该态待机动画（就绪/完成漂浮、思考=眼珠沿 右→上→左→回 转动）。<br>
+      • 其余格 = 从行态过渡到列态；五官是 A 的真实形状，错误保持绿色生气脸、不变红。<br>
+      • 目前过渡=交叉淡入（保真）；若要"形状连续变形"更丝滑，需牺牲保真做 morph，或走 Lottie/Live2D。
+    </div>
+  </div>
+</div>
+<script>
+const ORDER=['ready','thinking','focused','paused','error','complete'];
+const LABEL={ready:'就绪',thinking:'思考',focused:'执行',paused:'暂停',error:'错误',complete:'完成'};
+const IDLE ={ready:'float',complete:'float',thinking:'',focused:'',paused:'',error:''};
+const svg=document.getElementById('svg'),cap=document.getElementById('cap'),sub=document.getElementById('sub');
+const gA=document.getElementById('gA'),gB=document.getElementById('gB');
+const eyesA=document.getElementById('eyesA'),eyesB=document.getElementById('eyesB');
+let STATES=null,cur='ready',front=gA,back=gB,frontEyes=eyesA,backEyes=eyesB;
+
+function pathFrom(pts){const n=pts.length,g=i=>pts[(i%n+n)%n];
+  let d=`M ${g(0)[0]} ${g(0)[1]} `;
+  for(let i=0;i<n;i++){const p0=g(i-1),p1=g(i),p2=g(i+1),p3=g(i+2);
+    const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=`C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0]} ${p2[1]} `;}
+  return d+'Z';}
+function paint(group,s){const S=STATES[s];
+  // 思考态用描摩的“UP”帧作为过渡目标眼型（待机循环时再逐帧 morph）
+  let eL,eR;
+  if(s==='thinking'&&FRAMES){eL=FRAMES.eye.up;eR=shiftX(FRAMES.eye.up,DX);}
+  else{eL=S.eyeL;eR=S.eyeR;}
+  group.querySelector('.eL').setAttribute('d',pathFrom(eL));
+  group.querySelector('.eR').setAttribute('d',pathFrom(eR));
+  group.querySelector('.mo').setAttribute('d',pathFrom(S.mouth));}
+const gPupil=document.getElementById('gPupil');
+const pupPaths=[...document.querySelectorAll('#gPupil .pu')];
+const DX=125;                       // 左→右眼水平偏移
+let FRAMES=null;
+const shiftX=(pts,dx)=>pts.map(p=>[p[0]+dx,p[1]]);
+const lerpPts=(a,b,t)=>a.map((p,i)=>[p[0]+(b[i][0]-p[0])*t, p[1]+(b[i][1]-p[1])*t]);
+fetch('thinking_frames.json').then(r=>r.json()).then(j=>{FRAMES=j;if(cur==='thinking')snap('thinking');});
+
+// 思考 = “扫视+凝视”：眼珠快速跳到一个方向、停住凝视一会儿再跳（带回弹与随机停頓）
+const GAZE=['right','up','left'];
+const easeBack=t=>{const s=1.9;return 1+(--t)*t*((s+1)*t+s);};   // 过冲回弹
+let thinkAnim=null;
+let gz={cur:'up',tar:'right',t0:0,dur:0.2,dwell:1.0,moving:true};
+function nextGaze(c){const o=GAZE.filter(x=>x!==c);return o[Math.random()*o.length|0];}
+function thinkLoop(now){
+  if(FRAMES){
+    const tn=now/1000; let e;
+    if(gz.moving){
+      let p=(tn-gz.t0)/gz.dur;
+      if(p>=1){p=1;gz.moving=false;gz.cur=gz.tar;gz.t0=tn;}
+      e=easeBack(p);
+    }else{
+      e=1;
+      if(tn-gz.t0>gz.dwell){gz.tar=nextGaze(gz.cur);gz.t0=tn;gz.dur=0.13+Math.random()*0.09;gz.dwell=0.6+Math.random()*1.3;gz.moving=true;}
+    }
+    // 凝视时的极微漂移（微扫视），避免死盯
+    const jit=gz.moving?0:Math.sin(tn*7)*0.4;
+    const eye=lerpPts(FRAMES.eye[gz.cur],FRAMES.eye[gz.tar],e);
+    const pup=lerpPts(FRAMES.pupil[gz.cur],FRAMES.pupil[gz.tar],e).map(p=>[p[0]+jit,p[1]]);
+    front.querySelector('.eL').setAttribute('d',pathFrom(eye));
+    front.querySelector('.eR').setAttribute('d',pathFrom(shiftX(eye,DX)));
+    pupPaths[0].setAttribute('d',pathFrom(pup));
+    pupPaths[1].setAttribute('d',pathFrom(shiftX(pup,DX)));
+  }
+  thinkAnim=requestAnimationFrame(thinkLoop);
+}
+function setIdle(s){svg.classList.remove('float','breathe');if(IDLE[s])svg.classList.add(IDLE[s]);
+  if(s==='thinking'||s==='focused'||s==='error')svg.classList.add('breathe'); // 呼吸生命感（暂停保持静止）
+  gPupil.classList.toggle('think',s==='thinking');
+  if(s==='thinking'){if(!thinkAnim){gz={cur:'up',tar:'right',t0:performance.now()/1000,dur:0.2,dwell:0.5,moving:true};thinkAnim=requestAnimationFrame(thinkLoop);}}
+  else if(thinkAnim){cancelAnimationFrame(thinkAnim);thinkAnim=null;}}
+function snap(s){ // instant show s on front
+  paint(front,s);front.style.transition='none';front.style.opacity=1;
+  back.style.transition='none';back.style.opacity=0;cur=s;setIdle(s);
+  cap.textContent=LABEL[s]+' (待机)';sub.textContent='点矩阵播放过渡';
+}
+function transition(from,to){
+  snap(from);
+  paint(back,to);back.style.transition='none';back.style.opacity=0;void back.getBoundingClientRect();
+  svg.classList.remove('float','breathe');gPupil.classList.remove('think');
+  back.style.transition='opacity .30s ease';front.style.transition='opacity .30s ease';
+  back.style.opacity=1;front.style.opacity=0;
+  cap.textContent=`${LABEL[from]} → ${LABEL[to]}`;sub.textContent='过渡中…';
+  const nf=back,nb=front,nfe=(back===gA?eyesA:eyesB),nbe=(front===gA?eyesA:eyesB);
+  front=nf;back=nb;frontEyes=nfe;backEyes=nbe;cur=to;
+  setTimeout(()=>{setIdle(to);cap.textContent=LABEL[to]+' (待机)';sub.textContent='点矩阵播放过渡';},320);
+}
+// 不规则眨眼：随机间隔 + 偶尔连眨，更像活物
+function blinkOnce(cb){
+  if(document.hidden){cb&&cb();return;}
+  frontEyes.style.transition='transform .08s ease';frontEyes.style.transformOrigin='center 231px';
+  frontEyes.style.transform='scaleY(0.08)';
+  setTimeout(()=>{frontEyes.style.transform='scaleY(1)';cb&&cb();},110);
+}
+function scheduleBlink(){
+  const wait=2800+Math.random()*6400;
+  setTimeout(()=>{
+    if(cur==='ready'||cur==='thinking'){
+      blinkOnce(Math.random()<0.28?()=>setTimeout(()=>blinkOnce(),150):null);
+    }
+    scheduleBlink();
+  },wait);
+}
+scheduleBlink();
+
+const mt=document.getElementById('matrix');
+let head='<tr><th class="corner">起↓ \\ 目→</th>';ORDER.forEach(c=>head+=`<th>${LABEL[c]}</th>`);head+='</tr>';
+let rows='';ORDER.forEach(r=>{rows+=`<tr><td class="rowh">${LABEL[r]}</td>`;
+  ORDER.forEach(c=>{const diag=r===c?' diag':'';rows+=`<td class="cell${diag}" data-from="${r}" data-to="${c}">${r===c?'待机':'▶'}</td>`;});
+  rows+='</tr>';});
+mt.innerHTML=head+rows;
+mt.querySelectorAll('td.cell').forEach(td=>td.onclick=()=>{
+  mt.querySelectorAll('td.cell').forEach(x=>x.classList.remove('active'));td.classList.add('active');
+  const f=td.dataset.from,t=td.dataset.to;
+  if(f===t)snap(t);else transition(f,t);});
+
+let loop=null;
+document.getElementById('loopBtn').onclick=function(){
+  if(loop){clearInterval(loop);loop=null;this.textContent='▶ 自动巡演';return;}
+  this.textContent='⏸ 停止巡演';let i=0;
+  const seq=['ready','thinking','focused','complete','ready','error','paused','ready'];
+  loop=setInterval(()=>{transition(seq[i%seq.length],seq[(i+1)%seq.length]);i++;},1500);};
+
+fetch('states_A.json').then(r=>r.json()).then(j=>{STATES=j;snap('ready');});
+</script>
+</body></html>
