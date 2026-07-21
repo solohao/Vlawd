@@ -46,6 +46,12 @@ html[data-view="runtime"],
 html[data-view="runtime"] body,
 html[data-view="runtime"] #root {
   background: transparent !important;
+  overflow: hidden !important;
+}
+
+html[data-view="runtime"] body {
+  overscroll-behavior: none;
+  user-select: none;
 }
 
 /* ============================================================
