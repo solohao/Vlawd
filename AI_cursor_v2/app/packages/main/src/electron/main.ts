@@ -68,6 +68,7 @@ const OVERLAY_DEFAULT = { width: 208, height: 84 };
 
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
+let overlayDragTimer: ReturnType<typeof setInterval> | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
@@ -353,12 +354,36 @@ ipcMain.handle("overlay:setInteractive", (_event, interactive: boolean) => {
   overlayWindow.setIgnoreMouseEvents(!interactive, { forward: true });
 });
 
-// 自定义拖拽：渲染层根据指针位移下发悬浮窗的目标屏幕坐标。
-ipcMain.handle("overlay:move", (_event, pos: { x: number; y: number }) => {
+// 自定义拖拽：按下后主进程用系统光标坐标定时跟随移动悬浮窗。
+// 不依赖渲染层转发的 mousemove（一旦穿透切换会丢事件），可拖到桌面任意位置。
+function stopOverlayDrag(): void {
+  if (overlayDragTimer) {
+    clearInterval(overlayDragTimer);
+    overlayDragTimer = null;
+  }
+}
+
+ipcMain.handle("overlay:dragStart", () => {
   if (!overlayWindow || overlayWindow.isDestroyed()) {
     return;
   }
-  overlayWindow.setPosition(Math.round(pos.x), Math.round(pos.y));
+  const cursor = screen.getCursorScreenPoint();
+  const bounds = overlayWindow.getBounds();
+  const offsetX = cursor.x - bounds.x;
+  const offsetY = cursor.y - bounds.y;
+  stopOverlayDrag();
+  overlayDragTimer = setInterval(() => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+      stopOverlayDrag();
+      return;
+    }
+    const point = screen.getCursorScreenPoint();
+    overlayWindow.setPosition(point.x - offsetX, point.y - offsetY);
+  }, 16);
+});
+
+ipcMain.handle("overlay:dragEnd", () => {
+  stopOverlayDrag();
 });
 
 ipcMain.handle("overlay:getBounds", () => {

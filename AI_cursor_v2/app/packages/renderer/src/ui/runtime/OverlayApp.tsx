@@ -29,14 +29,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const pausedRef = useRef(paused);
   const interactiveRef = useRef<boolean | null>(null);
   const hitRef = useRef<{ ctx: CanvasRenderingContext2D; w: number; h: number } | null>(null);
-  const dragRef = useRef<{
-    sx: number;
-    sy: number;
-    wx: number | null;
-    wy: number | null;
-    moved: boolean;
-    pointerId: number;
-  } | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; moved: boolean; pointerId: number } | null>(null);
 
   useEffect(() => {
     expandedRef.current = expanded;
@@ -139,19 +132,11 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     }
   }, []);
 
-  // window 级鼠标移动：主进程 forward 过来的移动事件驱动穿透开关与拖拽。
+  // window 级鼠标移动：主进程 forward 过来的移动事件驱动穿透开关。
+  // 拖拽期间不再切换穿透（否则一旦光标滑出吉祥物就会重新穿透、丢失后续事件）。
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      const drag = dragRef.current;
-      if (drag) {
-        const dx = e.screenX - drag.sx;
-        const dy = e.screenY - drag.sy;
-        if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
-          drag.moved = true;
-        }
-        if (drag.moved && drag.wx !== null && drag.wy !== null) {
-          api()?.moveOverlay({ x: drag.wx + dx, y: drag.wy + dy });
-        }
+      if (dragRef.current) {
         return;
       }
       setInteractive(hitTest(e.clientX, e.clientY));
@@ -172,7 +157,8 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     }
   }, []);
 
-  // 左键按住吉祥物：移动整个透明窗口；松开且未移动才视为点击 → 暂停/继续。
+  // 左键按住吉祥物：主进程用系统光标坐标定时跟随移动窗口（不依赖转发事件）。
+  // 松开且几乎未移动才视为点击 → 暂停/继续。拖拽全程锁定可交互 + pointer capture。
   const onSpritePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) {
@@ -180,33 +166,37 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
       }
       e.preventDefault();
       e.currentTarget.setPointerCapture(e.pointerId);
-      dragRef.current = {
-        sx: e.screenX,
-        sy: e.screenY,
-        wx: null,
-        wy: null,
-        moved: false,
-        pointerId: e.pointerId
-      };
-      void api()
-        ?.getOverlayBounds()
-        .then((bounds) => {
-          const drag = dragRef.current;
-          if (!drag || drag.pointerId !== e.pointerId) {
-            return;
-          }
-          drag.wx = bounds?.x ?? 0;
-          drag.wy = bounds?.y ?? 0;
-        });
-      const onUp = () => {
-        window.removeEventListener("pointerup", onUp);
-        const drag = dragRef.current;
-        dragRef.current = null;
-        if (drag && !drag.moved) {
-          togglePause();
-        }
-      };
-      window.addEventListener("pointerup", onUp);
+      setInteractive(true);
+      dragRef.current = { sx: e.screenX, sy: e.screenY, moved: false, pointerId: e.pointerId };
+      void api()?.startOverlayDrag();
+    },
+    [setInteractive]
+  );
+
+  const onSpritePointerMove = useCallback((e: React.PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) {
+      return;
+    }
+    if (!drag.moved && Math.hypot(e.screenX - drag.sx, e.screenY - drag.sy) > DRAG_THRESHOLD) {
+      drag.moved = true;
+    }
+  }, []);
+
+  const onSpritePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== e.pointerId) {
+        return;
+      }
+      dragRef.current = null;
+      void api()?.endOverlayDrag();
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      if (!drag.moved) {
+        togglePause();
+      }
     },
     [togglePause]
   );
@@ -231,6 +221,8 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
         style={{ width: SPRITE, height: SPRITE, cursor: "grab" }}
         data-sprite-state={paused ? "paused" : liveState}
         onPointerDown={onSpritePointerDown}
+        onPointerMove={onSpritePointerMove}
+        onPointerUp={onSpritePointerUp}
         onContextMenu={(e) => {
           e.preventDefault();
           setExpanded((v) => !v);
