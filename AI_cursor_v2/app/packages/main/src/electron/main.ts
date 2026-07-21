@@ -192,6 +192,9 @@ function createOverlayWindow(): BrowserWindow {
 
   window.setAlwaysOnTop(true, "screen-saver");
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // 默认整窗鼠标穿透（forward 保留 hover 事件）：只有光标落在吉祥物不规则区域内时，
+  // 渲染层才通过 overlay:setInteractive 临时关闭穿透，从而实现"只有精灵本体可交互"。
+  window.setIgnoreMouseEvents(true, { forward: true });
   void loadView(window, "runtime");
   window.once("ready-to-show", () => positionOverlayTopRight(window));
   window.on("closed", () => {
@@ -340,6 +343,29 @@ ipcMain.handle("overlay:resize", (_event, size: { width: number; height: number 
   const height = Math.max(48, Math.round(size.height));
   // keep the window anchored by its right edge so it grows toward the screen interior
   overlayWindow.setBounds({ x: bounds.x + bounds.width - width, y: bounds.y, width, height });
+});
+
+// 光标进入/离开吉祥物本体时切换鼠标穿透：true=可点击，false=穿透到桌面。
+ipcMain.handle("overlay:setInteractive", (_event, interactive: boolean) => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return;
+  }
+  overlayWindow.setIgnoreMouseEvents(!interactive, { forward: true });
+});
+
+// 自定义拖拽：渲染层根据指针位移下发悬浮窗的目标屏幕坐标。
+ipcMain.handle("overlay:move", (_event, pos: { x: number; y: number }) => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return;
+  }
+  overlayWindow.setPosition(Math.round(pos.x), Math.round(pos.y));
+});
+
+ipcMain.handle("overlay:getBounds", () => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return null;
+  }
+  return overlayWindow.getBounds();
 });
 
 ipcMain.handle("app:quit", () => {

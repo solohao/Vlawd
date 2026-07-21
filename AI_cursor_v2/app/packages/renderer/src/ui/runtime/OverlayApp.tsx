@@ -1,59 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { aiEmployeeSpriteTransparent } from "../../app/assets.js";
-import { runtimeStateToken } from "../../brand/ai-employee.js";
-import { ExpandIcon, GearIcon } from "../icons.js";
 import { VoiceController } from "./VoiceController.js";
 
 function api() {
   return typeof window !== "undefined" ? window.aiCursorDesktop : undefined;
 }
 
-function OverlayMini({
-  runtimeState,
-  onExpand
-}: {
-  runtimeState: ModelRuntimeState;
-  onExpand: () => void;
-}) {
-  const token = runtimeStateToken(runtimeState);
-
-  return (
-    <div
-      className="drag group relative h-[76px] w-[76px] select-none"
-      data-sprite-state={runtimeState}
-    >
-      <button
-        onClick={onExpand}
-        className="no-drag relative grid h-[76px] w-[76px] place-items-center rounded-full transition-transform duration-200 group-hover:scale-[1.04]"
-        aria-label={`expand voice controller, current state ${token.label}`}
-      >
-        <img
-          src={aiEmployeeSpriteTransparent}
-          alt=""
-          className="overlay-sprite relative h-[68px] w-[68px] object-contain drop-shadow-[0_10px_18px_rgba(15,23,42,0.22)]"
-        />
-      </button>
-      <div className="pointer-events-none absolute -right-1 top-1 flex translate-x-1 gap-1 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100">
-        <button
-          onClick={() => api()?.openMainWindow()}
-          className="no-drag grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white/90 text-slate-400 shadow-[0_6px_16px_rgba(15,23,42,0.14)] backdrop-blur-xl hover:text-slate-700"
-          aria-label="open settings"
-        >
-          <GearIcon width={13} height={13} />
-        </button>
-        <button
-          onClick={onExpand}
-          className="no-drag grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white/90 text-slate-400 shadow-[0_6px_16px_rgba(15,23,42,0.14)] backdrop-blur-xl hover:text-slate-700"
-          aria-label="expand"
-        >
-          <ExpandIcon width={13} height={13} />
-        </button>
-      </div>
-      <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-brand-400 shadow-[0_2px_8px_rgba(164,209,0,0.6)]" />
-    </div>
-  );
-}
+const SPRITE = 76;
+const DRAG_THRESHOLD = 4; // px：小于此位移视为点击，否则视为拖拽
+const ALPHA_HIT = 24; // 命中吉祥物本体的最小 alpha（过滤透明区域）
 
 interface OverlayAppProps {
   runtimeState?: ModelRuntimeState;
@@ -62,26 +18,54 @@ interface OverlayAppProps {
 export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const [expanded, setExpanded] = useState(false);
   const [liveState, setLiveState] = useState<ModelRuntimeState>(runtimeState);
-  const ref = useRef<HTMLDivElement>(null);
+  const [paused, setPaused] = useState(false);
 
-  // Cycle 1：订阅主进程 Runtime 事件，实时投影运行状态到悬浮控制器。
+  const rootRef = useRef<HTMLDivElement>(null);
+  const spriteRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // 供 window 级事件监听读取的最新值（避免闭包过期）。
+  const expandedRef = useRef(expanded);
+  const pausedRef = useRef(paused);
+  const interactiveRef = useRef<boolean | null>(null);
+  const hitRef = useRef<{ ctx: CanvasRenderingContext2D; w: number; h: number } | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; wx: number; wy: number; moved: boolean } | null>(null);
+
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  // Cycle 1：订阅主进程 Runtime 事件，实时投影运行状态与暂停标志。
   useEffect(() => {
     const desktop = api();
     if (!desktop) {
       return;
     }
-    void desktop.conversationSnapshot().then((snapshot) => setLiveState(snapshot.runtimeState)).catch(() => undefined);
+    void desktop
+      .conversationSnapshot()
+      .then((snapshot) => {
+        setLiveState(snapshot.runtimeState);
+        setPaused(snapshot.paused);
+      })
+      .catch(() => undefined);
     return desktop.onConversationEvent((event) => {
       if (event.type === "state") {
         setLiveState(event.state);
       } else if (event.type === "snapshot") {
         setLiveState(event.snapshot.runtimeState);
+        setPaused(event.snapshot.paused);
+      } else if (event.type === "preemption") {
+        setPaused(event.intent !== "resume");
       }
     });
   }, []);
 
+  // 悬浮窗尺寸跟随内容（吉祥物或展开面板）。
   useEffect(() => {
-    const el = ref.current;
+    const el = rootRef.current;
     if (!el) {
       return;
     }
@@ -95,21 +79,160 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     return () => observer.disconnect();
   }, [expanded]);
 
+  // 预渲染吉祥物 alpha 到离屏画布，用于"不规则多边形"命中检测。
+  useEffect(() => {
+    const img = new Image();
+    img.src = aiEmployeeSpriteTransparent;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      hitRef.current = { ctx, w: img.naturalWidth, h: img.naturalHeight };
+    };
+  }, []);
+
+  const setInteractive = useCallback((next: boolean) => {
+    if (interactiveRef.current === next) {
+      return;
+    }
+    interactiveRef.current = next;
+    api()?.setOverlayInteractive(next);
+  }, []);
+
+  // 判断光标是否落在"可交互"区域：展开时的面板 或 吉祥物不透明像素。
+  const hitTest = useCallback((clientX: number, clientY: number): boolean => {
+    if (expandedRef.current && panelRef.current) {
+      const el = document.elementFromPoint(clientX, clientY);
+      if (el && panelRef.current.contains(el)) {
+        return true;
+      }
+    }
+    const sprite = spriteRef.current;
+    const hit = hitRef.current;
+    if (!sprite || !hit) {
+      return false;
+    }
+    const rect = sprite.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    if (x < 0 || y < 0 || x >= rect.width || y >= rect.height) {
+      return false;
+    }
+    const px = Math.floor((x / rect.width) * hit.w);
+    const py = Math.floor((y / rect.height) * hit.h);
+    try {
+      return hit.ctx.getImageData(px, py, 1, 1).data[3] > ALPHA_HIT;
+    } catch {
+      return true;
+    }
+  }, []);
+
+  // window 级鼠标移动：主进程 forward 过来的移动事件驱动穿透开关与拖拽。
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (drag) {
+        const dx = e.screenX - drag.sx;
+        const dy = e.screenY - drag.sy;
+        if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+          drag.moved = true;
+        }
+        if (drag.moved) {
+          api()?.moveOverlay({ x: drag.wx + dx, y: drag.wy + dy });
+        }
+        return;
+      }
+      setInteractive(hitTest(e.clientX, e.clientY));
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [hitTest, setInteractive]);
+
+  const togglePause = useCallback(() => {
+    const desktop = api();
+    if (!desktop) {
+      return;
+    }
+    if (pausedRef.current) {
+      void desktop.conversationResume();
+    } else {
+      void desktop.conversationPreempt("pause");
+    }
+  }, []);
+
+  // 在吉祥物上按下：进入"可能拖拽"；松开时若几乎没移动则视为点击 → 暂停/继续。
+  const onSpritePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) {
+        return;
+      }
+      e.preventDefault();
+      void api()
+        ?.getOverlayBounds()
+        .then((bounds) => {
+          dragRef.current = {
+            sx: e.screenX,
+            sy: e.screenY,
+            wx: bounds?.x ?? 0,
+            wy: bounds?.y ?? 0,
+            moved: false
+          };
+        });
+      const onUp = () => {
+        window.removeEventListener("pointerup", onUp);
+        const drag = dragRef.current;
+        dragRef.current = null;
+        if (drag && !drag.moved) {
+          togglePause();
+        }
+      };
+      window.addEventListener("pointerup", onUp);
+    },
+    [togglePause]
+  );
+
   return (
-    <div ref={ref} className="inline-block p-3">
-      {expanded ? (
-        <VoiceController
-          runtimeState={liveState}
-          draggable
-          onCollapse={() => setExpanded(false)}
-          onOpenSettings={() => api()?.openMainWindow()}
-          onPause={() => api()?.conversationPreempt("pause")}
-          onCancel={() => api()?.conversationPreempt("cancel")}
-          onTakeover={() => api()?.openMainWindow()}
-        />
-      ) : (
-        <OverlayMini runtimeState={liveState} onExpand={() => setExpanded(true)} />
+    <div ref={rootRef} className="inline-flex flex-col items-end gap-2 p-1">
+      {expanded && (
+        <div ref={panelRef}>
+          <VoiceController
+            runtimeState={liveState}
+            onCollapse={() => setExpanded(false)}
+            onOpenSettings={() => api()?.openMainWindow()}
+            onPause={togglePause}
+            onCancel={() => api()?.conversationPreempt("cancel")}
+            onTakeover={() => api()?.openMainWindow()}
+          />
+        </div>
       )}
+      <div
+        ref={spriteRef}
+        className="relative select-none"
+        style={{ width: SPRITE, height: SPRITE, cursor: "grab" }}
+        data-sprite-state={paused ? "paused" : liveState}
+        onPointerDown={onSpritePointerDown}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setExpanded((v) => !v);
+        }}
+        title={paused ? "点击继续" : "点击暂停 · 右键更多 · 拖动移动"}
+      >
+        <img
+          src={aiEmployeeSpriteTransparent}
+          alt=""
+          draggable={false}
+          className="overlay-sprite pointer-events-none h-full w-full object-contain"
+        />
+        <span
+          className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white"
+          style={{ background: paused ? "#94a3b8" : "var(--brand-400, #a4d100)" }}
+        />
+      </div>
     </div>
   );
 }
