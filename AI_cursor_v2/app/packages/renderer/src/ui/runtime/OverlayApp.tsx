@@ -29,7 +29,14 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const pausedRef = useRef(paused);
   const interactiveRef = useRef<boolean | null>(null);
   const hitRef = useRef<{ ctx: CanvasRenderingContext2D; w: number; h: number } | null>(null);
-  const dragRef = useRef<{ sx: number; sy: number; wx: number; wy: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    sx: number;
+    sy: number;
+    wx: number | null;
+    wy: number | null;
+    moved: boolean;
+    pointerId: number;
+  } | null>(null);
 
   useEffect(() => {
     expandedRef.current = expanded;
@@ -142,7 +149,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
         if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
           drag.moved = true;
         }
-        if (drag.moved) {
+        if (drag.moved && drag.wx !== null && drag.wy !== null) {
           api()?.moveOverlay({ x: drag.wx + dx, y: drag.wy + dy });
         }
         return;
@@ -165,23 +172,31 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     }
   }, []);
 
-  // 在吉祥物上按下：进入"可能拖拽"；松开时若几乎没移动则视为点击 → 暂停/继续。
+  // 左键按住吉祥物：移动整个透明窗口；松开且未移动才视为点击 → 暂停/继续。
   const onSpritePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) {
         return;
       }
       e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = {
+        sx: e.screenX,
+        sy: e.screenY,
+        wx: null,
+        wy: null,
+        moved: false,
+        pointerId: e.pointerId
+      };
       void api()
         ?.getOverlayBounds()
         .then((bounds) => {
-          dragRef.current = {
-            sx: e.screenX,
-            sy: e.screenY,
-            wx: bounds?.x ?? 0,
-            wy: bounds?.y ?? 0,
-            moved: false
-          };
+          const drag = dragRef.current;
+          if (!drag || drag.pointerId !== e.pointerId) {
+            return;
+          }
+          drag.wx = bounds?.x ?? 0;
+          drag.wy = bounds?.y ?? 0;
         });
       const onUp = () => {
         window.removeEventListener("pointerup", onUp);
@@ -197,7 +212,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   );
 
   return (
-    <div ref={rootRef} className="inline-flex flex-col items-end gap-2 p-1">
+    <div ref={rootRef} className="inline-flex flex-col items-end gap-2 overflow-hidden p-1">
       {expanded && (
         <div ref={panelRef}>
           <VoiceController
