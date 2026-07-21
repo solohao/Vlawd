@@ -27,6 +27,9 @@ export interface AiCursorDesktopApi {
   openMainWindow(): Promise<void>;
   hideMainWindow(): Promise<void>;
   resizeOverlay(size: OverlaySize): Promise<void>;
+  setOverlayInteractive(interactive: boolean): Promise<void>;
+  moveOverlay(pos: { x: number; y: number }): Promise<void>;
+  getOverlayBounds(): Promise<{ x: number; y: number; width: number; height: number } | null>;
   quitApp(): Promise<void>;
 
   conversationSnapshot(): Promise<DuplexConversationSnapshot>;
