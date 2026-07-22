@@ -24,6 +24,7 @@ python3 -m http.server 4189
 ## 文件
 
 - `index.html` — 原型主体（SVG + 动画逻辑）。
+- `rive-style-matrix.html` — **Rive 式状态机版原型**：用同一套精灵资源演示 Rive 的驱动方式（几何顶点 morph 过渡 + 呼吸/眨眼/看向光标/口型混合输入 + 6×6 状态过渡矩阵）。用于对比"交叉淡入 vs 连续 morph"，评估是否采用 Rive 做默认吉祥物。运行同上，浏览器打开 `rive-style-matrix.html`。
 - `clean_body.png` — 抹掉原就绪五官后的干净身体底图。
 - `states_A.json` — 从表情图 A 描摹的六态五官轮廓。
 - `thinking_frames.json` — 思考态 右/上/左 关键帧的眼形与眼仁轮廓（等点数、已对齐，供逐帧 morph）。
