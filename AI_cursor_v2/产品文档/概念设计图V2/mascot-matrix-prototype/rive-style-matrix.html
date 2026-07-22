@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vlawd 精灵 · Rive 式状态机 · 6×6 过渡矩阵</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;background:#20242b;color:#e8ecf3}
+  header{padding:14px 20px;border-bottom:1px solid #3c4152}
+  header h1{font-size:16px;margin:0 0 4px}
+  header p{margin:0;font-size:12px;color:#9aa3b5;max-width:980px;line-height:1.6}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:6px;background:#3a4150;color:#9fce5a;margin-left:6px;vertical-align:middle}
+  .wrap{display:flex;gap:26px;padding:22px;flex-wrap:wrap;align-items:flex-start}
+  .panel{background:#2c313b;border:1px solid #3c4152;border-radius:14px;padding:18px}
+  h3{font-size:13px;margin:0 0 12px;color:#cfd6e4}
+  #stage{width:300px;height:300px;display:block;margin:0 auto;cursor:crosshair}
+  .cap{text-align:center;font-size:14px;color:#e8ecf3;margin-top:8px;font-weight:600}
+  .sub{text-align:center;font-size:11px;color:#8b93a6;margin-top:2px;min-height:14px}
+  table{border-collapse:collapse;margin-top:2px}
+  td,th{border:1px solid #3c4152;text-align:center}
+  th{background:#343a45;color:#cfd6e4;font-size:11px;padding:6px 8px;font-weight:600}
+  th.corner{background:#2c313b}
+  td.cell{width:96px;height:44px;cursor:pointer;font-size:10px;color:#9aa3b5;background:#20242b;line-height:1.35;padding:2px 4px}
+  td.cell:hover{background:#3a4150;color:#e8ecf3}
+  td.diag{background:#26301c;color:#9fce5a}
+  td.cell.active{background:#8bc34a;color:#1c2230;font-weight:700}
+  .rowh{background:#343a45;color:#cfd6e4;font-size:11px;padding:0 8px;font-weight:600;white-space:nowrap}
+  .legend{font-size:11px;color:#8b93a6;margin-top:14px;line-height:1.8;max-width:520px}
+  .ctrl{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  button{background:#454b5e;color:#e8ecf3;border:1px solid #565d72;border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12px}
+  button.on{background:#8bc34a;color:#1c2230;border-color:#8bc34a;font-weight:700}
+  label.sw{font-size:12px;color:#cfd6e4;display:inline-flex;gap:5px;align-items:center;background:#343a45;padding:5px 10px;border-radius:7px;cursor:pointer}
+  .row-inputs{margin-top:10px;font-size:11px;color:#8b93a6;line-height:1.7;background:#242932;border:1px dashed #3c4152;border-radius:8px;padding:10px 12px;max-width:520px}
+  code{color:#9fce5a}
+</style></head>
+<body>
+<header>
+  <h1>Vlawd 桌面精灵 · Rive 式状态机 · 6×6 状态过渡矩阵<span class="tag">概念原型 · 不接入生产</span></h1>
+  <p>用你们现有精灵（表情图 A 描摹的矢量五官 + 果冻贴图 + 干净底图）演示 <b>Rive 的驱动方式</b>：①状态之间用<b>矢量顶点几何 morph</b>（连续变形，非交叉淡入）；②待机是<b>多动画混合</b>（呼吸+眨眼+微扫视）；③三个<b>实时输入参数</b>由代码喂入 —— <code>lookAt</code>(看向光标)、<code>mouthOpen</code>(口型)、<code>state</code>(状态)。这正是真实 Rive 状态机在运行时接 duplex-runtime 的方式；真实 Rive 里这些在编辑器画好，运行时驱动模型完全一致。</p>
+</header>
+<div class="wrap">
+  <div class="panel" style="text-align:center">
+    <h3>实时预览（在画面上移动鼠标看"看向光标"）</h3>
+    <svg id="stage" viewBox="0 0 512 512">
+      <defs>
+        <pattern id="jelly" patternUnits="userSpaceOnUse" width="512" height="512">
+          <image href="jelly_tex.png" x="0" y="0" width="512" height="512"/>
+        </pattern>
+        <filter id="jellyfx" x="-60%" y="-60%" width="220%" height="220%">
+          <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#c8ff4d" flood-opacity="0.55"/>
+        </filter>
+      </defs>
+      <g id="rig">
+      <image href="clean_body.png" x="0" y="0" width="512" height="512"/>
+      <g id="face" filter="url(#jellyfx)">
+        <path id="eL" fill="url(#jelly)"/>
+        <path id="eR" fill="url(#jelly)"/>
+        <path id="mo" fill="url(#jelly)"/>
+        <g id="pupils" opacity="0">
+          <ellipse id="pL" rx="12" ry="15" fill="#141414"/>
+          <ellipse id="pR" rx="12" ry="15" fill="#141414"/>
+        </g>
+      </g>
+      </g>
+    </svg>
+    <div class="cap" id="cap">就绪</div>
+    <div class="sub" id="sub">待机中 · 呼吸 + 眨眼</div>
+    <div class="ctrl" style="justify-content:center">
+      <label class="sw"><input type="checkbox" id="tLook" checked> 看向光标 lookAt</label>
+      <label class="sw"><input type="checkbox" id="tLip"> 口型 mouthOpen</label>
+      <label class="sw"><input type="checkbox" id="tBlink" checked> 眨眼 blink</label>
+      <label class="sw"><input type="checkbox" id="tBreathe" checked> 呼吸 breathe</label>
+    </div>
+    <div class="ctrl" style="justify-content:center">
+      <button id="loopBtn">▶ 自动巡演（走一遍状态机）</button>
+      <button id="talkBtn">🗣 模拟说话（口型 3s）</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>状态过渡矩阵（点格子：行→列，播放几何 morph 过渡）</h3>
+    <table id="matrix"></table>
+    <div class="row-inputs">
+      <b>Rive 状态机映射（运行时代码这样喂）：</b><br>
+      • <code>state</code> ← duplex-runtime 状态：<code>listening→就绪 · thinking→思考 · acting→执行 · paused→暂停 · interrupted→错误 · complete→完成</code><br>
+      • <code>mouthOpen(0..1)</code> ← 说话音量（勾"口型"或点"模拟说话"看效果）<br>
+      • <code>lookX / lookY</code> ← 鼠标/执行目标位置（勾"看向光标"，在预览区移动鼠标）
+    </div>
+    <div class="legend">
+      • 绿色对角线 = 该态<b>待机循环</b>（就绪/完成漂浮、思考=眼珠右→上→左扫视凝视、执行=前视微动、暂停=静止变暗、错误=抖动后稳定）。<br>
+      • 其余格 = 从行态<b>几何 morph</b> 到列态：五官顶点重采样后逐点插值 + 缓动，形状连续变形（对比旧版 `index.html` 的交叉淡入）。<br>
+      • 全程叠加呼吸/眨眼/看向光标等"混合输入"，这就是极简五官也能灵动的原因 —— 靠运动设计，不靠器官数量。
+    </div>
+  </div>
+</div>
+<script>
+const ORDER=['ready','thinking','focused','paused','error','complete'];
+const LABEL={ready:'就绪',thinking:'思考',focused:'执行',paused:'暂停',error:'错误',complete:'完成'};
+const CELLDESC={
+  ready:'漂浮+呼吸+眨眼',thinking:'眼珠扫视凝视',focused:'前视·微动',
+  paused:'静止·变暗',error:'抖动后稳定',complete:'轻跳漂浮'
+};
+const N=56; // 统一重采样点数，供逐点 morph
+const stage=document.getElementById('stage'),cap=document.getElementById('cap'),sub=document.getElementById('sub');
+const eL=document.getElementById('eL'),eR=document.getElementById('eR'),mo=document.getElementById('mo');
+const face=document.getElementById('face'),pupils=document.getElementById('pupils'),rig=document.getElementById('rig');
+const bodyImg=document.querySelector('#stage image[href="clean_body.png"]');
+const pL=document.getElementById('pL'),pR=document.getElementById('pR');
+let STATES=null,FRAMES=null,cur='ready';
+
+// ---------- 几何工具 ----------
+function pathFrom(pts){const n=pts.length,g=i=>pts[(i%n+n)%n];
+  let d=`M ${g(0)[0].toFixed(2)} ${g(0)[1].toFixed(2)} `;
+  for(let i=0;i<n;i++){const p0=g(i-1),p1=g(i),p2=g(i+1),p3=g(i+2);
+    const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=`C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0].toFixed(2)} ${p2[1].toFixed(2)} `;}
+  return d+'Z';}
+// 闭合多边形按弧长重采样为 N 点，并把起点旋转到最顶端（y 最小），改善逐点对应
+function resample(pts,n){
+  const m=pts.length,seg=[],closed=[...pts,pts[0]];let total=0;
+  for(let i=0;i<m;i++){const a=closed[i],b=closed[i+1];const d=Math.hypot(b[0]-a[0],b[1]-a[1]);seg.push(d);total+=d;}
+  const out=[];let step=total/n,acc=0,si=0,sacc=0;
+  for(let k=0;k<n;k++){const target=k*step;
+    while(si<m-1 && sacc+seg[si]<target){sacc+=seg[si];si++;}
+    const a=closed[si],b=closed[si+1];const t=seg[si]?(target-sacc)/seg[si]:0;
+    out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}
+  // 旋转到最顶端起点
+  let mi=0,my=1e9;out.forEach((p,i)=>{if(p[1]<my){my=p[1];mi=i;}});
+  return out.slice(mi).concat(out.slice(0,mi));
+}
+const lerp=(a,b,t)=>a.map((p,i)=>[p[0]+(b[i][0]-p[0])*t,p[1]+(b[i][1]-p[1])*t]);
+const centroid=p=>{let x=0,y=0;p.forEach(q=>{x+=q[0];y+=q[1];});return[x/p.length,y/p.length];};
+function scaleY(p,k){const[cx,cy]=centroid(p);return p.map(q=>[q[0],cy+(q[1]-cy)*k]);}
+function bbox(p){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;p.forEach(q=>{x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1]);});return{x0,y0,x1,y1,cx:(x0+x1)/2,cy:(y0+y1)/2};}
+
+// 预计算每个状态重采样后的五官
+const RS={};
+function buildRS(){for(const s of ORDER){const S=STATES[s];RS[s]={eL:resample(S.eyeL,N),eR:resample(S.eyeR,N),mo:resample(S.mouth,N)};}}
+
+// ---------- 输入参数（Rive inputs 的等价物） ----------
+const inputs={lookX:0,lookY:0,mouthOpen:0,breathe:true,blink:true,look:true};
+let mouseLevel=0; // 由"模拟说话"驱动
+document.getElementById('tLook').onchange=e=>{inputs.look=e.target.checked;pupils.style.opacity=(inputs.look||cur==='thinking')?1:0;};
+document.getElementById('tLip').onchange=e=>{inputs.lipToggle=e.target.checked;};
+document.getElementById('tBlink').onchange=e=>{inputs.blink=e.target.checked;};
+document.getElementById('tBreathe').onchange=e=>{inputs.breathe=e.target.checked;};
+stage.addEventListener('pointermove',ev=>{const r=stage.getBoundingClientRect();
+  inputs.lookX=Math.max(-1,Math.min(1,((ev.clientX-r.left)/r.width-0.5)*2));
+  inputs.lookY=Math.max(-1,Math.min(1,((ev.clientY-r.top)/r.height-0.5)*2));});
+
+// ---------- morph 状态（用于过渡） ----------
+let morph={from:'ready',to:'ready',t0:0,dur:0,active:false};
+let blinkK=1; // 1=睁开 0=闭合
+let shakePhase=0, shakeUntil=0;
+
+// ---------- 眨眼调度 ----------
+function scheduleBlink(){const wait=2600+Math.random()*5200;
+  setTimeout(()=>{if(inputs.blink&&!document.hidden&&cur!=='paused'){doBlink(Math.random()<0.3);}scheduleBlink();},wait);}
+let blinkAnim=null;
+function doBlink(dbl){const t0=performance.now();
+  function step(now){const p=(now-t0)/150; // 150ms 闭合再睁开
+    if(p>=1){blinkK=1;if(dbl){dbl=false;return doBlink(false);}return;}
+    blinkK=Math.abs(Math.cos(p*Math.PI));requestAnimationFrame(step);}
+  requestAnimationFrame(step);}
+scheduleBlink();
+
+// ---------- 思考态扫视 ----------
+const GAZE=['right','up','left'];
+let gz={cur:'up',tar:'right',t0:0,dur:0.2,dwell:0.6,moving:true};
+const easeBack=t=>{const s=1.9;return 1+(--t)*t*((s+1)*t+s);};
+function nextGaze(c){const o=GAZE.filter(x=>x!==c);return o[Math.random()*o.length|0];}
+
+// ---------- 主渲染循环 ----------
+function render(now){
+  const tn=now/1000;
+  let cE=RS[cur].eL,cER=RS[cur].eR,cM=RS[cur].mo;
+  // 过渡 morph
+  if(morph.active){let p=(now-morph.t0)/morph.dur;
+    if(p>=1){p=1;morph.active=false;cur=morph.to;setStateChrome(cur);}
+    const e=p<1?(1-Math.pow(1-p,3)):1; // easeOutCubic
+    cE =lerp(RS[morph.from].eL,RS[morph.to].eL,e);
+    cER=lerp(RS[morph.from].eR,RS[morph.to].eR,e);
+    cM =lerp(RS[morph.from].mo,RS[morph.to].mo,e);
+  }else{cE=RS[cur].eL.slice();cER=RS[cur].eR.slice();cM=RS[cur].mo.slice();}
+
+  // 思考态：眼珠扫视（morph 眼型不改，靠瞳孔移动 + 前视）
+  let gazeX=0,gazeY=0;
+  if(cur==='thinking'&&!morph.active){
+    if(gz.moving){let p=(tn-gz.t0)/gz.dur;if(p>=1){p=1;gz.moving=false;gz.cur=gz.tar;gz.t0=tn;}
+      var ge=easeBack(p);}
+    else{if(tn-gz.t0>gz.dwell){gz.tar=nextGaze(gz.cur);gz.t0=tn;gz.dur=0.13+Math.random()*0.09;gz.dwell=0.6+Math.random()*1.3;gz.moving=true;}var ge=1;}
+    const dir={right:[1,-.2],up:[0,-1],left:[-1,-.2]};
+    const a=dir[gz.cur],b=dir[gz.tar];gazeX=a[0]+(b[0]-a[0])*ge;gazeY=a[1]+(b[1]-a[1])*ge;
+    const jit=gz.moving?0:Math.sin(tn*7)*0.06;gazeX+=jit;
+  }
+
+  // lookAt：非思考态用鼠标输入
+  if(inputs.look&&cur!=='thinking'){gazeX=inputs.lookX;gazeY=inputs.lookY;}
+
+  // 眨眼：压扁眼睛
+  if(blinkK<1){cE=scaleY(cE,blinkK);cER=scaleY(cER,blinkK);}
+
+  // 口型 mouthOpen：说话时纵向张开 + 轻微加宽
+  let mouthOpen=0;
+  if(cur==='complete')mouthOpen=0.35+0.15*Math.sin(tn*4); // 完成态微笑张口
+  if(inputs.lipToggle)mouthOpen=Math.max(mouthOpen,(Math.sin(tn*9)*0.5+0.5)*(0.5+0.5*Math.abs(Math.sin(tn*2.3))));
+  if(mouseLevel>0)mouthOpen=Math.max(mouthOpen,mouseLevel*(Math.sin(tn*11)*0.5+0.5));
+  inputs.mouthOpen=mouthOpen;
+  if(mouthOpen>0.02){cM=scaleY(cM,1+mouthOpen*1.4);}
+
+  eL.setAttribute('d',pathFrom(cE));
+  eR.setAttribute('d',pathFrom(cER));
+  mo.setAttribute('d',pathFrom(cM));
+
+  // 瞳孔（看向 / 思考时显示）
+  const showPup=(inputs.look||cur==='thinking')&&cur!=='paused';
+  pupils.style.opacity=showPup?1:0;
+  if(showPup){const bl=bbox(cE),br=bbox(cER);
+    const rngX=10,rngY=8;
+    pL.setAttribute('cx',bl.cx+gazeX*rngX);pL.setAttribute('cy',bl.cy+gazeY*rngY);
+    pR.setAttribute('cx',br.cx+gazeX*rngX);pR.setAttribute('cy',br.cy+gazeY*rngY);
+    const er=Math.max(0.25,blinkK);pL.setAttribute('ry',15*er);pR.setAttribute('ry',15*er);}
+
+  // 整体绑定变换（外框 + 五官一起动）：果冻 squash&stretch + 漂浮 + 歪头/前倾 + 弹性抖动
+  // 关键：外框(clean_body)与五官同在 #rig 内，用非等比缩放做"压扁-回弹"，体积守恒 → 果冻感
+  let ty=0,sq=0,rot=0,skew=0; // sq>0 纵向拉伸/横向压缩；sq<0 纵向压扁/横向变宽
+  const alive=(cur!=='paused');
+  if(alive&&inputs.breathe){sq+=0.022*Math.sin(tn*1.9);ty+=-2*Math.sin(tn*1.9);}
+  if(cur==='ready'){ty+=-6*Math.sin(tn*1.6);rot=1.1*Math.sin(tn*1.15);}
+  if(cur==='thinking'){rot=3.2*Math.sin(tn*1.1);}                 // 轻微歪头
+  if(cur==='focused'){skew=-3.5+1.2*Math.sin(tn*3.2);sq+=0.01*Math.sin(tn*5);} // 前倾+紧凑微动
+  if(cur==='complete'){const j=Math.max(0,Math.sin(tn*3));ty+=-14*j;sq+=0.10*j-0.03;} // 上跳+挤压
+  if(now<shakeUntil){const k=(shakeUntil-now)/520;rot+=9*k*Math.sin((now-shakePhase)*0.055);sq+=0.05*k*Math.sin((now-shakePhase)*0.09);} // 弹性衰减抖动
+  const sy=(1+sq),sx=1/sy; // 体积守恒的 squash&stretch
+  // 缩放锚点在底部(接触面)，旋转/倾斜锚点在中心，更像"坐在桌面上的果冻"
+  const T=`translate(0 ${ty.toFixed(2)}) `
+    +`translate(256 470) scale(${sx.toFixed(4)} ${sy.toFixed(4)}) translate(-256 -470) `
+    +`translate(256 300) rotate(${rot.toFixed(2)}) skewX(${skew.toFixed(2)}) translate(-256 -300)`;
+  rig.setAttribute('transform',T);
+  const op=cur==='paused'?0.55:1;
+  rig.setAttribute('opacity',op);
+
+  requestAnimationFrame(render);
+}
+
+function setStateChrome(s){cap.textContent=LABEL[s];
+  sub.textContent={ready:'待机 · 呼吸+眨眼+看向',thinking:'思考 · 眼珠扫视凝视',focused:'执行 · 前视微动',
+    paused:'暂停 · 静止变暗',error:'错误 · 抖动后稳定',complete:'完成 · 轻跳微笑'}[s];
+  if(s==='error'){shakePhase=performance.now();shakeUntil=performance.now()+520;}}
+
+function go(from,to){
+  if(from!==cur){cur=from;setStateChrome(from);}
+  if(from===to){cur=to;setStateChrome(to);return;}
+  morph={from,to,t0:performance.now(),dur:360,active:true};
+  cap.textContent=`${LABEL[from]} → ${LABEL[to]}`;sub.textContent='几何 morph 过渡中…';
+}
+
+// ---------- 矩阵 UI ----------
+const mt=document.getElementById('matrix');
+let head='<tr><th class="corner">起↓ \\ 目→</th>';ORDER.forEach(c=>head+=`<th>${LABEL[c]}</th>`);head+='</tr>';
+let rows='';ORDER.forEach(r=>{rows+=`<tr><td class="rowh">${LABEL[r]}</td>`;
+  ORDER.forEach(c=>{const diag=r===c?' diag':'';
+    const txt=r===c?`待机<br>${CELLDESC[c]}`:`▶ ${LABEL[r]}→${LABEL[c]}`;
+    rows+=`<td class="cell${diag}" data-from="${r}" data-to="${c}">${txt}</td>`;});
+  rows+='</tr>';});
+mt.innerHTML=head+rows;
+mt.querySelectorAll('td.cell').forEach(td=>td.onclick=()=>{
+  mt.querySelectorAll('td.cell').forEach(x=>x.classList.remove('active'));td.classList.add('active');
+  go(td.dataset.from,td.dataset.to);});
+
+let loop=null;
+document.getElementById('loopBtn').onclick=function(){
+  if(loop){clearInterval(loop);loop=null;this.textContent='▶ 自动巡演（走一遍状态机）';return;}
+  this.textContent='⏸ 停止巡演';const seq=['ready','thinking','focused','complete','ready','error','paused','ready'];let i=0;
+  go(seq[0],seq[1]);i=1;
+  loop=setInterval(()=>{go(seq[i%seq.length],seq[(i+1)%seq.length]);i++;},1600);};
+
+document.getElementById('talkBtn').onclick=function(){mouseLevel=0.9;
+  setTimeout(()=>{mouseLevel=0;},3000);};
+
+// ---------- 载入资源 ----------
+Promise.all([
+  fetch('states_A.json').then(r=>r.json()),
+  fetch('thinking_frames.json').then(r=>r.json())
+]).then(([s,f])=>{STATES=s;FRAMES=f;buildRS();setStateChrome('ready');requestAnimationFrame(render);});
+</script>
+</body></html>
