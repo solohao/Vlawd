@@ -8,3 +8,5 @@ const base = import.meta.env.BASE_URL;
 export const aiEmployeeAvatarWithBase = `${base}ai-employee-avatar-with-base.png`;
 export const aiEmployeeAvatarCompact = `${base}ai-employee-avatar-compact.png`;
 export const aiEmployeeSpriteTransparent = `${base}ai-employee-sprite-transparent.png`;
+export const aiEmployeeMascotBody = `${base}ai-employee-mascot-body.png`;
+export const aiEmployeeMascotJelly = `${base}ai-employee-mascot-jelly.png`;

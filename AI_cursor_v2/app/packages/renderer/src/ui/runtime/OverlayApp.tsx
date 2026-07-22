@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
-import { aiEmployeeSpriteTransparent } from "../../app/assets.js";
+import { aiEmployeeMascotBody } from "../../app/assets.js";
+import { AiEmployeeSprite } from "./AiEmployeeSprite.js";
 import { VoiceController } from "./VoiceController.js";
 
 function api() {
@@ -82,7 +83,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   // 预渲染吉祥物 alpha 到离屏画布，用于"不规则多边形"命中检测。
   useEffect(() => {
     const img = new Image();
-    img.src = aiEmployeeSpriteTransparent;
+    img.src = aiEmployeeMascotBody;
     img.onload = () => {
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;
@@ -229,12 +230,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
         }}
         title={paused ? "点击继续" : "点击暂停 · 右键更多 · 拖动移动"}
       >
-        <img
-          src={aiEmployeeSpriteTransparent}
-          alt=""
-          draggable={false}
-          className="overlay-sprite pointer-events-none h-full w-full object-contain"
-        />
+        <AiEmployeeSprite state={liveState} paused={paused} size={SPRITE} />
         <span
           className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white"
           style={{ background: paused ? "#94a3b8" : "var(--brand-400, #a4d100)" }}
