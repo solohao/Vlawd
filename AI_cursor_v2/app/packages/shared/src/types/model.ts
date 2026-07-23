@@ -8,9 +8,19 @@ export type ModelArtifactSource = "huggingface" | "modelscope" | "local";
 export type ModelArtifactTarget = "modelPath" | "speechTokenizerPath" | "speechDecoderPath";
 export type ModelRuntimeState = "listening" | "speaking" | "thinking" | "acting" | "waiting_confirm" | "paused" | "interrupted" | "complete";
 
+/** 一轮已完成的对话，作为多轮上下文喂给 Provider。 */
+export interface DuplexHistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+  /** 该助手回合是否被用户自然插话打断（只保留“用户实际听到的部分”）。 */
+  interrupted?: boolean;
+}
+
 export interface DuplexModelInput {
   session_id: string;
   user_utterance: string;
+  /** 之前回合的对话历史（不含本次 user_utterance），用于多轮连续与“按新约束继续”。 */
+  history?: DuplexHistoryTurn[];
   screen_summary?: string;
   candidates?: string[];
 }

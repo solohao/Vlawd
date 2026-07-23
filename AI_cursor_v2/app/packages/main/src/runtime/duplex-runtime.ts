@@ -3,6 +3,7 @@ import {
   createSession,
   type ConversationTurn,
   type DuplexConversationSnapshot,
+  type DuplexHistoryTurn,
   type DuplexLatencySample,
   type DuplexModelProvider,
   type DuplexProviderKind,
@@ -133,11 +134,30 @@ export class DuplexConversationRuntime {
       this.paused = false;
     }
 
+    // 在写入本轮用户回合之前快照历史：barge-in 已把上一助手回合标记为 interrupted，
+    // 因此历史里会带上“用户实际听到的部分 + 被打断”标记（对齐 Open-LLM-VTuber）。
+    const history = this.buildHistory();
+
     const userTurn = this.pushTurn("user", trimmed);
     this.emit({ type: "user_utterance", turnId: userTurn.id, text: trimmed, at: this.timestamp() });
     this.appendSessionChunk("user", trimmed, { utterance: trimmed, bargeIn: wasSpeaking });
 
-    await this.runGeneration(trimmed);
+    await this.runGeneration(trimmed, history);
+  }
+
+  /** 把已完成的对话回合映射为 Provider 多轮上下文（丢弃空回合）。 */
+  private buildHistory(): DuplexHistoryTurn[] {
+    const history: DuplexHistoryTurn[] = [];
+    for (const turn of this.turns) {
+      const content = turn.text.trim();
+      if (!content) {
+        continue;
+      }
+      history.push(
+        turn.interrupted ? { role: turn.role, content, interrupted: true } : { role: turn.role, content }
+      );
+    }
+    return history;
   }
 
   /**
@@ -222,7 +242,7 @@ export class DuplexConversationRuntime {
     return connected;
   }
 
-  private async runGeneration(utterance: string): Promise<void> {
+  private async runGeneration(utterance: string, history: DuplexHistoryTurn[] = []): Promise<void> {
     const controller = new AbortController();
     this.activeGeneration = controller;
     const assistantTurn = this.pushTurn("assistant", "");
@@ -233,7 +253,7 @@ export class DuplexConversationRuntime {
 
     try {
       for await (const event of this.provider.generate(
-        { session_id: this.session.id, user_utterance: utterance },
+        { session_id: this.session.id, user_utterance: utterance, history },
         controller.signal
       )) {
         if (controller.signal.aborted) {

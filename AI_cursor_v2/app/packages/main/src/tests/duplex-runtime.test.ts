@@ -1,9 +1,35 @@
 import { describe, expect, it } from "vitest";
-import type { DuplexRuntimeEvent } from "@ai-cursor-v2/shared";
+import type {
+  DuplexModelEvent,
+  DuplexModelInput,
+  DuplexModelProvider,
+  DuplexRuntimeEvent
+} from "@ai-cursor-v2/shared";
 import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { EchoLlmAdapter } from "../model/llm-adapter.js";
 import { PipelineDuplexModelProvider } from "../model/pipeline-duplex-provider.js";
 import { StubDuplexModelProvider } from "../model/provider-registry.js";
+
+/** 记录每次 generate 收到的 input，用于断言多轮上下文。 */
+class RecordingProvider implements DuplexModelProvider {
+  readonly kind = "pipeline" as const;
+  readonly inputs: DuplexModelInput[] = [];
+  constructor(private readonly delayMs = 0) {}
+  async *generate(input: DuplexModelInput, signal?: AbortSignal): AsyncIterable<DuplexModelEvent> {
+    this.inputs.push({ ...input, history: input.history?.map((turn) => ({ ...turn })) });
+    yield { type: "state", state: "speaking" };
+    for (const segment of ["好的", "，", "我来回答。"]) {
+      if (this.delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+      }
+      if (signal?.aborted) {
+        return;
+      }
+      yield { type: "speech", text: segment };
+    }
+    yield { type: "state", state: "complete" };
+  }
+}
 
 function makeRuntime() {
   const provider = new PipelineDuplexModelProvider(new EchoLlmAdapter(0));
@@ -102,5 +128,35 @@ describe("DuplexConversationRuntime (Cycle 1)", () => {
   it("marks offline echo as not-real inference for Cycle 1 evidence gating", () => {
     const { runtime } = makeRuntime();
     expect(runtime.getSnapshot().usingRealInference).toBe(false);
+  });
+
+  it("carries prior turns into the provider as multi-turn history", async () => {
+    const provider = new RecordingProvider(0);
+    const runtime = new DuplexConversationRuntime({ sessionId: "history", provider });
+    await runtime.submitUtterance("我叫小明");
+    await runtime.submitUtterance("我叫什么");
+
+    expect(provider.inputs).toHaveLength(2);
+    // 第一轮没有历史；第二轮应带上第一轮的 user + assistant。
+    expect(provider.inputs[0]?.history ?? []).toHaveLength(0);
+    const secondHistory = provider.inputs[1]?.history ?? [];
+    expect(secondHistory.map((turn) => turn.role)).toEqual(["user", "assistant"]);
+    expect(secondHistory[0]?.content).toBe("我叫小明");
+    expect(secondHistory[1]?.content.length).toBeGreaterThan(0);
+  });
+
+  it("keeps only the heard part and marks the interrupted assistant turn in history", async () => {
+    const provider = new RecordingProvider(40);
+    const runtime = new DuplexConversationRuntime({ sessionId: "interrupt-history", provider });
+
+    const first = runtime.submitUtterance("给我讲讲考研数学的复习顺序");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await runtime.submitUtterance("换成英语");
+    await first;
+
+    const secondHistory = provider.inputs[1]?.history ?? [];
+    const interruptedAssistant = secondHistory.find((turn) => turn.role === "assistant" && turn.interrupted);
+    expect(interruptedAssistant).toBeDefined();
+    expect(interruptedAssistant?.content.length).toBeGreaterThan(0);
   });
 });
