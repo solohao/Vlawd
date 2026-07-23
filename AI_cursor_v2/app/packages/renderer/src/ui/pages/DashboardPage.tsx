@@ -6,34 +6,18 @@ import {
   ArrowRight,
   BrainIcon,
   CheckIcon,
-  ChevronDown,
   FileIcon,
   GearIcon,
   GridIcon,
   HeadphonesIcon,
   MicIcon,
   MonitorIcon,
-  PlusIcon,
-  RefreshIcon,
   ShieldIcon,
   SparkIcon,
   SunIcon
 } from "../icons.js";
-
-const card = "rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]";
-const cardHover = "transition-all duration-200 hover:shadow-[0_4px_20px_rgba(15,23,42,0.08)] hover:border-slate-300";
-const button = "outline-none transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2";
-
-function StatusDot({ active = false, pulse = false }: { active?: boolean; pulse?: boolean }) {
-  return (
-    <span className="relative inline-flex h-2 w-2">
-      {pulse && active && (
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-500 opacity-75" />
-      )}
-      <span className={`relative inline-flex h-2 w-2 rounded-full ${active ? "bg-brand-500" : "bg-slate-300"}`} />
-    </span>
-  );
-}
+import { Button, Card, StatusDot, Badge, cn } from "../../design-system/index.js";
+import { motion } from "framer-motion";
 
 interface DashboardPageProps {
   onStartTask: () => void;
@@ -93,12 +77,11 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
         </p>
 
         {/* 主语音交互区 */}
-        <section className={`${card} relative flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-brand-50/60 via-white to-white py-10`}>
+        <Card variant="default" padding="none" className="relative overflow-hidden bg-gradient-to-br from-brand-50/60 via-white to-white">
           {/* 装饰背景 */}
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute left-[10%] top-[45%] h-32 w-32 rounded-full bg-brand-400/10 blur-3xl" />
             <div className="absolute right-[15%] top-[35%] h-40 w-40 rounded-full bg-brand-300/8 blur-3xl" />
-            {/* 波浪装饰 */}
             <svg className="absolute left-0 right-0 top-1/2 -translate-y-1/2" width="100%" height="120" viewBox="0 0 1200 120" preserveAspectRatio="none">
               <path d="M0,60 Q300,20 600,60 T1200,60" fill="none" stroke="rgba(163,209,0,0.08)" strokeWidth="2" strokeDasharray="8,8" />
               <path d="M0,60 Q300,100 600,60 T1200,60" fill="none" stroke="rgba(163,209,0,0.08)" strokeWidth="2" strokeDasharray="8,8" />
@@ -106,39 +89,36 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
           </div>
 
           {/* 内容 */}
-          <div className="relative z-10 flex flex-col items-center">
+          <div className="relative z-10 flex flex-col items-center py-10">
             <AiEmployeeMascot size={110} />
             <h2 className="mt-4 text-[24px] font-bold text-slate-950">只需开口说出你的目标</h2>
             <p className="mt-2.5 max-w-md text-center text-[13px] leading-relaxed text-slate-600">
               我会理解你的目标，规划并执行，完成后为你汇报结果。
             </p>
 
-            <button
+            <Button
+              variant="voice"
+              size="xl"
               onClick={() => void startVoice()}
               disabled={!convo.micSupported && convo.available}
-              className={`${button} group mt-6 flex h-[60px] w-full max-w-[480px] items-center justify-center gap-4 rounded-full border-2 border-brand-500 bg-white shadow-[0_4px_24px_rgba(163,209,0,0.15)] transition-all hover:border-brand-600 hover:shadow-[0_6px_32px_rgba(163,209,0,0.25)] disabled:opacity-50`}
+              animated
+              className="mt-6 w-full max-w-[480px] gap-4"
             >
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-600 text-white shadow-[0_0_0_8px_rgba(163,209,0,0.12)] transition-all group-hover:bg-brand-700 group-hover:shadow-[0_0_0_10px_rgba(163,209,0,0.15)]">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-600 text-white shadow-[0_0_0_8px_rgba(163,209,0,0.12)]">
                 <MicIcon width={22} />
               </span>
               <span className="flex flex-col items-start">
-                <span className="text-[15px] font-semibold text-slate-950">
-                  开始语音对话
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  点击说话，或按 Space 开始
-                </span>
+                <span className="text-[15px] font-semibold text-slate-950">开始语音对话</span>
+                <span className="text-[11px] text-slate-500">点击说话，或按 Space 开始</span>
               </span>
-            </button>
+            </Button>
 
-            <p className={`mt-3.5 flex items-center gap-2.5 text-[11px] ${convo.micActive ? "text-brand-700" : "text-slate-400"}`}>
+            <p className={cn("mt-3.5 flex items-center gap-2.5 text-[11px]", convo.micActive ? "text-brand-700" : "text-slate-400")}>
               <StatusDot active={convo.micActive} pulse={convo.micActive} />
-              {convo.micActive
-                ? "语音连接已建立 · 全双工进行中"
-                : "语音连接已建立 · 全双工进行中"}
+              {convo.micActive ? "语音连接已建立 · 全双工进行中" : "语音连接已建立 · 全双工进行中"}
             </p>
           </div>
-        </section>
+        </Card>
 
         {/* 当前任务 */}
         <CurrentTaskPanel />
@@ -178,14 +158,14 @@ function StatusBadge({
   highlight?: boolean;
 }) {
   return (
-    <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${
-      highlight
-        ? "border-brand-300 bg-brand-50/60"
-        : "border-slate-200 bg-white"
-    }`}>
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+    <div className={cn(
+      "flex items-center gap-3 rounded-xl border px-4 py-2.5",
+      highlight ? "border-brand-300 bg-brand-50/60" : "border-slate-200 bg-white"
+    )}>
+      <span className={cn(
+        "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
         status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-brand-50 text-brand-700"
-      }`}>
+      )}>
         {icon}
       </span>
       <div className="min-w-0">
@@ -208,7 +188,7 @@ function CurrentTaskPanel() {
   const currentStep = 2;
 
   return (
-    <section className={`${card} px-5 py-4`}>
+    <Card variant="default" padding="lg">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -219,9 +199,9 @@ function CurrentTaskPanel() {
             <p className="text-[11px] text-slate-600">整理会议记录并生成行动项</p>
           </div>
         </div>
-        <button className={`${button} rounded-lg px-3 py-1.5 text-[11px] font-medium text-brand-700 hover:bg-brand-50`}>
+        <Button variant="brandGhost" size="sm">
           查看任务详情 →
-        </button>
+        </Button>
       </div>
 
       <div className="flex items-center gap-3">
@@ -230,18 +210,19 @@ function CurrentTaskPanel() {
             <div className="flex w-full items-center">
               <div className="flex flex-col items-center gap-2">
                 <span
-                  className={`grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold transition-all ${
+                  className={cn(
+                    "grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold transition-all",
                     index < currentStep
                       ? "bg-brand-600 text-white shadow-sm"
                       : index === currentStep
                         ? "border-2 border-brand-600 bg-white text-brand-600 ring-4 ring-brand-100"
                         : "border-2 border-slate-200 bg-white text-slate-400"
-                  }`}
+                  )}
                 >
                   {index < currentStep ? <CheckIcon width={14} /> : index + 1}
                 </span>
                 <div className="text-center">
-                  <p className={`text-[11px] font-medium ${index <= currentStep ? "text-slate-900" : "text-slate-400"}`}>
+                  <p className={cn("text-[11px] font-medium", index <= currentStep ? "text-slate-900" : "text-slate-400")}>
                     {step.label}
                   </p>
                   <p className="text-[9px] text-slate-500">{step.desc}</p>
@@ -267,10 +248,10 @@ function CurrentTaskPanel() {
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
           <p className="text-[10px] text-slate-600">提供配置</p>
-          <p className="mt-1 text-[13px] font-semibold text-slate-950">AI 正在配置中提供应器...</p>
+          <p className="mt-1 text-[13px] font-semibold text-slate-950">AI 正在配置中...</p>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -284,14 +265,18 @@ function QuickActionsPanel({ onStartTask, onOpenModels }: { onStartTask: () => v
   ];
 
   return (
-    <section className={`${card} px-5 py-4`}>
+    <Card variant="default" padding="lg">
       <h3 className="mb-3 text-[13px] font-semibold text-slate-950">快速开始</h3>
       <div className="grid grid-cols-5 gap-3">
         {actions.map(({ Icon, title, desc, action }) => (
-          <button
+          <Card
             key={title}
+            variant="default"
+            padding="md"
+            hoverable
+            animated
             onClick={action}
-            className={`${card} ${cardHover} ${button} flex flex-col items-center justify-center gap-2.5 py-4 text-center`}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2.5 py-4 text-center"
           >
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700">
               <Icon width={20} />
@@ -300,10 +285,10 @@ function QuickActionsPanel({ onStartTask, onOpenModels }: { onStartTask: () => v
               <span className="block text-[11.5px] font-semibold text-slate-950">{title}</span>
               <span className="mt-0.5 block text-[9.5px] text-slate-500">{desc}</span>
             </span>
-          </button>
+          </Card>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -317,15 +302,12 @@ function RecentSessionsPanel({ onOpenSessions }: { onOpenSessions: () => void })
   ];
 
   return (
-    <section className={`${card} overflow-hidden`}>
+    <Card variant="default" padding="none" className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
         <h3 className="text-[13px] font-semibold text-slate-950">最近 Session</h3>
-        <button
-          onClick={onOpenSessions}
-          className={`${button} flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-brand-700 hover:bg-brand-50`}
-        >
+        <Button variant="brandGhost" size="sm" onClick={onOpenSessions}>
           查看全部 Session →
-        </button>
+        </Button>
       </div>
 
       <div className="divide-y divide-slate-50">
@@ -347,7 +329,10 @@ function RecentSessionsPanel({ onOpenSessions }: { onOpenSessions: () => void })
               <p className="truncate text-[12px] font-medium text-slate-900">{s.title}</p>
               <p className="mt-0.5 text-[10px] text-slate-500">{s.type}</p>
             </div>
-            <span className={`flex items-center gap-1.5 text-[10.5px] ${s.status === "已完成" ? "text-brand-700" : s.status === "已取消" ? "text-slate-400" : "text-amber-600"}`}>
+            <span className={cn(
+              "flex items-center gap-1.5 text-[10.5px]",
+              s.status === "已完成" ? "text-brand-700" : s.status === "已取消" ? "text-slate-400" : "text-amber-600"
+            )}>
               <StatusDot active={s.status === "已完成"} />
               {s.status}
             </span>
@@ -356,7 +341,7 @@ function RecentSessionsPanel({ onOpenSessions }: { onOpenSessions: () => void })
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -370,25 +355,18 @@ function VoiceSettingsPanel({
   onOpenModels: () => void;
 }) {
   return (
-    <section className={`${card} px-4 py-4`}>
+    <Card variant="default" padding="md">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 className="text-[13px] font-semibold text-slate-950">当前语音设置</h3>
-        <button
-          onClick={onOpenModels}
-          className={`${button} rounded-lg px-2.5 py-1 text-[10.5px] font-medium text-brand-700 hover:bg-brand-50`}
-        >
+        <Button variant="brandGhost" size="sm" onClick={onOpenModels}>
           管理语音
-        </button>
+        </Button>
       </div>
 
       <div className="mt-3 space-y-2.5">
         <SettingRow label="预设模式" value="平衡模式（Balanced）" />
         <SettingRow label="语音引擎" value={engine} />
-        <SettingRow
-          label="运行模式"
-          value="完全离线 • 本地运行"
-          badge="local"
-        />
+        <SettingRow label="运行模式" value="完全离线 • 本地运行" badge />
       </div>
 
       <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/50 p-3">
@@ -397,22 +375,16 @@ function VoiceSettingsPanel({
           当前会话完全离线处理，不会连接云端服务。
         </p>
       </div>
-    </section>
+    </Card>
   );
 }
 
-function SettingRow({ label, value, badge }: { label: string; value: string; badge?: "local" | "cloud" }) {
+function SettingRow({ label, value, badge = false }: { label: string; value: string; badge?: boolean }) {
   return (
     <div className="flex items-center justify-between text-[11px]">
       <span className="text-slate-600">{label}</span>
       {badge ? (
-        <span
-          className={`rounded-md px-2 py-1 text-[10px] font-medium ${
-            badge === "local" ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-600"
-          }`}
-        >
-          {value}
-        </span>
+        <Badge variant="brand" size="sm">{value}</Badge>
       ) : (
         <span className="font-medium text-slate-900">{value}</span>
       )}
@@ -422,7 +394,7 @@ function SettingRow({ label, value, badge }: { label: string; value: string; bad
 
 function SafetyPanel() {
   return (
-    <section className={`${card} px-4 py-4`}>
+    <Card variant="default" padding="md">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
@@ -430,7 +402,10 @@ function SafetyPanel() {
           </span>
           <div>
             <h3 className="text-[13px] font-semibold text-slate-950">安全引擎</h3>
-            <p className="text-[10px] text-emerald-700">● 运行中</p>
+            <p className="flex items-center gap-1.5 text-[10px] text-emerald-700">
+              <StatusDot active pulse color="success" size="sm" />
+              运行中
+            </p>
           </div>
         </div>
       </div>
@@ -440,7 +415,7 @@ function SafetyPanel() {
         <SafetyItem icon={<ShieldIcon width={14} />} label="数据保护" value="已启用" />
         <SafetyItem icon={<ShieldIcon width={14} />} label="高风险拦截" value="已启用" />
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -458,7 +433,7 @@ function SafetyItem({ icon, label, value }: { icon: ReactNode; label: string; va
 
 function ExecutionBrainPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
   return (
-    <section className={`${card} px-4 py-4`}>
+    <Card variant="default" padding="md">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="text-brand-700">
@@ -467,7 +442,7 @@ function ExecutionBrainPanel({ model }: { model: ReturnType<typeof useModelCente
           <h3 className="text-[13px] font-semibold text-slate-950">执行大脑</h3>
         </div>
         <span className="flex items-center gap-1.5 text-[10.5px] font-medium text-brand-700">
-          <StatusDot active pulse />
+          <StatusDot active pulse color="brand" size="sm" />
           就绪
         </span>
       </div>
@@ -482,13 +457,13 @@ function ExecutionBrainPanel({ model }: { model: ReturnType<typeof useModelCente
           <span className="font-medium text-slate-900">200K</span>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
 function RecordNotebookPanel() {
   return (
-    <section className={`${card} px-4 py-4`}>
+    <Card variant="default" padding="md">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="text-brand-700">
@@ -497,7 +472,7 @@ function RecordNotebookPanel() {
           <h3 className="text-[13px] font-semibold text-slate-950">记录笔记本</h3>
         </div>
         <span className="flex items-center gap-1.5 text-[10.5px] font-medium text-amber-600">
-          <StatusDot active />
+          <StatusDot active color="warning" size="sm" />
           同步中
         </span>
       </div>
@@ -505,14 +480,14 @@ function RecordNotebookPanel() {
       <div className="mt-3 space-y-2">
         <div className="flex justify-between text-[11px]">
           <span className="text-slate-600">存储位置</span>
-          <span className="font-medium text-slate-900">本地加密储</span>
+          <span className="font-medium text-slate-900">本地加密存储</span>
         </div>
         <div className="flex justify-between text-[11px]">
           <span className="text-slate-600">记录状态</span>
           <span className="font-medium text-slate-900">正常</span>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -527,15 +502,15 @@ function AuditTrailPanel({ count }: { count: number }) {
   ];
 
   return (
-    <section className={`${card} px-4 py-4`}>
+    <Card variant="default" padding="md">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-[13px] font-semibold text-slate-950">审计轨迹</h3>
           <p className="text-[10px] text-slate-600">本地记录，完整可追溯</p>
         </div>
-        <button className={`${button} rounded-lg px-2.5 py-1 text-[10px] font-medium text-brand-700 hover:bg-brand-50`}>
+        <Button variant="brandGhost" size="sm">
           查看全部 →
-        </button>
+        </Button>
       </div>
 
       <div className="mt-4 flex items-end gap-2">
@@ -547,7 +522,7 @@ function AuditTrailPanel({ count }: { count: number }) {
           {bars.map((height, i) => (
             <span
               key={i}
-              className={`flex-1 rounded-t ${legend[i % legend.length].color}`}
+              className={cn("flex-1 rounded-t", legend[i % legend.length].color)}
               style={{ height: `${(height / 60) * 100}%` }}
             />
           ))}
@@ -557,12 +532,12 @@ function AuditTrailPanel({ count }: { count: number }) {
       <div className="mt-3 grid grid-cols-3 gap-2 text-[9px]">
         {legend.map((item) => (
           <div key={item.label} className="flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-sm ${item.color}`} />
+            <span className={cn("h-2 w-2 rounded-sm", item.color)} />
             <span className="text-slate-600">{item.label}</span>
             <span className="font-semibold text-slate-900">{item.value}</span>
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

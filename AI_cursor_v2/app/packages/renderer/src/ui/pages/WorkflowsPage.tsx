@@ -1,5 +1,6 @@
 import { DemoBadge, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { ArrowRight, MailIcon, PlusIcon, ShieldIcon, TableIcon, WorkflowIcon } from "../icons.js";
+import { Button, Card, Badge } from "../../design-system/index.js";
 
 const workflows = [
   { title: "市场调研助手", description: "检索来源、提取 Evidence、生成带引用摘要。", icon: WorkflowIcon, state: "草稿" },
@@ -16,9 +17,9 @@ export function WorkflowsPage() {
         action={
           <div className="flex items-center gap-3">
             <DemoBadge />
-            <button className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-[12px] font-semibold text-white">
+            <Button variant="default" size="default" className="gap-2">
               <PlusIcon width={15} height={15} /> 新建工作流
-            </button>
+            </Button>
           </div>
         }
       />
@@ -26,9 +27,9 @@ export function WorkflowsPage() {
         {workflows.map((workflow) => {
           const Icon = workflow.icon;
           return (
-            <section key={workflow.title} className="rounded-[22px] border border-slate-200 bg-white p-5">
+            <Card key={workflow.title} variant="default" padding="lg" hoverable animated>
               <div className="flex items-center justify-between">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-100 text-brand-700">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-100 text-brand-700 shadow-sm">
                   <Icon width={20} height={20} />
                 </span>
                 <ToneBadge tone={workflow.state === "可用" ? "brand" : "neutral"}>{workflow.state}</ToneBadge>
@@ -39,28 +40,28 @@ export function WorkflowsPage() {
                 <span className="flex items-center gap-1.5 text-[10.5px] text-slate-400">
                   <ShieldIcon width={13} height={13} /> 受监督执行
                 </span>
-                <button className="flex items-center gap-1 text-[11.5px] font-semibold text-brand-700">
+                <Button variant="link" size="sm" className="gap-1 p-0">
                   查看编辑器 <ArrowRight width={13} height={13} />
-                </button>
+                </Button>
               </div>
-            </section>
+            </Card>
           );
         })}
       </div>
-      <section className="mt-5 rounded-[22px] border border-slate-200 bg-white p-5">
+      <Card variant="default" padding="lg" className="mt-5">
         <h2 className="text-[14px] font-semibold text-slate-900">工作流编辑器预览</h2>
         <div className="mt-4 flex items-center justify-center gap-3 rounded-2xl bg-slate-50 p-8">
           {["输入目标", "读取来源", "提取 Evidence", "等待确认", "生成结果"].map((step, index) => (
             <div key={step} className="flex items-center gap-3">
-              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-[0_2px_4px_rgba(0,0,0,0.06)]">
                 <p className="text-[10px] font-semibold text-brand-700">STEP {index + 1}</p>
-                <p className="mt-1 text-[11.5px] text-slate-700">{step}</p>
+                <p className="mt-1 text-[11.5px] font-medium text-slate-700">{step}</p>
               </div>
               {index < 4 && <ArrowRight className="text-slate-300" />}
             </div>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   );
 }

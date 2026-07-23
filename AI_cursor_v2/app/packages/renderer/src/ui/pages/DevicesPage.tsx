@@ -1,5 +1,6 @@
 import { DemoBadge, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { HeadphonesIcon, MicIcon, MonitorIcon, RefreshIcon, ShieldIcon } from "../icons.js";
+import { Button, Card } from "../../design-system/index.js";
 
 const devices = [
   { title: "输入设备", value: "未选择麦克风", icon: MicIcon, tone: "warning", level: 0 },
@@ -19,28 +20,28 @@ export function DevicesPage() {
         {devices.map((device) => {
           const Icon = device.icon;
           return (
-            <section key={device.title} className="rounded-[22px] border border-slate-200 bg-white p-5">
+            <Card key={device.title} variant="default" padding="lg">
               <div className="flex items-center justify-between">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-100 text-brand-700">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-100 text-brand-700 shadow-sm">
                   <Icon width={20} height={20} />
                 </span>
                 <ToneBadge tone={device.tone}>未连接</ToneBadge>
               </div>
               <h2 className="mt-5 text-[13px] font-semibold text-slate-900">{device.title}</h2>
               <p className="mt-1 text-[11.5px] text-slate-500">{device.value}</p>
-              <div className="mt-4 flex h-7 items-center gap-1 rounded-xl bg-slate-50 px-3">
+              <div className="mt-4 flex h-7 items-center gap-1 rounded-xl bg-slate-50 px-3 shadow-inner">
                 {Array.from({ length: 18 }, (_, index) => (
                   <span key={index} className="h-1 w-full rounded-full bg-slate-200" />
                 ))}
               </div>
-              <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2.5 text-[11.5px] text-slate-600">
+              <Button variant="secondary" size="default" className="mt-4 w-full gap-2">
                 <RefreshIcon width={14} height={14} /> 检查设备
-              </button>
-            </section>
+              </Button>
+            </Card>
           );
         })}
       </div>
-      <section className="mt-5 grid grid-cols-[1fr_300px] gap-5 rounded-[22px] border border-slate-200 bg-white p-5">
+      <Card variant="default" padding="lg" className="mt-5 grid grid-cols-[1fr_300px] gap-5">
         <div>
           <h2 className="text-[14px] font-semibold text-slate-900">本地停止通道</h2>
           <p className="mt-2 text-[11.5px] leading-relaxed text-slate-500">
@@ -48,7 +49,7 @@ export function DevicesPage() {
           </p>
           <div className="mt-4 grid grid-cols-3 gap-3">
             {["暂停调度", "Flush 输出", "用户接管"].map((item) => (
-              <div key={item} className="rounded-xl bg-slate-50 px-3 py-3">
+              <div key={item} className="rounded-xl bg-slate-50 px-3 py-3 shadow-sm">
                 <ShieldIcon width={16} height={16} className="text-brand-700" />
                 <p className="mt-2 text-[11.5px] font-medium text-slate-700">{item}</p>
                 <p className="mt-1 text-[10px] text-slate-400">等待 Runtime 实现</p>
@@ -56,18 +57,18 @@ export function DevicesPage() {
             ))}
           </div>
         </div>
-        <div className="rounded-2xl bg-slate-900 p-4 text-white">
+        <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-white shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
           <p className="text-[12px] font-semibold">权限摘要</p>
           <div className="mt-3 space-y-2">
             {["麦克风", "扬声器", "屏幕读取", "辅助功能"].map((permission) => (
-              <div key={permission} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5">
+              <div key={permission} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 backdrop-blur-sm">
                 <span className="text-[11px] text-slate-300">{permission}</span>
                 <ToneBadge dark tone="neutral">未检查</ToneBadge>
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </Card>
     </div>
   );
 }

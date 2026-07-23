@@ -9,6 +9,7 @@ import {
   PauseIcon,
   ShieldIcon
 } from "../icons.js";
+import { Button, Card } from "../../design-system/index.js";
 
 const steps = [
   { label: "理解目标", state: "done" },
@@ -43,14 +44,14 @@ export function TaskWorkspacePage() {
         }
       />
       <div className="grid grid-cols-[220px_minmax(480px,1fr)_260px] gap-4">
-        <section className="rounded-[22px] border border-slate-200 bg-white p-4">
+        <Card variant="default" padding="md">
           <h2 className="text-[13px] font-semibold text-slate-900">任务步骤</h2>
           <div className="mt-4 space-y-0">
             {steps.map((step, index) => (
               <div key={step.label} className="relative flex gap-3 pb-5 last:pb-0">
                 {index < steps.length - 1 && <span className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-slate-200" />}
                 <span
-                  className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] ${
+                  className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] shadow-sm ${
                     step.state === "done"
                       ? "border-brand-500 bg-brand-500 text-white"
                       : step.state === "current"
@@ -61,7 +62,7 @@ export function TaskWorkspacePage() {
                   {step.state === "done" ? <CheckIcon width={12} height={12} /> : index + 1}
                 </span>
                 <div>
-                  <p className={`text-[12px] ${step.state === "next" ? "text-slate-400" : "text-slate-700"}`}>{step.label}</p>
+                  <p className={`text-[12px] font-medium ${step.state === "next" ? "text-slate-400" : "text-slate-700"}`}>{step.label}</p>
                   <p className="mt-0.5 text-[10px] text-slate-400">
                     {step.state === "done" ? "完成" : step.state === "current" ? "进行中" : "等待"}
                   </p>
@@ -70,99 +71,80 @@ export function TaskWorkspacePage() {
             ))}
           </div>
           <div className="mt-6 grid grid-cols-2 gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setState("paused")}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-2.5 text-[12px] text-slate-600 hover:bg-slate-200"
+              className="gap-1.5"
             >
               <PauseIcon /> 暂停
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => setState("cancelled")}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-rose-500 py-2.5 text-[12px] text-white hover:bg-rose-600"
+              className="gap-1.5"
             >
               <CloseIcon width={14} height={14} /> 取消
-            </button>
+            </Button>
           </div>
-        </section>
+        </Card>
 
-        <section className="rounded-[22px] border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3 rounded-xl bg-slate-100 px-3 py-2.5">
+        <Card variant="default" padding="md">
+          <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 shadow-sm">
             <GlobeIcon width={16} height={16} className="text-slate-400" />
             <span className="flex-1 text-[12px] text-slate-600">中文全双工语音模型 本地运行</span>
             <ToneBadge tone="info">BrowserView A</ToneBadge>
           </div>
-          <div className="mt-3 rounded-2xl bg-[#f4f6f2] p-5 text-slate-800">
-            <p className="text-[12px] font-semibold">搜索结果</p>
+          <div className="mt-3 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 p-5 shadow-inner">
+            <p className="text-[12px] font-semibold text-slate-800">搜索结果</p>
             <div className="mt-3 divide-y divide-slate-200">
               {["BayLing-Duplex 技术报告", "PersonaPlex 模型说明", "Moshi 开源仓库"].map((result) => (
                 <div key={result} className="py-3">
                   <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-                    <span className="text-[12px] font-medium">{result}</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-sm" />
+                    <span className="text-[11.5px] font-medium text-slate-700">{result}</span>
                   </div>
-                  <p className="ml-3.5 mt-1 text-[10px] text-slate-500">示例来源 · 等待真实 BrowserView 接入</p>
+                  <p className="mt-1 text-[10px] text-slate-400">等待 Runtime Evidence 提取</p>
                 </div>
               ))}
             </div>
           </div>
-          <div className="mt-3 rounded-xl border border-brand-400/40 bg-brand-400/10 p-3">
-            <p className="text-[10px] font-semibold text-brand-700">当前动作</p>
-            <p className="mt-1 text-[12px] text-slate-700">读取 PersonaPlex 的硬件和许可要求</p>
-            <p className="mt-1 text-[10px] text-slate-500">只读 DOM · 不提交表单 · 不写入文件</p>
-          </div>
-          <div className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-400/15 text-brand-600">
-              <BrainIcon width={18} height={18} />
-            </span>
-            <div>
-              <p className="text-[12px] font-semibold text-slate-800">{state === "paused" ? "Paused" : "Speaking"}</p>
-              <p className="text-[10px] text-slate-400">状态由本页 Demo 控件驱动</p>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 shadow-sm">
+              <ShieldIcon width={14} height={14} className="text-amber-600" />
+              <span className="text-[10.5px] text-slate-600">高风险动作需确认</span>
             </div>
-            <div className="ml-auto flex h-5 items-end gap-1">
-              {[9, 16, 12, 20, 14, 18, 8, 15].map((height, index) => (
-                <span key={index} className="w-1 rounded-full bg-brand-500" style={{ height }} />
-              ))}
-            </div>
-            <button
-              onClick={() => setState("paused")}
-              className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
-            >
-              <PauseIcon />
-            </button>
+            <Button variant="primary" size="default" className="w-full gap-2">
+              <HandIcon width={14} height={14} /> 接管并纠正
+            </Button>
           </div>
-          <button
-            onClick={() => setState("takeover")}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-500 py-2.5 text-[12px] font-semibold text-brand-700 hover:bg-brand-400/10"
-          >
-            <HandIcon /> 接管当前 Workspace
-          </button>
-        </section>
+        </Card>
 
-        <aside className="rounded-[22px] border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[13px] font-semibold text-slate-900">Session 实时记录</h2>
-            <ShieldIcon width={15} height={15} className="text-brand-600" />
-          </div>
-          <div className="mt-4 space-y-4">
-            {events.map((event, index) => (
-              <div key={event.type} className="relative flex gap-3">
-                {index < events.length - 1 && <span className="absolute left-[5px] top-4 h-[calc(100%+8px)] w-px bg-slate-200" />}
-                <span
-                  className={`relative z-10 mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-white ${
-                    index === 1 ? "bg-blue-400" : index === 2 ? "bg-amber-400" : "bg-brand-500"
-                  }`}
-                />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-semibold text-slate-700">{event.type}</p>
-                    <span className="text-[9px] text-slate-400">{event.time}</span>
-                  </div>
-                  <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">{event.text}</p>
+        <Card variant="default" padding="md">
+          <h2 className="text-[13px] font-semibold text-slate-900">Event 记录</h2>
+          <div className="mt-4 space-y-3">
+            {events.map((event) => (
+              <div key={event.text} className="rounded-lg bg-slate-50 px-3 py-2.5 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase text-brand-700">{event.type}</span>
+                  <span className="text-[9px] text-slate-400">{event.time}</span>
                 </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">{event.text}</p>
               </div>
             ))}
           </div>
-        </aside>
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <BrainIcon width={15} height={15} className="text-brand-700" />
+              <span className="text-[11px] font-medium text-slate-700">执行信心</span>
+            </div>
+            <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-100 shadow-inner">
+              <span className="w-[75%] bg-gradient-to-r from-brand-500 to-brand-600 shadow-[0_0_8px_rgba(163,209,0,0.3)]" />
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-400">信心度 75% · 来源可验证</p>
+          </div>
+        </Card>
       </div>
     </div>
   );
