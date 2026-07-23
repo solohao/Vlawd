@@ -36,7 +36,7 @@ export interface AiCursorDesktopApi {
   conversationSnapshot(): Promise<DuplexConversationSnapshot>;
   conversationConnect(): Promise<DuplexConversationSnapshot>;
   conversationUtterance(text: string): Promise<void>;
-  conversationBargeIn(): Promise<void>;
+  conversationBargeIn(heardText?: string): Promise<void>;
   conversationPreempt(intent: SafetyPreemptionIntent): Promise<void>;
   conversationResume(): Promise<void>;
   conversationSetProvider(kind: DuplexProviderKind): Promise<DuplexConversationSnapshot>;

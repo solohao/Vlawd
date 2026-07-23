@@ -53,6 +53,8 @@ export class DuplexConversationRuntime {
   private turnCounter = 0;
   private activeGeneration: AbortController | null = null;
   private speakingStartedAt = 0;
+  /** barge-in 时渲染层上报的“已听到文本”，用于把被打断回合裁剪到实际听到的部分。 */
+  private pendingHeardText: string | null = null;
 
   constructor(options: DuplexRuntimeOptions) {
     this.now = options.now ?? (() => Date.now());
@@ -163,12 +165,19 @@ export class DuplexConversationRuntime {
   /**
    * VAD 检测到用户开口（转写尚未就绪）时的即时打断信号：立刻掐断 AI 语音输出。
    * 用于满足 barge-in → 输出停止 < 200ms 的目标。
+   *
+   * `heardText` 为渲染层上报的“用户实际已听到的文本”（TTS 已朗读完的句子）。
+   * 提供时，会把被打断的助手回合裁剪到这一部分——既保留 Alice 的“留半截文本”，
+   * 又达到 Open-LLM-VTuber 的“只留真正听到的部分”精度，避免模型以为自己已说完。
    */
-  bargeIn(): void {
+  bargeIn(heardText?: string): void {
     if (!this.activeGeneration) {
       return;
     }
     const start = this.now();
+    if (typeof heardText === "string") {
+      this.pendingHeardText = heardText.trim();
+    }
     this.cancelActiveGeneration({ interrupted: true });
     this.setState("listening");
     this.recordLatency("barge_in_to_output_stop", this.now() - start);
@@ -290,6 +299,11 @@ export class DuplexConversationRuntime {
       this.activeGeneration = null;
     }
     assistantTurn.interrupted = interrupted || undefined;
+    // 被打断时，若渲染层上报了“已听到文本”，把本回合裁剪到实际听到的部分（Open-LLM-VTuber 精度）。
+    if (interrupted && this.pendingHeardText !== null) {
+      assistantTurn.text = this.pendingHeardText;
+    }
+    this.pendingHeardText = null;
     this.emit({ type: "assistant_end", turnId: assistantTurn.id, interrupted, at: this.timestamp() });
 
     if (assistantTurn.text.trim()) {

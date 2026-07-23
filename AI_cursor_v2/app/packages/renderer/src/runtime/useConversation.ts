@@ -6,7 +6,7 @@ import type {
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
 import { desktopApi } from "../app/desktop-api.js";
-import { BrowserSpeechRecognizer, MicVad, TtsPlayer } from "./audio-io.js";
+import { BrowserSpeechRecognizer, MicVad, TtsPlayer, WhisperTranscriber } from "./audio-io.js";
 
 const EMPTY_SNAPSHOT: DuplexConversationSnapshot = {
   sessionId: "",
@@ -48,6 +48,7 @@ export function useConversation(): ConversationController {
   const tts = useRef<TtsPlayer | null>(null);
   const vad = useRef<MicVad | null>(null);
   const recognizer = useRef<BrowserSpeechRecognizer | null>(null);
+  const whisper = useRef<WhisperTranscriber | null>(null);
   const speakingRef = useRef(false);
 
   if (!tts.current && TtsPlayer.isSupported()) {
@@ -61,6 +62,10 @@ export function useConversation(): ConversationController {
     }
     if (event.type === "state") {
       speakingRef.current = event.state === "speaking";
+      if (event.state === "thinking") {
+        // 新一轮回答开始，重置“已听到”累计，供下次 barge-in 精确上报。
+        tts.current?.beginResponse();
+      }
       if (event.state === "interrupted" || event.state === "paused" || event.state === "listening") {
         tts.current?.cancel();
       }
@@ -91,6 +96,7 @@ export function useConversation(): ConversationController {
       tts.current?.cancel();
       vad.current?.stop();
       recognizer.current?.stop();
+      whisper.current?.stop();
     };
   }, [available, handleEvent]);
 
@@ -149,27 +155,54 @@ export function useConversation(): ConversationController {
     if (!MicVad.isSupported()) {
       throw new Error("当前环境不支持麦克风");
     }
+    // Electron 里 webkitSpeechRecognition 通常不可用，优先用 renderer 内 Whisper（transformers.js）。
+    const useWhisper = WhisperTranscriber.isSupported();
+    if (useWhisper) {
+      whisper.current = new WhisperTranscriber();
+      whisper.current.warmup();
+    }
+
     vad.current = new MicVad();
-    await vad.current.start(
-      () => {
-        // VAD 检测到用户开口：AI 正在说话时立即打断（barge-in）。
+    await vad.current.start({
+      onSpeechStart: () => {
+        // VAD 检测到用户开口：AI 正在说话时立即打断（barge-in），并上报“已听到文本”。
         if (speakingRef.current && available) {
+          const heard = tts.current?.getSpokenText() ?? "";
           tts.current?.cancel();
-          void desktopApi().conversationBargeIn();
+          void desktopApi().conversationBargeIn(heard);
         }
       },
-      (level) => setMicLevel(level)
-    );
-
-    recognizer.current = new BrowserSpeechRecognizer();
-    recognizer.current.start({
-      onInterim: (text) => setInterimTranscript(text),
-      onFinal: (text) => {
-        setInterimTranscript("");
-        void submit(text);
-      },
-      onError: () => setInterimTranscript("")
+      onLevel: (level) => setMicLevel(level),
+      onSpeechEnd: useWhisper
+        ? (audio) => {
+            setInterimTranscript("识别中…");
+            whisper.current
+              ?.transcribe(audio)
+              .then((text) => {
+                setInterimTranscript("");
+                if (text.trim()) {
+                  void submit(text);
+                }
+              })
+              .catch(() => setInterimTranscript(""));
+          }
+        : undefined
     });
+
+    if (!useWhisper && BrowserSpeechRecognizer.isSupported()) {
+      recognizer.current = new BrowserSpeechRecognizer();
+      const started = recognizer.current.start({
+        onInterim: (text) => setInterimTranscript(text),
+        onFinal: (text) => {
+          setInterimTranscript("");
+          void submit(text);
+        },
+        onError: () => setInterimTranscript("")
+      });
+      if (!started) {
+        recognizer.current = null;
+      }
+    }
     setMicActive(true);
   }, [available, submit]);
 
@@ -178,6 +211,8 @@ export function useConversation(): ConversationController {
     vad.current = null;
     recognizer.current?.stop();
     recognizer.current = null;
+    whisper.current?.stop();
+    whisper.current = null;
     setMicActive(false);
     setMicLevel(0);
     setInterimTranscript("");
@@ -197,7 +232,7 @@ export function useConversation(): ConversationController {
       snapshot,
       micActive,
       micSupported: MicVad.isSupported(),
-      sttSupported: BrowserSpeechRecognizer.isSupported(),
+      sttSupported: WhisperTranscriber.isSupported() || BrowserSpeechRecognizer.isSupported(),
       ttsSupported: TtsPlayer.isSupported(),
       micLevel,
       interimTranscript,

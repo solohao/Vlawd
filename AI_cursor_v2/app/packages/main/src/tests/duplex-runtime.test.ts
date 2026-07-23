@@ -145,6 +145,21 @@ describe("DuplexConversationRuntime (Cycle 1)", () => {
     expect(secondHistory[1]?.content.length).toBeGreaterThan(0);
   });
 
+  it("truncates the interrupted turn to the renderer-reported heard text", async () => {
+    const provider = new RecordingProvider(40);
+    const runtime = new DuplexConversationRuntime({ sessionId: "heard", provider });
+
+    const first = runtime.submitUtterance("讲讲考研数学的复习顺序");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    runtime.bargeIn("只听到了这一句");
+    await first;
+
+    await runtime.submitUtterance("换成英语");
+    const secondHistory = provider.inputs[1]?.history ?? [];
+    const interruptedAssistant = secondHistory.find((turn) => turn.role === "assistant" && turn.interrupted);
+    expect(interruptedAssistant?.content).toBe("只听到了这一句");
+  });
+
   it("keeps only the heard part and marks the interrupted assistant turn in history", async () => {
     const provider = new RecordingProvider(40);
     const runtime = new DuplexConversationRuntime({ sessionId: "interrupt-history", provider });

@@ -43,8 +43,8 @@ export interface AiCursorDesktopApi {
   conversationConnect(): Promise<DuplexConversationSnapshot>;
   /** 用户一段发言（文字输入或 ASR 转写）。 */
   conversationUtterance(text: string): Promise<void>;
-  /** VAD 检测到用户开口的即时打断信号（掐断 AI 语音输出）。 */
-  conversationBargeIn(): Promise<void>;
+  /** VAD 检测到用户开口的即时打断信号（掐断 AI 语音输出）；heardText=已听到文本。 */
+  conversationBargeIn(heardText?: string): Promise<void>;
   /** 本地硬抢占：停/暂停/取消/退回。 */
   conversationPreempt(intent: SafetyPreemptionIntent): Promise<void>;
   conversationResume(): Promise<void>;
@@ -109,7 +109,7 @@ const api: AiCursorDesktopApi = {
   conversationConnect: () =>
     ipcRenderer.invoke("conversation:connect") as Promise<DuplexConversationSnapshot>,
   conversationUtterance: (text) => ipcRenderer.invoke("conversation:utterance", text) as Promise<void>,
-  conversationBargeIn: () => ipcRenderer.invoke("conversation:bargeIn") as Promise<void>,
+  conversationBargeIn: (heardText) => ipcRenderer.invoke("conversation:bargeIn", heardText) as Promise<void>,
   conversationPreempt: (intent) => ipcRenderer.invoke("conversation:preempt", intent) as Promise<void>,
   conversationResume: () => ipcRenderer.invoke("conversation:resume") as Promise<void>,
   conversationSetProvider: (kind) =>
