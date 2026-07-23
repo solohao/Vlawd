@@ -20,12 +20,12 @@ export type DesktopPage =
   | "settings";
 
 const pageThemes: Record<DesktopPage, "dark" | "light"> = {
-  dashboard: "light",
+  dashboard: "dark",
   conversation: "light",
   task: "light",
   sessions: "light",
   workflows: "light",
-  models: "light",
+  models: "dark",
   devices: "light",
   settings: "light"
 };
@@ -38,7 +38,7 @@ export function DesktopApp() {
   return (
     <div
       className={`flex h-screen w-screen overflow-hidden transition-colors ${
-        theme === "dark" ? "bg-ink-900" : "bg-[#f4f6f2]"
+        theme === "dark" ? "bg-ink-900" : "bg-[#fafbf9]"
       }`}
       data-theme={theme}
     >

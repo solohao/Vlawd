@@ -265,3 +265,10 @@ export const MinimizeIcon = (p: IconProps) => (
     <path d="M5 12h14" />
   </svg>
 );
+
+export const DownloadIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3v12M8 11l4 4 4-4" />
+    <path d="M3 17v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
+  </svg>
+);

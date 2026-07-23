@@ -28,11 +28,8 @@ declare global {
 }
 
 function readSavedMode(): PaintMode {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === "off" ? "off" : "on";
-  } catch {
-    return "on";
-  }
+  // V2 界面验收期间暂时强制显示完整配色。保留 window.__paint 供开发期手动对比。
+  return "off";
 }
 
 function persist(mode: PaintMode): void {
@@ -48,7 +45,7 @@ function applyPaintMode(mode: PaintMode): void {
 }
 
 /**
- * 初始化填色模式：读取上次选择（默认 on），设置根属性，并在
+ * 初始化填色模式：V2 界面验收期间默认 off，设置根属性，并在
  * `window.__paint` 暴露开发期切换入口，方便在 DevTools 里对比。
  */
 export function initPaintMode(): void {
