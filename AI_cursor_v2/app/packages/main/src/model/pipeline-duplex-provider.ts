@@ -1,4 +1,5 @@
 import type {
+  DuplexHistoryTurn,
   DuplexModelEvent,
   DuplexModelInput,
   DuplexModelProvider
@@ -45,6 +46,7 @@ export class PipelineDuplexModelProvider implements DuplexModelProvider {
     const messages: LlmMessage[] = [
       { role: "system", content: this.systemPrompt },
       ...this.history,
+      ...toHistoryMessages(input.history),
       { role: "user", content: input.user_utterance }
     ];
 
@@ -118,6 +120,21 @@ export class PipelineDuplexModelProvider implements DuplexModelProvider {
     this.realInference = connected && this.llm.usingRealInference;
     return connected;
   }
+}
+
+/**
+ * 把运行时的对话历史映射为 LLM 消息。被自然插话打断的助手回合，只保留“用户实际听到的
+ * 部分”并显式标注，避免模型误以为自己已完整表达（对齐 Open-LLM-VTuber 的打断历史处理）。
+ */
+function toHistoryMessages(history: DuplexHistoryTurn[] | undefined): LlmMessage[] {
+  if (!history?.length) {
+    return [];
+  }
+  return history.map((turn) => ({
+    role: turn.role,
+    content:
+      turn.role === "assistant" && turn.interrupted ? `${turn.content}（说到这里被用户打断）` : turn.content
+  }));
 }
 
 function isAbortError(error: unknown): boolean {

@@ -106,7 +106,11 @@ export class MicVad {
     if (!MicVad.isSupported()) {
       throw new Error("当前环境不支持麦克风采集");
     }
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // 开启回声消除/降噪/自动增益：外放场景下抑制“AI 自己的 TTS 被麦克风采到又触发 barge-in”
+    // 的自打断问题（对齐 pipecat 的自打断防护关注点）。耳机场景本就无此问题。
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
     this.context = new AudioContext();
     const source = this.context.createMediaStreamSource(this.stream);
     this.analyser = this.context.createAnalyser();
