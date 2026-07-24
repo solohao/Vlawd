@@ -32,7 +32,7 @@ export function TaskWorkspacePage() {
   const visibleChunks = [...session.chunks].slice(-6).reverse();
 
   return (
-    <FeatureSection id="ui.task" title="任务空间" autoReady={session.chunks.length > 0} className="h-full">
+    <FeatureSection id="ui.task" title="任务空间" className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title={session.id ? `Session ${session.id.slice(0, 8)}` : "研究中文全双工模型"}

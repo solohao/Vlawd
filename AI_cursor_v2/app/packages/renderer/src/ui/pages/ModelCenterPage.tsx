@@ -158,46 +158,55 @@ export function ModelCenterPage() {
   const device = useMemo(() => deviceFromProbe(model.snapshot.environment), [model.snapshot.environment]);
 
   return (
-    <FeatureSection id="ui.models" title="模型中心" autoReady={!!model.snapshot.generatedAt} className="h-full">
     <DensityProvider density="compact">
       {editing ? (
-        <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />
+        <FeatureSection id="model-center.edit" title="编辑配置" className="h-full">
+          <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />
+        </FeatureSection>
       ) : (
         <div className="flex h-screen flex-col overflow-hidden bg-white">
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1400px] px-6 py-4">
-              <header className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h1 className="text-[20px] font-semibold text-slate-900">模型中心</h1>
-                  <p className="mt-0.5 text-[12px] text-slate-500">
-                    根据你的设备推荐最佳配置
-                  </p>
-                </div>
-                <Button variant="secondary" size="sm" className="h-8 gap-1.5 text-[11px]" animated={false}>
-                  <PlusIcon width={14} /> 新建
-                </Button>
-              </header>
+              <FeatureSection id="model-center.header" title="模型中心头部" className="h-full">
+                <header className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h1 className="text-[20px] font-semibold text-slate-900">模型中心</h1>
+                    <p className="mt-0.5 text-[12px] text-slate-500">
+                      根据你的设备推荐最佳配置
+                    </p>
+                  </div>
+                  <Button variant="secondary" size="sm" className="h-8 gap-1.5 text-[11px]" animated={false}>
+                    <PlusIcon width={14} /> 新建
+                  </Button>
+                </header>
+              </FeatureSection>
 
-              <div className="mt-3 flex items-center gap-6 border-b border-slate-100">
-                <TabButton active={tab === "config"} onClick={() => setTab("config")}>
-                  配置
-                </TabButton>
-                <TabButton active={tab === "library"} onClick={() => setTab("library")}>
-                  模型库
-                </TabButton>
-              </div>
+              <FeatureSection id="model-center.tabs" title="配置/模型库切换" className="h-full">
+                <div className="mt-3 flex items-center gap-6 border-b border-slate-100">
+                  <TabButton active={tab === "config"} onClick={() => setTab("config")}>
+                    配置
+                  </TabButton>
+                  <TabButton active={tab === "library"} onClick={() => setTab("library")}>
+                    模型库
+                  </TabButton>
+                </div>
+              </FeatureSection>
 
               <div className="pt-4">
                 {tab === "config" ? (
-                  <ConfigView
-                    model={model}
-                    selectedPreset={selectedPreset}
-                    device={device}
-                    onSelect={setSelectedPreset}
-                    onEdit={() => setEditing(true)}
-                  />
+                  <FeatureSection id="model-center.config" title="运行配置" className="h-full">
+                    <ConfigView
+                      model={model}
+                      selectedPreset={selectedPreset}
+                      device={device}
+                      onSelect={setSelectedPreset}
+                      onEdit={() => setEditing(true)}
+                    />
+                  </FeatureSection>
                 ) : (
-                  <LibraryView model={model} />
+                  <FeatureSection id="model-center.library" title="模型库" className="h-full">
+                    <LibraryView model={model} />
+                  </FeatureSection>
                 )}
               </div>
             </div>
@@ -205,7 +214,6 @@ export function ModelCenterPage() {
         </div>
       )}
     </DensityProvider>
-    </FeatureSection>
   );
 }
 

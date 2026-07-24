@@ -28,7 +28,7 @@ export function SettingsPage() {
   const [retention, setRetention] = useState(true);
 
   return (
-    <FeatureSection id="ui.settings" title="设置与隐私" autoReady={false} className="h-full">
+    <FeatureSection id="ui.settings" title="设置与隐私" className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="设置与隐私"

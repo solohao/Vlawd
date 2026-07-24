@@ -67,7 +67,7 @@ export function DevicesPage(): JSX.Element {
   ];
 
   return (
-    <FeatureSection id="ui.devices" title="设备中心" autoReady={audio.connected} className="h-full">
+    <FeatureSection id="ui.devices" title="设备中心" className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="设备中心"

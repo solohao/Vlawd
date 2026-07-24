@@ -156,7 +156,7 @@ export function LiveConversationPage({
   for (const sample of convo.latency) latestByKind.set(sample.kind, sample);
 
   return (
-    <FeatureSection id="ui.conversation" title="对话入口选择" autoReady={readyForConversation(snapshot)} className="h-full">
+    <FeatureSection id="ui.conversation" title="对话入口选择" className="h-full">
     <div className="px-8 py-7">
       {/* header */}
       <header className="mb-5 flex items-start justify-between">
