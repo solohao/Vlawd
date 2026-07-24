@@ -93,7 +93,12 @@ export function useModelCenter(): ModelCenterController {
       try {
         setSnapshot(await action());
       } catch {
-        // 错误已投影到快照（backend/activePull）；此处避免抛到 UI。
+        // 错误可能未投影到快照；兜底拉一次最新快照，避免 UI 停留在旧状态。
+        try {
+          setSnapshot(await desktopApi().modelSnapshot());
+        } catch {
+          // ignore
+        }
       } finally {
         setBusy(false);
       }

@@ -130,6 +130,15 @@ export class ModelCenterService {
   }
 
   private async detectBackend(kind: ModelBackendKind): Promise<void> {
+    if (kind === "ollama" && this.activeBackend === "ollama") {
+      const running = await this.ollama.version().catch(() => null);
+      if (running === null && await this.ollama.binaryInstalled()) {
+        const started = await this.ollama.ensureServing(this.modelsDir());
+        if (started) {
+          this.ollamaManagedByApp = true;
+        }
+      }
+    }
     const backend = this.backends[kind];
     const result: BackendDetectResult = await backend.detect().catch((error) => ({
       status: "not_installed" as const,
@@ -272,16 +281,10 @@ export class ModelCenterService {
     if (this.pullController) {
       throw new Error("已有下载任务进行中，请先等待或取消。");
     }
-    // 确保后端可用；未运行则尝试用当前目录启动。
-    if (this.backendStates.ollama.status !== "running") {
-      const started = await this.ollama.ensureServing(this.modelsDir());
-      if (started) {
-        this.ollamaManagedByApp = true;
-      }
-      await this.detectBackend("ollama");
-      if (!this.isRunning("ollama")) {
-        throw new Error("Ollama 未运行，无法下载。请先安装并启动 Ollama。");
-      }
+    // 确保后端可用；未运行则 detectBackend 会尝试用当前目录启动。
+    await this.detectBackend("ollama");
+    if (!this.isRunning("ollama")) {
+      throw new Error("Ollama 未运行，无法下载。请先安装并启动 Ollama。");
     }
 
     const controller = new AbortController();
