@@ -51,5 +51,23 @@ export type {
 export { ListRow } from "./components/ListRow.js";
 export type { ListRowProps } from "./components/ListRow.js";
 
+export { List } from "./components/List.js";
+export type { ListProps } from "./components/List.js";
+
 export { KeyValueRow } from "./components/KeyValueRow.js";
 export type { KeyValueRowProps } from "./components/KeyValueRow.js";
+
+export {
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableHeader,
+  TableCell,
+} from "./components/Table.js";
+export type {
+  TableProps,
+  TableRowProps,
+  TableHeaderProps,
+  TableCellProps,
+} from "./components/Table.js";

@@ -17,7 +17,7 @@ import {
   SearchIcon,
   ShieldIcon
 } from "../icons.js";
-import { cn, ListRow, KeyValueRow, DensityProvider, Card } from "../../design-system/index.js";
+import { cn, ListRow, KeyValueRow, DensityProvider, Card, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, List } from "../../design-system/index.js";
 
 interface DashboardPageProps {
   onStartTask: () => void;
@@ -112,11 +112,49 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
                     <span className="h-2 w-2 rounded-full bg-brand-500" /> 随时待命
                   </span>
                 </div>
-                <div className="mt-4 space-y-1">
-                  <StatusRow icon={<MonitorIcon width={15} />} label="运行环境" value="本地运行" />
-                  <StatusRow icon={<LockIcon width={15} />} label="数据隐私" value="完全本地存储" />
-                  <StatusRow icon={<CheckIcon width={15} />} label="响应状态" value="随时可用" />
-                  <StatusRow icon={<RefreshIcon width={15} />} label="上次活跃" value="2 分钟前" />
+                <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+                  <Table className="table-fixed">
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>项目</TableHeader>
+                        <TableHeader className="w-28 text-right">状态</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>
+                          <span className="flex items-center gap-2 text-slate-700">
+                            <MonitorIcon width={15} className="text-slate-400" /> 运行环境
+                          </span>
+                        </TableCell>
+                        <TableCell align="right" className="font-medium text-slate-800">本地运行</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>
+                          <span className="flex items-center gap-2 text-slate-700">
+                            <LockIcon width={15} className="text-slate-400" /> 数据隐私
+                          </span>
+                        </TableCell>
+                        <TableCell align="right" className="font-medium text-slate-800">完全本地存储</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>
+                          <span className="flex items-center gap-2 text-slate-700">
+                            <CheckIcon width={15} className="text-slate-400" /> 响应状态
+                          </span>
+                        </TableCell>
+                        <TableCell align="right" className="font-medium text-slate-800">随时可用</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>
+                          <span className="flex items-center gap-2 text-slate-700">
+                            <RefreshIcon width={15} className="text-slate-400" /> 上次活跃
+                          </span>
+                        </TableCell>
+                        <TableCell align="right" className="font-medium text-slate-800">2 分钟前</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
                 </div>
                 <button
                   onClick={onOpenModels}
@@ -128,19 +166,51 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
             </div>
 
             {/* 常用操作 */}
-            <div className="mt-7 flex items-center justify-between">
-              <h3 className="text-[14px] font-semibold text-slate-900">常用操作</h3>
-              <button className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-600">
-                更多 <ChevronRight width={14} />
-              </button>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3.5 sm:grid-cols-3 xl:grid-cols-5">
-              <ActionCard icon={<DocIcon width={18} />} title="整理会议纪要" desc="提炼要点并生成报告" onClick={onStartTask} />
-              <ActionCard icon={<GridIcon width={18} />} title="数据分析" desc="分析数据并生成图表" onClick={onStartTask} />
-              <ActionCard icon={<SearchIcon width={18} />} title="信息调研" desc="搜索并总结关键信息" onClick={onStartTask} />
-              <ActionCard icon={<PencilIcon width={18} />} title="内容撰写" desc="撰写文档与方案" onClick={onStartTask} />
-              <ActionCard icon={<CheckIcon width={18} />} title="待办管理" desc="整理并跟进待办事项" onClick={onStartTask} />
-            </div>
+            <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[14px] font-semibold text-slate-900">常用操作</h3>
+                <button className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-600">
+                  更多 <ChevronRight width={14} />
+                </button>
+              </div>
+              <List className="mt-4">
+                <ListRow
+                  onClick={onStartTask}
+                  leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600"><DocIcon width={18} /></span>}
+                  title="整理会议纪要"
+                  description="提炼要点并生成报告"
+                  trailing={<ChevronRight width={16} className="text-slate-400" />}
+                />
+                <ListRow
+                  onClick={onStartTask}
+                  leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600"><GridIcon width={18} /></span>}
+                  title="数据分析"
+                  description="分析数据并生成图表"
+                  trailing={<ChevronRight width={16} className="text-slate-400" />}
+                />
+                <ListRow
+                  onClick={onStartTask}
+                  leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600"><SearchIcon width={18} /></span>}
+                  title="信息调研"
+                  description="搜索并总结关键信息"
+                  trailing={<ChevronRight width={16} className="text-slate-400" />}
+                />
+                <ListRow
+                  onClick={onStartTask}
+                  leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600"><PencilIcon width={18} /></span>}
+                  title="内容撰写"
+                  description="撰写文档与方案"
+                  trailing={<ChevronRight width={16} className="text-slate-400" />}
+                />
+                <ListRow
+                  onClick={onStartTask}
+                  leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600"><CheckIcon width={18} /></span>}
+                  title="待办管理"
+                  description="整理并跟进待办事项"
+                  trailing={<ChevronRight width={16} className="text-slate-400" />}
+                />
+              </List>
+            </section>
 
             {/* 当前任务 + 最近使用 */}
             <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
@@ -172,40 +242,6 @@ function Chip({ icon, label }: { icon: ReactNode; label: string }) {
       <span className="text-slate-400">{icon}</span>
       {label}
     </span>
-  );
-}
-
-function StatusRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <KeyValueRow
-      icon={<span className="text-slate-400">{icon}</span>}
-      label={label}
-      value={<span className="font-medium text-slate-800">{value}</span>}
-    />
-  );
-}
-
-function ActionCard({
-  icon,
-  title,
-  desc,
-  onClick
-}: {
-  icon: ReactNode;
-  title: string;
-  desc: string;
-  onClick: () => void;
-}) {
-  return (
-    <Card padding="sm" variant="default" hoverable onClick={onClick} className="text-left">
-      <ListRow
-        flush
-        leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600">{icon}</span>}
-        title={title}
-        description={desc}
-        trailing={<ChevronRight width={16} className="text-slate-400" />}
-      />
-    </Card>
   );
 }
 
@@ -263,41 +299,47 @@ function CurrentTaskPanel() {
         </div>
       </div>
 
-      <div className="mt-5 rounded-xl border border-slate-200 p-4">
-        <p className="text-[12px] font-medium text-slate-600">任务计划（自动生成）</p>
-        <div className="mt-3">
-          {plan.map((p) => (
-            <ListRow
-              key={p.label}
-              flush
-              leading={
-                <span
-                  className={cn(
-                    "grid h-4 w-4 shrink-0 place-items-center rounded-full",
-                    p.state === "done"
-                      ? "bg-brand-500 text-white"
-                      : p.state === "current"
-                        ? "border-2 border-brand-500"
-                        : "border border-slate-300"
-                  )}
-                >
-                  {p.state === "done" && <CheckIcon width={10} />}
-                  {p.state === "current" && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
-                </span>
-              }
-              title={p.label}
-              trailing={
-                <span className={cn("text-[11px]", p.state === "current" ? "text-brand-700" : "text-slate-400")}>
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+        <Table hoverable className="table-fixed">
+          <TableHead>
+            <TableRow>
+              <TableHeader className="w-12 text-center">状态</TableHeader>
+              <TableHeader>任务</TableHeader>
+              <TableHeader className="w-28 text-right">时间</TableHeader>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {plan.map((p) => (
+              <TableRow key={p.label}>
+                <TableCell align="center" className="w-12">
+                  <span
+                    className={cn(
+                      "grid h-4 w-4 shrink-0 place-items-center rounded-full",
+                      p.state === "done"
+                        ? "bg-brand-500 text-white"
+                        : p.state === "current"
+                          ? "border-2 border-brand-500"
+                          : "border border-slate-300"
+                    )}
+                  >
+                    {p.state === "done" && <CheckIcon width={10} />}
+                    {p.state === "current" && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
+                  </span>
+                </TableCell>
+                <TableCell className={cn("font-medium", p.state === "todo" ? "text-slate-400" : "text-slate-700")}>
+                  {p.label}
+                </TableCell>
+                <TableCell align="right" className={cn("w-28 text-[11px]", p.state === "current" ? "text-brand-700" : "text-slate-400")}>
                   {p.time}
-                </span>
-              }
-            />
-          ))}
-        </div>
-        <button className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-[12px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50">
-          查看详情
-        </button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
+      <button className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-[12px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50">
+        查看详情
+      </button>
     </section>
   );
 }
@@ -319,7 +361,7 @@ function RecentUsePanel({ onOpenSessions }: { onOpenSessions: () => void }) {
           查看全部
         </button>
       </div>
-      <div className="mt-4 space-y-1">
+      <List className="mt-4">
         {items.map((it) => (
           <ListRow
             key={it.title}
@@ -345,7 +387,7 @@ function RecentUsePanel({ onOpenSessions }: { onOpenSessions: () => void }) {
             }
           />
         ))}
-      </div>
+      </List>
     </section>
   );
 }
