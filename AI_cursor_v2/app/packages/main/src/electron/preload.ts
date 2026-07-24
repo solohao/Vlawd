@@ -55,6 +55,9 @@ export interface AiCursorDesktopApi {
   /** 订阅实时 Runtime 事件；返回取消订阅函数。 */
   onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
 
+  /** 订阅桌面运行时快照；返回取消订阅函数。 */
+  onDesktopSnapshot(listener: (snapshot: DesktopUiSnapshot) => void): () => void;
+
   // ── 模型中心（包装版 Ollama 后端）────────────────────────────────────
   modelSnapshot(): Promise<ModelCenterSnapshot>;
   modelProbeEnvironment(): Promise<ModelCenterSnapshot>;
@@ -118,6 +121,12 @@ const api: AiCursorDesktopApi = {
   onConversationEvent: (listener) => {
     const channel = "conversation:event";
     const handler = (_event: unknown, payload: DuplexRuntimeEvent): void => listener(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onDesktopSnapshot: (listener) => {
+    const channel = "desktop:snapshot";
+    const handler = (_event: unknown, payload: DesktopUiSnapshot): void => listener(payload);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },

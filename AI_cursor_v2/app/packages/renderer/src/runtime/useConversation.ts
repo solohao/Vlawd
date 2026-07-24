@@ -35,11 +35,11 @@ export interface ConversationController {
   whisperLoading: { status: string; progress?: number } | null;
   inputDeviceId?: string;
   outputDeviceId?: string;
-  connect(): Promise<void>;
+  connect(): Promise<DuplexConversationSnapshot>;
   submit(text: string): Promise<void>;
   preempt(intent: SafetyPreemptionIntent): Promise<void>;
   resume(): Promise<void>;
-  setProvider(kind: DuplexProviderKind): Promise<void>;
+  setProvider(kind: DuplexProviderKind): Promise<DuplexConversationSnapshot>;
   checkHealth(): Promise<void>;
   toggleMic(): Promise<void>;
   selectInputDevice(deviceId: string): void;
@@ -136,11 +136,12 @@ export function useConversation(): ConversationController {
 
   const connect = useCallback(async () => {
     if (!available) {
-      return;
+      return EMPTY_SNAPSHOT;
     }
     const next = await desktopApi().conversationConnect();
     setSnapshot(next);
     await desktopApi().conversationCheckHealth().catch(() => undefined);
+    return next;
   }, [available]);
 
   const submit = useCallback(
@@ -172,10 +173,12 @@ export function useConversation(): ConversationController {
 
   const setProvider = useCallback(
     async (kind: DuplexProviderKind) => {
-      if (available) {
-        const next = await desktopApi().conversationSetProvider(kind);
-        setSnapshot(next);
+      if (!available) {
+        return EMPTY_SNAPSHOT;
       }
+      const next = await desktopApi().conversationSetProvider(kind);
+      setSnapshot(next);
+      return next;
     },
     [available]
   );

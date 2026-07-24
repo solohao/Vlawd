@@ -1,5 +1,7 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useConversation } from "../../runtime/useConversation.js";
+import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
+import { useMarkFeature } from "../../app/feature-status.js";
 import {
   BoltIcon,
   CheckIcon,
@@ -17,7 +19,7 @@ import {
   SearchIcon,
   ShieldIcon
 } from "../icons.js";
-import { cn, ListRow, KeyValueRow, DensityProvider, Card, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, List } from "../../design-system/index.js";
+import { cn, ListRow, KeyValueRow, DensityProvider, Button, Card, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, List } from "../../design-system/index.js";
 
 interface DashboardPageProps {
   onStartTask: () => void;
@@ -27,15 +29,40 @@ interface DashboardPageProps {
 
 export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: DashboardPageProps) {
   const convo = useConversation();
+  const desktop = useDesktopRuntime();
+  const mark = useMarkFeature();
+  const markedRef = useRef(false);
 
-  const startVoice = () => {
+  useEffect(() => {
+    if (desktop.snapshot.generatedAt && !markedRef.current) {
+      markedRef.current = true;
+      mark("ui.dashboard", "done");
+    }
+  }, [desktop.snapshot.generatedAt, mark]);
+
+  const startVoice = async () => {
     const realInference = convo.snapshot.providerConnected && convo.snapshot.usingRealInference;
-    // Cycle 1 要求真实 Provider：未就绪时引导到模型中心。
-    if (convo.available && !realInference) {
+    const canUseMock = convo.snapshot.activeProviderKind === "mock";
+    // Cycle 1 优先真实 Provider；mock 仅用于开发链路验证。
+    if (convo.available && !realInference && !canUseMock) {
       onOpenModels();
       return;
     }
+    if (convo.available) {
+      await convo.connect();
+    }
     void convo.toggleMic();
+    onStartTask();
+  };
+
+  const startManual = async () => {
+    if (convo.available) {
+      const afterConnect = await convo.connect();
+      const needsMock = !afterConnect.providerConnected && afterConnect.candidateProviderKinds.includes("mock");
+      if (needsMock) {
+        await convo.setProvider("mock");
+      }
+    }
     onStartTask();
   };
 
@@ -181,6 +208,13 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
               </div>
               <List className="mt-4">
                 <ListRow
+                  onClick={() => void startManual()}
+                  leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-600"><MicIcon width={18} /></span>}
+                  title="打开对话（手动输入）"
+                  description="选择 Provider 并发送文本，验证 Cycle 1 链路"
+                  trailing={<ChevronRight width={16} className="text-slate-400" />}
+                />
+                <ListRow
                   onClick={onStartTask}
                   leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600"><DocIcon width={18} /></span>}
                   title="整理会议纪要"
@@ -223,6 +257,7 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
               <CurrentTaskPanel />
               <RecentUsePanel onOpenSessions={onOpenSessions} />
             </div>
+            <RuntimePanel />
           </div>
         </div>
 
@@ -394,6 +429,121 @@ function RecentUsePanel({ onOpenSessions }: { onOpenSessions: () => void }) {
           />
         ))}
       </List>
+    </section>
+  );
+}
+
+function RuntimePanel() {
+  const desktop = useDesktopRuntime();
+  const { snapshot, busy } = desktop;
+  const { runtimeState, audio, healthChecks, modelDownloads, browser } = snapshot;
+
+  return (
+    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[15px] font-semibold text-slate-900">运行时调试台</h3>
+        <span className="text-[11px] text-slate-400">backend linked</span>
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card variant="default" padding="md" className="space-y-3">
+          <KeyValueRow label="runtimeState" value={runtimeState} />
+          <KeyValueRow label="audio.connected" value={audio.connected ? "已连接" : "未连接"} />
+          <KeyValueRow label="audio.message" value={audio.message} />
+          <KeyValueRow
+            label="nextAction"
+            value={browser.nextAction?.actionType ? `${browser.nextAction.actionType} · ${browser.nextAction.targetLabel}` : "-"}
+          />
+        </Card>
+        <Card variant="default" padding="md">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => void desktop.chooseStorageRoot()} disabled={busy}>
+              选择存储
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void desktop.connectAudio()} disabled={busy}>
+              连接音频
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void desktop.pauseSession()} disabled={busy}>
+              暂停
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void desktop.cancelSession()} disabled={busy}>
+              取消
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void desktop.executeRuntimeAction()} disabled={busy}>
+              执行动作
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {modelDownloads.map((download) => (
+              <Button
+                key={download.role}
+                variant="secondary"
+                size="sm"
+                onClick={() => void desktop.startModelDownload(download.role)}
+                disabled={busy || download.status === "downloaded"}
+              >
+                下载 {download.label}
+              </Button>
+            ))}
+            {healthChecks.map((check) => (
+              <Button
+                key={check.role}
+                variant="secondary"
+                size="sm"
+                onClick={() => void desktop.runHealthCheck(check.role)}
+                disabled={busy}
+              >
+                检查 {check.role}
+              </Button>
+            ))}
+          </div>
+        </Card>
+      </div>
+      {healthChecks.length > 0 && (
+        <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+          <Table className="table-fixed">
+            <TableHead>
+              <TableRow>
+                <TableHeader>角色</TableHeader>
+                <TableHeader>状态</TableHeader>
+                <TableHeader className="w-40 text-right">检测时间</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {healthChecks.map((check) => (
+                <TableRow key={check.role}>
+                  <TableCell className="text-slate-700">{check.role}</TableCell>
+                  <TableCell className="text-slate-700">{check.state} · {check.message}</TableCell>
+                  <TableCell align="right" className="text-[11px] text-slate-500">
+                    {check.lastCheckedAt ? new Date(check.lastCheckedAt).toLocaleTimeString() : "-"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      {modelDownloads.length > 0 && (
+        <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+          <Table className="table-fixed">
+            <TableHead>
+              <TableRow>
+                <TableHeader>模型角色</TableHeader>
+                <TableHeader>状态</TableHeader>
+                <TableHeader className="w-28 text-right">进度</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {modelDownloads.map((download) => (
+                <TableRow key={download.role}>
+                  <TableCell className="text-slate-700">{download.label}</TableCell>
+                  <TableCell className="text-slate-700">{download.status} · {download.message}</TableCell>
+                  <TableCell align="right" className="text-[11px] text-slate-500">{download.progress}%</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </section>
   );
 }
