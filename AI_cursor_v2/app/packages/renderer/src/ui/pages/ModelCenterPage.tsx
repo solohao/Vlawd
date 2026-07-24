@@ -1,962 +1,1034 @@
-import { useEffect, useState } from "react";
-import type {
-  ModelBackendKind,
-  ModelBackendState,
-  ModelCatalogItem,
-  ModelPullProgress
-} from "@ai-cursor-v2/shared";
-import { modelCenterData } from "../demo-data.js";
-import { useConversation } from "../../runtime/useConversation.js";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useModelCenter } from "../../runtime/useModelCenter.js";
 import {
-  ArrowRight,
+  ArrowLeft,
+  BoltIcon,
   BrainIcon,
   CheckIcon,
+  ChevronDown,
   ChevronRight,
-  CompatIcon,
-  CubeIcon,
   DotsIcon,
-  GearIcon,
-  HelpIcon,
-  ImportIcon,
+  EarIcon,
+  GlobeIcon,
+  InfoIcon,
+  LockIcon,
   NotebookIcon,
+  PencilIcon,
+  PlusIcon,
   RefreshIcon,
-  ShieldIcon
+  SearchIcon,
+  SlidersIcon,
+  SparkIcon,
+  SpeakerIcon
 } from "../icons.js";
+import { Button, cn } from "../../design-system/index.js";
+import { intentTemplates, modelCatalog } from "./model-catalog.js";
+import {
+  deviceFromProbe,
+  rankSlot,
+  resolvePreset,
+  type DeviceProfile,
+  type IntentTemplate,
+  type RankedModel,
+  type ResolvedSlot,
+  type Runnability
+} from "./model-resolver.js";
 
-const panel = "rounded-2xl border border-slate-200 bg-white";
-const roleIcon = { brain: BrainIcon, notebook: NotebookIcon, safety: ShieldIcon };
+type Tab = "config" | "library";
 
-type Tone = "running" | "available" | "idle" | "always";
+type Tone = "ok" | "warn" | "bad";
 
-function StateDot({ tone, label }: { tone: Tone; label: string }) {
-  const color =
-    tone === "running"
-      ? "bg-brand-500"
-      : tone === "available"
-        ? "bg-amber-400"
-        : tone === "always"
-          ? "bg-brand-500"
-          : "bg-slate-400";
+interface SelectOption {
+  name: string;
+  tag: string;
+  note?: string;
+  tone?: Tone;
+}
+
+interface ConfigRow {
+  id: string;
+  name: string;
+  desc: string;
+  current?: boolean;
+  custom?: boolean;
+}
+
+/** 自定义配置：不是官方模板，取向沿用均衡，作为"改出来的"方案的落点。 */
+const customTemplate: IntentTemplate = {
+  id: "custom",
+  name: "我的自定义配置",
+  description: "由你亲自调整的模型组合。",
+  official: false,
+  weights: { quality: 5, speed: 3.5, chinese: 1.5 },
+  requireLocal: false,
+  allowCloudFallback: true,
+  perf: "由你亲自调整的模型组合",
+  privacy: "取决于你所选择的模型",
+  scene: "根据你的偏好定制的使用场景"
+};
+
+const configRows: ConfigRow[] = [
+  ...intentTemplates.map((t) => ({ id: t.id, name: t.name, desc: t.description, current: t.id === "balanced" })),
+  { id: "custom", name: customTemplate.name, desc: "上次使用：2 天前", custom: true }
+];
+
+function templateById(id: string): IntentTemplate {
+  if (id === "custom") {
+    return customTemplate;
+  }
+  return intentTemplates.find((t) => t.id === id) ?? intentTemplates[0];
+}
+
+function toneOf(runnability: Runnability): Tone {
+  if (runnability === "smooth") {
+    return "ok";
+  }
+  return runnability === "insufficient" ? "bad" : "warn";
+}
+
+const TONE_DOT: Record<Tone, string> = {
+  ok: "bg-brand-500",
+  warn: "bg-amber-500",
+  bad: "bg-rose-500"
+};
+
+const TONE_TEXT: Record<Tone, string> = {
+  ok: "text-brand-700",
+  warn: "text-amber-700",
+  bad: "text-rose-600"
+};
+
+function toSelectOptions(ranked: RankedModel[]): SelectOption[] {
+  return ranked.map((r) => ({
+    name: r.model.name,
+    tag: r.model.local ? r.model.quant ?? "本地" : "云端",
+    note: r.annotation,
+    tone: toneOf(r.runnability)
+  }));
+}
+
+function deviceSummary(device: DeviceProfile): string {
+  if (!device.hasGpu) {
+    return `CPU 运行 · ${device.ramGB}GB 内存`;
+  }
+  const vramGB = Math.round(device.vramMB / 1024);
+  return `${device.gpuName ?? "独立显卡"} · ${vramGB}GB 显存 · ${device.ramGB}GB 内存`;
+}
+
+export function ModelCenterPage() {
+  const model = useModelCenter();
+  const [tab, setTab] = useState<Tab>("config");
+  const [editing, setEditing] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState("balanced");
+  const device = useMemo(() => deviceFromProbe(model.snapshot.environment), [model.snapshot.environment]);
+
+  if (editing) {
+    return <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />;
+  }
+
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-500">
-      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
-      {label}
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+          <header className="flex items-start justify-between">
+            <div>
+              <h1 className="text-[24px] font-bold tracking-tight text-slate-900">模型中心</h1>
+              <p className="mt-1.5 text-[12.5px] text-slate-500">
+                选择最适合你的模型配置，助手已根据你的设备为你准备好推荐方案。
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+              <PlusIcon width={15} /> 新建配置
+            </Button>
+          </header>
+
+          <div className="mt-5 flex items-center gap-6 border-b border-slate-200">
+            <TabButton active={tab === "config"} onClick={() => setTab("config")}>
+              配置
+            </TabButton>
+            <TabButton active={tab === "library"} onClick={() => setTab("library")}>
+              模型库
+            </TabButton>
+          </div>
+
+          <div className="pt-6">
+            {tab === "config" ? (
+              <ConfigView
+                selectedPreset={selectedPreset}
+                device={device}
+                onSelect={setSelectedPreset}
+                onEdit={() => setEditing(true)}
+              />
+            ) : (
+              <LibraryView model={model} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative -mb-px pb-2.5 text-[14px] font-medium transition-colors",
+        active ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+      )}
+    >
+      {children}
+      {active && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-500" />}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ 配置 */
+
+function ConfigView({
+  selectedPreset,
+  device,
+  onSelect,
+  onEdit
+}: {
+  selectedPreset: string;
+  device: DeviceProfile;
+  onSelect: (id: string) => void;
+  onEdit: () => void;
+}) {
+  const template = templateById(selectedPreset);
+  // 概览按默认"分步"架构，为当前设备解析出实际组合。
+  const resolved = useMemo(
+    () => resolvePreset(template, modelCatalog, device, "pipeline"),
+    [template, device]
+  );
+  const hearing = resolved.slots.hearing;
+  const brain = resolved.slots.executionBrain;
+  const speaking = resolved.slots.speaking;
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,480px)_1fr]">
+      {/* 选择配置 */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
+        <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
+
+        <div className="mt-4 space-y-2.5">
+          {configRows.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p.id)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all",
+                selectedPreset === p.id
+                  ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              )}
+            >
+              <Radio checked={selectedPreset === p.id} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <b className="text-[13.5px] font-semibold text-slate-900">{p.name}</b>
+                  {p.current && (
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                      当前使用
+                    </span>
+                  )}
+                  {p.custom && (
+                    <span className="ml-auto text-slate-300">
+                      <DotsIcon width={16} />
+                    </span>
+                  )}
+                </span>
+                <span className="mt-1 block text-[11.5px] leading-relaxed text-slate-500">{p.desc}</span>
+              </span>
+            </button>
+          ))}
+
+          <button
+            onClick={onEdit}
+            className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
+          >
+            <span className="min-w-0 flex-1">
+              <b className="block text-[13px] font-semibold text-slate-800">管理配置</b>
+              <span className="mt-0.5 block text-[11px] text-slate-500">重命名、编辑或恢复配置</span>
+            </span>
+            <ChevronRight width={16} className="text-slate-400" />
+          </button>
+        </div>
+      </section>
+
+      {/* 当前配置概览 */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
+            <p className="mt-1 text-[12px] text-slate-500">已根据你的设备为该方案解析出实际模型</p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-600">
+            <BoltIcon width={13} /> {deviceSummary(device)}
+          </span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
+          <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
+          <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
+        </div>
+
+        <div className="my-5 h-px bg-slate-100" />
+
+        <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
+        <div className="mt-3 space-y-1">
+          <AboutRow icon={<BoltIcon width={16} />} label="性能" desc={template.perf} />
+          <AboutRow icon={<LockIcon width={16} />} label="隐私" desc={template.privacy} />
+          <AboutRow icon={<GlobeIcon width={16} />} label="适用场景" desc={template.scene} />
+        </div>
+
+        <div className="mt-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-[13.5px] font-semibold text-slate-900">切换配置后</h3>
+            <p className="mt-1 max-w-md text-[12px] leading-relaxed text-slate-500">
+              {resolved.notes[0] ?? "系统会自动检查并准备所需模型，无需手动下载或设置。"}
+            </p>
+          </div>
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium",
+              resolved.notes.length > 0 ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"
+            )}
+          >
+            <CheckIcon width={14} /> {resolved.notes.length > 0 ? "可运行（有提示）" : "准备就绪"}
+          </span>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-5">
+          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+            <PencilIcon width={14} /> 重命名
+          </Button>
+          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onEdit}>
+            <SlidersIcon width={14} /> 编辑配置
+          </Button>
+          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+            <RefreshIcon width={14} /> 恢复默认
+          </Button>
+          <Button variant="primary" size="sm" className="h-9 gap-1.5" animated={false}>
+            <CheckIcon width={14} /> 应用此配置
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CapabilitySummary({
+  icon,
+  title,
+  kind,
+  slot
+}: {
+  icon: ReactNode;
+  title: string;
+  kind: string;
+  slot: ResolvedSlot;
+}) {
+  const tone = slot.needsCloud ? "warn" : toneOf(slot.runnability);
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center gap-2 text-slate-600">
+        <span className="text-slate-500">{icon}</span>
+        <span className="text-[13px] font-semibold text-slate-900">{title}</span>
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">{kind}</p>
+      <p className="mt-1 text-[13px] font-medium text-slate-800">{slot.model?.name ?? "暂无可用模型"}</p>
+      <p className={cn("mt-3 flex items-center gap-1.5 text-[11.5px] font-medium", TONE_TEXT[tone])}>
+        <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
+      </p>
+    </div>
+  );
+}
+
+function AboutRow({
+  icon,
+  label,
+  desc,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  desc: string;
+  value?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg px-1 py-2.5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-500">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[12.5px] font-semibold text-slate-900">{label}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">{desc}</p>
+      </div>
+      {value && <span className="text-[12.5px] font-medium text-slate-700">{value}</span>}
+    </div>
+  );
+}
+
+function Radio({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={cn(
+        "mt-0.5 grid h-4.5 w-4.5 shrink-0 place-items-center rounded-full border-2",
+        checked ? "border-brand-600" : "border-slate-300"
+      )}
+      style={{ height: 18, width: 18 }}
+    >
+      {checked && <span className="h-2 w-2 rounded-full bg-brand-600" />}
     </span>
   );
 }
 
-const PROVIDER_LABELS: Record<string, string> = {
-  pipeline: "方案 B · Qwen2.5 流式管线",
-  "bayling-duplex": "方案 A · BayLing 原生全双工",
-  personaplex: "方案 A · PersonaPlex",
-  moshi: "方案 A · Moshi",
-  mock: "Mock（开发）"
-};
+/* ------------------------------------------------------------------ 编辑配置 */
 
-const BACKEND_LABELS: Record<ModelBackendKind, string> = {
-  ollama: "Ollama",
-  lmstudio: "LM Studio",
-  custom: "自定义端点"
-};
-
-const BACKEND_HINTS: Record<ModelBackendKind, string> = {
-  ollama: "本地下载器 + 自选目录（OLLAMA_MODELS）",
-  lmstudio: "连接 LM Studio 本地服务器（:1234）",
-  custom: "任意 OpenAI 兼容端点（vLLM / llama.cpp / Jan）"
-};
-
-function backendState(backend: ModelBackendState): { label: string; tone: Tone } {
-  const notRunningLabel = backend.backend === "ollama" ? "未安装" : "未连接";
-  switch (backend.status) {
-    case "running":
-      return { label: backend.backend === "ollama" ? "运行中" : "已连接", tone: "running" };
-    case "installed_not_running":
-      return { label: "未启动", tone: "available" };
-    case "not_installed":
-      return { label: notRunningLabel, tone: "idle" };
-    default:
-      return { label: "检测中", tone: "idle" };
-  }
-}
-
-function formatGB(value: number): string {
-  return `${value.toFixed(value < 10 ? 1 : 0)} GB`;
-}
-
-export function ModelCenterPage() {
-  const m = modelCenterData;
-  const convo = useConversation();
-  const model = useModelCenter();
-  const snap = model.snapshot;
-  const backend = snap.backend;
-  const [tab, setTab] = useState(0);
-
-  const backendInfo = backendState(backend);
-
-  const brainState: { state: string; tone: Tone } = !convo.available
-    ? { state: "未连接", tone: "idle" }
-    : convo.snapshot.providerConnected && convo.snapshot.usingRealInference
-      ? { state: "运行中", tone: "running" }
-      : convo.snapshot.providerConnected
-        ? { state: "离线回退", tone: "available" }
-        : { state: "未连接", tone: "idle" };
-
-  const brainModelLabel = snap.activeBrainModel
-    ? snap.activeBrainModel
-    : PROVIDER_LABELS[convo.snapshot.activeProviderKind] ?? "未选择";
-
-  const overview: { label: string; state: string; tone: Tone }[] = [
-    { label: "Execution Brain", state: brainState.state, tone: brainState.tone },
-    { label: "Record Notebook", state: backend.status === "running" ? "可用" : "待就绪", tone: backend.status === "running" ? "available" : "idle" },
-    { label: "Safety Engine", state: "始终开启", tone: "always" }
-  ];
-
-  return (
-    <div className="flex gap-6 px-8 py-7">
-      <div className="min-w-0 flex-1">
-        <header className="mb-5 flex items-start justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-[24px] font-bold text-slate-900">
-              {m.title}
-              <CubeIcon className="text-brand-500" />
-            </h1>
-            <p className="mt-1.5 text-[13.5px] text-slate-500">{m.subtitle}</p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-slate-500">
-            <span className={`h-1.5 w-1.5 rounded-full ${backendInfo.tone === "running" ? "bg-brand-500" : "bg-slate-300"}`} />
-            {BACKEND_LABELS[snap.activeBackend]} {backendInfo.label}
-          </span>
-        </header>
-
-        <BackendSelector snap={snap} model={model} />
-
-        <BackendBanner backend={backend} model={model} />
-
-        {/* tabs */}
-        <div className="mb-5 flex items-center justify-between border-b border-slate-200">
-          <div className="flex gap-6">
-            {m.tabs.map((label, i) => (
-              <button
-                key={label}
-                onClick={() => setTab(i)}
-                className={`-mb-px border-b-2 pb-2.5 text-[13.5px] font-medium ${
-                  i === tab
-                    ? "border-brand-500 text-slate-900"
-                    : "border-transparent text-slate-400 hover:text-slate-600"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => void model.openInstallGuide()}
-            className="inline-flex items-center gap-1 pb-2 text-[12.5px] text-slate-500 hover:text-slate-700"
-          >
-            模型使用指南 <ArrowRight width={13} height={13} />
-          </button>
-        </div>
-
-        {tab === 0 && (
-          <ConfigTab
-            brain={{ state: brainState.state, tone: brainState.tone, model: brainModelLabel }}
-            onTestBrain={() => void convo.checkHealth()}
-            onConfigure={() => setTab(1)}
-            onLogs={() => setTab(2)}
-            catalog={snap.catalog}
-            activePull={snap.activePull}
-            busy={model.busy}
-            onPull={(id) => void model.pull(id)}
-            onUse={(id) => void model.useAsBrain(id)}
-            footerNote={m.footerNote}
-            showCatalog={backend.supportsPull}
-            backendLabel={BACKEND_LABELS[snap.activeBackend]}
-          />
-        )}
-
-        {tab === 1 && (
-          <DownloadTab
-            backend={backend}
-            catalog={snap.catalog}
-            activePull={snap.activePull}
-            busy={model.busy}
-            customEndpoint={snap.customEndpoint}
-            onPull={(id) => void model.pull(id)}
-            onCancel={() => void model.cancelPull()}
-            onRemove={(id) => void model.removeModel(id)}
-            onUse={(id) => void model.useAsBrain(id)}
-            onInstall={() => void model.openInstallGuide()}
-            onSaveCustomEndpoint={(cfg) => void model.setCustomEndpoint(cfg)}
-          />
-        )}
-
-        {tab === 2 && <LogsTab model={model} />}
-      </div>
-
-      {/* right rail */}
-      <aside className="w-[300px] shrink-0 space-y-4">
-        <section className={`${panel} p-4`}>
-          <p className="mb-3 text-[13px] font-semibold text-slate-800">模型状态总览</p>
-          <div className="space-y-2.5">
-            {overview.map((o) => {
-              const Icon =
-                roleIcon[o.label === "Execution Brain" ? "brain" : o.label === "Record Notebook" ? "notebook" : "safety"];
-              return (
-                <div key={o.label} className="flex items-center gap-2">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-400/15 text-brand-600">
-                    <Icon width={15} height={15} />
-                  </span>
-                  <span className="text-[12.5px] text-slate-600">{o.label}</span>
-                  <span className="ml-auto">
-                    <StateDot tone={o.tone} label={o.state} />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <StoragePanel model={model} />
-
-        <section className={`${panel} p-4`}>
-          <p className="mb-3 text-[13px] font-semibold text-slate-800">快速操作</p>
-          <div className="space-y-1">
-            <QuickAction
-              icon={RefreshIcon}
-              title="检查模型状态"
-              desc="重新检测全部后端与已安装模型"
-              onClick={() => void model.refreshBackend()}
-            />
-            <QuickAction
-              icon={ImportIcon}
-              title={
-                snap.activeBackend === "ollama"
-                  ? "安装 / 更新 Ollama"
-                  : snap.activeBackend === "lmstudio"
-                    ? "LM Studio 使用指南"
-                    : "OpenAI 兼容端点文档"
-              }
-              desc={
-                snap.activeBackend === "ollama"
-                  ? "自动检测并静默安装到指定目录"
-                  : snap.activeBackend === "lmstudio"
-                    ? "如何开启本地服务器"
-                    : "自定义端点接入说明"
-              }
-              onClick={() =>
-                snap.activeBackend === "ollama"
-                  ? void model.installOllama()
-                  : void model.openInstallGuide()
-              }
-            />
-            <QuickAction
-              icon={CompatIcon}
-              title="设备兼容性检测"
-              desc="探测 GPU / 显存 / 内存 / 磁盘"
-              onClick={() => void model.probe()}
-            />
-          </div>
-        </section>
-
-        <section className={`${panel} bg-slate-50/60 p-4`}>
-          <div className="mb-1.5 flex items-center gap-2">
-            <HelpIcon width={16} height={16} className="text-brand-600" />
-            <span className="text-[13px] font-semibold text-slate-800">了解更多</span>
-          </div>
-          <p className="text-[12.5px] font-medium text-slate-600">如何选择合适的模型？</p>
-          <p className="mt-1 text-[11.5px] text-slate-400">
-            {snap.environment?.recommendationReason ?? "不同模型在能力、性能和资源占用上有所不同。"}
-          </p>
-          <button
-            onClick={() => void model.openInstallGuide()}
-            className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand-600"
-          >
-            了解更多选择建议 <ArrowRight width={13} height={13} />
-          </button>
-        </section>
-      </aside>
-    </div>
-  );
-}
-
-function BackendBanner({ backend, model }: { backend: ModelBackendState; model: ReturnType<typeof useModelCenter> }) {
-  const env = model.snapshot.environment;
-  const running = backend.status === "running";
-  const notInstalled = backend.status === "not_installed";
-  return (
-    <div
-      className={`mb-5 rounded-2xl border p-4 ${
-        running ? "border-brand-200 bg-brand-400/5" : notInstalled ? "border-amber-200 bg-amber-50/60" : "border-slate-200 bg-slate-50/70"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-slate-800">{backend.message}</p>
-          <p className="mt-1 text-[11.5px] text-slate-500">
-            {env
-              ? `${env.platform} · ${env.cpuCores} 核 · 内存 ${formatGB(env.totalRamGB)}${
-                  env.gpus.length ? ` · GPU ${env.gpus[0].name}（${formatGB(env.gpus[0].vramTotalMB / 1024)}）` : " · 未检测到独显"
-                }`
-              : "正在探测本机环境…"}
-          </p>
-          {env && !env.canRunRealModel ? (
-            <p className="mt-1 text-[11.5px] text-amber-600">{env.recommendationReason}</p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            onClick={() => void model.refreshBackend()}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50"
-          >
-            重新检测
-          </button>
-        </div>
-      </div>
-
-      {notInstalled && backend.backend === "ollama" ? <OllamaInstallPanel model={model} /> : null}
-    </div>
-  );
-}
-
-function OllamaInstallPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  const install = model.snapshot.ollamaInstall;
-  const installing = install.phase === "installing";
-  return (
-    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-      <p className="text-[12.5px] font-medium text-slate-700">一键准备 Ollama</p>
-      <p className="mt-0.5 text-[11.5px] text-slate-400">
-        {!install.supported
-          ? "当前系统暂不支持代管安装，请前往官网手动安装。"
-          : install.installerFound
-            ? `已找到安装器：${install.installerPath}。点击安装并选择目标盘（如 D:\\Ollama），本 App 会静默安装。`
-            : "未在下载目录找到 OllamaSetup.exe。可手动指定安装器，或前往官网下载后再来安装。"}
-      </p>
-      {install.message && (install.phase === "installing" || install.phase === "error") ? (
-        <p className={`mt-1.5 text-[11.5px] ${install.phase === "error" ? "text-rose-600" : "text-slate-500"}`}>
-          {install.message}
-        </p>
-      ) : null}
-      <div className="mt-2.5 flex flex-wrap gap-2">
-        <button
-          disabled={!install.supported || installing}
-          onClick={() => void model.installOllama()}
-          className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-brand-600 disabled:opacity-40"
-        >
-          {installing ? "安装中…" : "选择目录并安装"}
-        </button>
-        <button
-          disabled={installing}
-          onClick={() => void model.locateOllamaInstaller()}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-        >
-          指定安装器
-        </button>
-        <button
-          onClick={() => void model.openInstallGuide()}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50"
-        >
-          官网下载
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function BackendSelector({
-  snap,
-  model
+function EditConfigView({
+  templateId,
+  device,
+  onBack
 }: {
-  snap: ReturnType<typeof useModelCenter>["snapshot"];
-  model: ReturnType<typeof useModelCenter>;
+  templateId: string;
+  device: DeviceProfile;
+  onBack: () => void;
 }) {
-  const kinds: ModelBackendKind[] = ["ollama", "lmstudio", "custom"];
+  const template = templateById(templateId);
+  const presetName = template.name.replace(/^推荐\s*·\s*/, "");
+  const [mode, setMode] = useState<"pipeline" | "duplex">("pipeline");
+
+  // 每个角色的候选列表都由同一解析引擎按设备排序 + 标注（手动选取出口）。
+  const sttOptions = useMemo(() => toSelectOptions(rankSlot("hearing", modelCatalog, template, device)), [template, device]);
+  const brainOptions = useMemo(() => toSelectOptions(rankSlot("thinking", modelCatalog, template, device)), [template, device]);
+  const notebookOptions = brainOptions;
+  const ttsOptions = useMemo(() => toSelectOptions(rankSlot("speaking", modelCatalog, template, device)), [template, device]);
+
+  const [stt, setStt] = useState(sttOptions[0]?.name ?? "");
+  const [brain, setBrain] = useState(brainOptions[0]?.name ?? "");
+  const [notebook, setNotebook] = useState(brainOptions[1]?.name ?? brainOptions[0]?.name ?? "");
+  const [tts, setTts] = useState(ttsOptions[0]?.name ?? "");
+
+  const findOption = (options: SelectOption[], name: string) => options.find((o) => o.name === name);
+
   return (
-    <div className="mb-4">
-      <p className="mb-2 text-[12px] font-medium text-slate-500">运行后端（选择模型来源，只需保持一个引擎在跑）</p>
-      <div className="grid grid-cols-3 gap-2">
-        {kinds.map((kind) => {
-          const state = snap.backends.find((b) => b.backend === kind);
-          const info = state ? backendState(state) : { label: "检测中", tone: "idle" as Tone };
-          const active = snap.activeBackend === kind;
-          return (
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+          <div className="flex items-center gap-3">
             <button
-              key={kind}
-              onClick={() => void model.setBackend(kind)}
-              className={`rounded-xl border p-3 text-left transition ${
-                active ? "border-brand-400 bg-brand-400/5" : "border-slate-200 bg-white hover:bg-slate-50"
-              }`}
+              onClick={onBack}
+              className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-slate-800">{BACKEND_LABELS[kind]}</span>
-                <StateDot tone={info.tone} label={info.label} />
-              </div>
-              <p className="mt-1 text-[11px] leading-snug text-slate-400">{BACKEND_HINTS[kind]}</p>
+              <ArrowLeft width={18} />
             </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function CustomEndpointForm({
-  customEndpoint,
-  onSave
-}: {
-  customEndpoint: { baseUrl: string; model: string };
-  onSave: (cfg: { baseUrl: string; model: string }) => void;
-}) {
-  const [baseUrl, setBaseUrl] = useState(customEndpoint.baseUrl);
-  const [modelName, setModelName] = useState(customEndpoint.model);
-  useEffect(() => {
-    setBaseUrl(customEndpoint.baseUrl);
-    setModelName(customEndpoint.model);
-  }, [customEndpoint.baseUrl, customEndpoint.model]);
-  return (
-    <section className={`${panel} p-4`}>
-      <p className="mb-1 text-[13px] font-semibold text-slate-800">自定义 OpenAI 兼容端点</p>
-      <p className="mb-3 text-[11.5px] text-slate-400">
-        填入本地/自建服务地址（会自动补 /v1）与模型名，连接后可在下方设为执行大脑。
-      </p>
-      <div className="space-y-2">
-        <input
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          placeholder="http://127.0.0.1:8000/v1"
-          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700 outline-none focus:border-brand-400"
-        />
-        <input
-          value={modelName}
-          onChange={(e) => setModelName(e.target.value)}
-          placeholder="模型名，例如 qwen2.5-7b-instruct"
-          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700 outline-none focus:border-brand-400"
-        />
-        <button
-          onClick={() => onSave({ baseUrl, model: modelName })}
-          className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-brand-600"
-        >
-          连接并检测
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function ConfigTab({
-  brain,
-  onTestBrain,
-  onConfigure,
-  onLogs,
-  catalog,
-  activePull,
-  busy,
-  onPull,
-  onUse,
-  footerNote,
-  showCatalog,
-  backendLabel
-}: {
-  brain: { state: string; tone: Tone; model: string };
-  onTestBrain: () => void;
-  onConfigure: () => void;
-  onLogs: () => void;
-  catalog: ModelCatalogItem[];
-  activePull: ModelPullProgress | null;
-  busy: boolean;
-  onPull: (id: string) => void;
-  onUse: (id: string) => void;
-  footerNote: string;
-  showCatalog: boolean;
-  backendLabel: string;
-}) {
-  return (
-    <>
-      <h2 className="mb-3 text-[14px] font-semibold text-slate-800">核心角色模型</h2>
-      <div className="space-y-3">
-        <RoleCard
-          role="brain"
-          title="Execution Brain"
-          desc="负责实时对话、理解目标、提出动作并执行任务。"
-          tag="对话与执行"
-          modelLabel={brain.model}
-          state={brain.state}
-          tone={brain.tone}
-          stripText={brain.tone === "running" ? "已连接真实本地推理端点" : "尚未连接真实推理端点（离线回退语气）"}
-          onConfigure={onConfigure}
-          onTest={onTestBrain}
-          onMore={onLogs}
-        />
-        <RoleCard
-          role="notebook"
-          title="Record Notebook"
-          desc="负责记录 Session、生成摘要、沉淀工作流与知识。"
-          tag="记录与沉淀"
-          modelLabel="规则 JSONL + 本地轻量模型"
-          state="可用"
-          tone="available"
-          stripText="记录引擎维护 Session chunks 与安全留痕"
-          onConfigure={onConfigure}
-          onMore={onLogs}
-        />
-        <RoleCard
-          role="safety"
-          title="Safety Engine"
-          desc="本地安全引擎，实时拦截高风险操作，保护你的设备安全。"
-          tag="安全防护"
-          modelLabel="本地安全引擎（规则锁定）"
-          state="始终开启"
-          tone="always"
-          stripText="硬抢占关键词已锁定：停 / 暂停 / 取消 / 退回"
-          locked
-        />
-      </div>
-
-      {showCatalog ? (
-        <>
-          <h2 className="mb-3 mt-7 text-[14px] font-semibold text-slate-800">模型推荐</h2>
-          <div className="grid grid-cols-3 gap-3">
-            {catalog.map((item) => (
-              <RecommendItem
-                key={item.id}
-                item={item}
-                progress={activePull && activePull.model === item.id ? activePull : null}
-                busy={busy}
-                onPull={() => onPull(item.id)}
-                onUse={() => onUse(item.id)}
-              />
-            ))}
+            <h1 className="text-[20px] font-bold tracking-tight text-slate-900">编辑配置</h1>
           </div>
-          <p className="mt-4 text-[12px] text-slate-400">{footerNote}</p>
-        </>
-      ) : (
-        <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[12.5px] text-slate-600">
-          {backendLabel} 的模型由其自身管理，本 App 不在此下载。请在「下载管理」标签查看已加载的模型并「设为大脑」。
-        </div>
-      )}
-    </>
-  );
-}
 
-function DownloadTab({
-  backend,
-  catalog,
-  activePull,
-  busy,
-  customEndpoint,
-  onPull,
-  onCancel,
-  onRemove,
-  onUse,
-  onInstall,
-  onSaveCustomEndpoint
-}: {
-  backend: ModelBackendState;
-  catalog: ModelCatalogItem[];
-  activePull: ModelPullProgress | null;
-  busy: boolean;
-  customEndpoint: { baseUrl: string; model: string };
-  onPull: (id: string) => void;
-  onCancel: () => void;
-  onRemove: (id: string) => void;
-  onUse: (id: string) => void;
-  onInstall: () => void;
-  onSaveCustomEndpoint: (cfg: { baseUrl: string; model: string }) => void;
-}) {
-  const downloading = activePull && (activePull.phase === "downloading" || activePull.phase === "resolving" || activePull.phase === "verifying");
-  const supportsPull = backend.supportsPull;
-  const installedLabel = supportsPull ? "已安装模型" : "已加载 / 可用模型";
-  return (
-    <div className="space-y-4">
-      {backend.backend === "custom" ? (
-        <CustomEndpointForm customEndpoint={customEndpoint} onSave={onSaveCustomEndpoint} />
-      ) : null}
-
-      {backend.status !== "running" && supportsPull ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-[12.5px] text-amber-700">
-          Ollama 未运行，无法下载模型。请先在右侧「安装 / 更新 Ollama」，或选择模型下载目录后由本 App 自动启动。
-          <button onClick={onInstall} className="ml-2 font-medium underline">
-            前往安装
-          </button>
-        </div>
-      ) : null}
-
-      {backend.status !== "running" && backend.backend === "lmstudio" ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-[12.5px] text-amber-700">
-          未连接到 LM Studio 本地服务器（默认 127.0.0.1:1234）。请在 LM Studio 中启动本地服务器并加载模型。
-          <button onClick={onInstall} className="ml-2 font-medium underline">
-            查看指南
-          </button>
-        </div>
-      ) : null}
-
-      {activePull ? (
-        <section className={`${panel} p-4`}>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-slate-800">下载进度 · {activePull.model}</span>
-            {downloading ? (
-              <button onClick={onCancel} className="text-[12px] text-slate-500 hover:text-rose-600">
-                取消
-              </button>
-            ) : null}
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-            <span
-              className={`block h-full rounded-full ${activePull.phase === "error" ? "bg-rose-500" : "bg-brand-500"}`}
-              style={{ width: `${activePull.percent}%` }}
-            />
-          </div>
-          <p className="mt-2 text-[11.5px] text-slate-500">
-            {activePull.phase === "error"
-              ? `下载失败：${activePull.message ?? activePull.status}`
-              : activePull.phase === "success"
-                ? "下载完成，可设为执行大脑。"
-                : activePull.phase === "cancelled"
-                  ? "已取消下载。"
-                  : `${activePull.status} · ${activePull.percent}%（${formatGB(activePull.completedBytes / 1024 ** 3)} / ${formatGB(activePull.totalBytes / 1024 ** 3)}）`}
-          </p>
-        </section>
-      ) : null}
-
-      <section className={`${panel} p-4`}>
-        <p className="mb-3 text-[13px] font-semibold text-slate-800">
-          {installedLabel}（{backend.installedModels.length}）
-        </p>
-        {backend.installedModels.length === 0 ? (
-          <p className="text-[12px] text-slate-400">
-            {supportsPull
-              ? "暂无已下载模型，从下方目录选择模型开始下载。"
-              : "未发现可用模型。请在该后端中加载 / 启动一个模型后点击「重新检测」。"}
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {backend.installedModels.map((installed) => (
-              <div key={installed.name} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
-                <span className="text-[12.5px] text-slate-700">{installed.name}</span>
-                <div className="flex items-center gap-3">
-                  {installed.sizeBytes > 0 ? (
-                    <span className="text-[11.5px] text-slate-400">{formatGB(installed.sizeBytes / 1024 ** 3)}</span>
-                  ) : null}
-                  <button onClick={() => onUse(installed.name)} className="text-[12px] font-medium text-brand-600 hover:text-brand-700">
-                    设为大脑
-                  </button>
-                  {supportsPull ? (
-                    <button onClick={() => onRemove(installed.name)} className="text-[12px] text-slate-400 hover:text-rose-600">
-                      删除
-                    </button>
-                  ) : null}
+          {/* 头部信息 */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center gap-4">
+              <span className="grid h-14 w-14 place-items-center rounded-full border border-slate-200 text-slate-400">
+                <NotebookIcon width={24} />
+              </span>
+              <div>
+                <p className="text-[11.5px] text-slate-400">正在编辑（已创建个人副本）</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <h2 className="text-[19px] font-bold text-slate-900">{presetName}（我的副本）</h2>
+                  <PencilIcon width={15} className="text-slate-400" />
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {supportsPull ? (
-      <section className={`${panel} p-4`}>
-        <p className="mb-3 text-[13px] font-semibold text-slate-800">可下载模型</p>
-        <div className="space-y-2">
-          {catalog.map((item) => (
-            <div key={item.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium text-slate-800">{item.displayName}</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] text-slate-500">{item.id}</span>
-                  {item.recommended ? <span className="rounded bg-brand-400/20 px-1.5 py-0.5 text-[10.5px] text-brand-700">推荐</span> : null}
-                </div>
-                <p className="mt-0.5 text-[11.5px] text-slate-400">
-                  约 {item.approxSizeGB} GB · 建议 {item.recommendedRamGB}GB+ 内存
+                <p className="mt-1 text-[11.5px] text-slate-500">
+                  基于官方推荐配置「{presetName}」创建的个人副本
                 </p>
               </div>
-              {item.installed ? (
-                <button onClick={() => onUse(item.id)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50">
-                  {item.active ? "使用中" : "设为大脑"}
-                </button>
-              ) : (
-                <button
-                  disabled={busy || !!downloading}
-                  onClick={() => onPull(item.id)}
-                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-brand-600 disabled:opacity-40"
-                >
-                  下载
-                </button>
-              )}
             </div>
-          ))}
+            <div className="flex items-center gap-5">
+              <div className="space-y-1.5 text-[11.5px] text-slate-500">
+                <p className="flex items-center gap-1.5">
+                  <CheckIcon width={14} className="text-brand-600" /> 官方推荐配置的个人副本
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <CheckIcon width={14} className="text-brand-600" /> 原始配置保持不变
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onBack}>
+                <RefreshIcon width={14} /> 重置为推荐配置
+              </Button>
+            </div>
+          </div>
+
+          {/* 处理方式 */}
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-[14px] font-semibold text-slate-900">处理方式</h3>
+                <p className="mt-0.5 text-[12px] text-slate-500">选择助手处理请求的整体方式</p>
+              </div>
+              <InfoIcon className="text-slate-300" />
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <ModeCard
+                selected={mode === "pipeline"}
+                onClick={() => setMode("pipeline")}
+                title="分步处理（听 → 想 → 说）"
+                desc="依次使用听觉模型、思考模型、发声模型，适合复杂任务与高质量回复"
+              />
+              <ModeCard
+                selected={mode === "duplex"}
+                onClick={() => setMode("duplex")}
+                title="端到端处理（一步到位）"
+                desc="单一模型直接处理全部流程，适合快速响应与简单场景"
+              />
+            </div>
+          </div>
+
+          {/* 听 / 想 / 说 */}
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <CapabilityCard icon={<EarIcon width={20} />} title="听（Hearing）" subtitle="将语音转换为文本">
+              <ModelSelect label="听觉模型" options={sttOptions} value={stt} onChange={setStt} />
+              <StatusLine option={findOption(sttOptions, stt)} />
+              <AutoPrepareNote />
+            </CapabilityCard>
+
+            <CapabilityCard
+              icon={<BrainIcon width={20} />}
+              title="想（Thinking）"
+              subtitle="由两个协同大脑共同思考与记录"
+              info
+            >
+              <ModelSelect
+                label="执行大脑（Execution Brain）"
+                labelDesc="负责规划、推理与执行任务"
+                options={brainOptions}
+                value={brain}
+                onChange={setBrain}
+              />
+              <StatusLine option={findOption(brainOptions, brain)} />
+              <div className="my-4 h-px bg-slate-100" />
+              <ModelSelect
+                label="记录笔记本（Record Notebook）"
+                labelDesc="负责记忆、整理与检索信息"
+                options={notebookOptions}
+                value={notebook}
+                onChange={setNotebook}
+              />
+              <StatusLine option={findOption(notebookOptions, notebook)} />
+              <AutoPrepareNote />
+            </CapabilityCard>
+
+            <CapabilityCard icon={<SpeakerIcon width={20} />} title="说（Speaking）" subtitle="将文本转换为语音">
+              <ModelSelect label="发声模型" options={ttsOptions} value={tts} onChange={setTts} />
+              <StatusLine option={findOption(ttsOptions, tts)} />
+              <AutoPrepareNote />
+            </CapabilityCard>
+          </div>
+
+          {/* 底部操作 */}
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-5">
+            <p className="flex items-center gap-2 text-[12px] text-slate-500">
+              <span className="text-brand-600">
+                <CheckIcon width={15} />
+              </span>
+              所有更改将保存到你的个人配置，不会影响原始推荐配置
+            </p>
+            <div className="flex items-center gap-2.5">
+              <Button variant="secondary" size="sm" className="h-9 px-5" animated={false} onClick={onBack}>
+                取消
+              </Button>
+              <Button variant="primary" size="sm" className="h-9 px-6" animated={false} onClick={onBack}>
+                保存并应用
+              </Button>
+            </div>
+          </div>
         </div>
-      </section>
-      ) : null}
+      </div>
     </div>
   );
 }
 
-function LogsTab({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  const snap = model.snapshot;
-  const env = snap.environment;
-  const backend = snap.backend;
-  const rows: { label: string; value: string }[] = [
-    { label: "激活后端", value: BACKEND_LABELS[snap.activeBackend] },
-    { label: "后端状态", value: backend.message },
-    { label: "端点", value: backend.endpoint },
-    { label: "OpenAI 兼容端点", value: backend.openaiEndpoint || "（未配置）" }
-  ];
-  if (backend.backend === "ollama") {
-    rows.push(
-      { label: "模型目录", value: backend.modelsDir ?? "（跟随已运行的 Ollama 默认目录）" },
-      { label: "进程管理", value: backend.managedByApp ? "由本 App 启动（OLLAMA_MODELS 生效）" : "外部/默认" }
-    );
-  }
-  rows.push(
-    { label: "活动 Provider", value: PROVIDER_LABELS[snap.activeProviderKind] ?? snap.activeProviderKind },
-    { label: "真实推理", value: snap.providerConnected && snap.usingRealInference ? "是（已验证连接）" : "否（离线回退，未验证连接）" }
-  );
-  if (env) {
-    rows.push(
-      { label: "平台", value: `${env.platform} / ${env.arch} · ${env.cpuCores} 核` },
-      { label: "内存", value: `${formatGB(env.totalRamGB)}（空闲 ${formatGB(env.freeRamGB)}）` },
-      { label: "GPU", value: env.gpus.length ? env.gpus.map((g) => `${g.name}（${formatGB(g.vramTotalMB / 1024)}）`).join("；") : "未检测到" },
-      { label: "磁盘", value: env.disk ? `${env.disk.path} 空闲 ${formatGB(env.disk.freeGB)} / ${formatGB(env.disk.totalGB)}` : "未知" }
-    );
-  }
-  if (snap.activePull) {
-    rows.push({ label: "最近下载", value: `${snap.activePull.model} · ${snap.activePull.status} · ${snap.activePull.percent}%` });
-  }
-  return (
-    <section className={`${panel} p-4`}>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-[13px] font-semibold text-slate-800">运行日志与环境</p>
-        <button onClick={() => void model.probe()} className="text-[12px] text-brand-600 hover:text-brand-700">
-          重新探测
-        </button>
-      </div>
-      <div className="space-y-1.5">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-start justify-between gap-4 border-b border-slate-50 py-1.5 text-[12px] last:border-0">
-            <span className="shrink-0 text-slate-400">{row.label}</span>
-            <span className="text-right text-slate-700">{row.value}</span>
-          </div>
-        ))}
-      </div>
-      {snap.storageWarnings.length ? (
-        <div className="mt-3 rounded-lg bg-amber-50 p-2.5 text-[11.5px] text-amber-700">
-          {snap.storageWarnings.map((warning) => (
-            <p key={warning}>· {warning}</p>
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function StoragePanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  const { storage, environment } = model.snapshot;
-  const disk = environment?.disk ?? null;
-  const usedPct = disk && disk.totalGB > 0 ? Math.round(((disk.totalGB - disk.freeGB) / disk.totalGB) * 100) : 0;
-  return (
-    <section className={`${panel} p-4`}>
-      <p className="mb-1.5 text-[13px] font-semibold text-slate-800">模型存储位置</p>
-      <p className="mb-3 text-[11.5px] text-slate-400">为模型文件选择合适的存储位置（通过 OLLAMA_MODELS 生效），避免占用系统盘空间。</p>
-      <button
-        onClick={() => void model.chooseStorageRoot()}
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[12.5px] text-slate-700 hover:bg-slate-100"
-      >
-        <span className="truncate">{storage.rootDir || "点击选择模型下载目录"}</span>
-        <ChevronRight width={14} height={14} className="shrink-0 text-slate-400" />
-      </button>
-      {storage.rootDir ? (
-        <button
-          onClick={() => void model.openStorageLocation()}
-          className="mt-2 text-[11.5px] text-brand-600 hover:text-brand-700"
-        >
-          打开目录
-        </button>
-      ) : null}
-      {disk ? (
-        <>
-          <div className="mt-3 flex items-center justify-between text-[11.5px] text-slate-500">
-            <span>磁盘可用</span>
-            <span>
-              {formatGB(disk.freeGB)} / {formatGB(disk.totalGB)}
-            </span>
-          </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-            <span className="block h-full rounded-full bg-brand-500" style={{ width: `${usedPct}%` }} />
-          </div>
-        </>
-      ) : null}
-    </section>
-  );
-}
-
-function QuickAction({
-  icon: Icon,
+function ModeCard({
+  selected,
+  onClick,
   title,
-  desc,
-  onClick
+  desc
 }: {
-  icon: (props: { width?: number; height?: number; className?: string }) => JSX.Element;
+  selected: boolean;
+  onClick: () => void;
   title: string;
   desc: string;
-  onClick: () => void;
 }) {
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-50">
-      <Icon width={17} height={17} className="text-slate-500" />
-      <span className="leading-tight">
-        <span className="block text-[12.5px] font-medium text-slate-700">{title}</span>
-        <span className="block text-[11px] text-slate-400">{desc}</span>
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-start gap-3 rounded-xl border px-4 py-4 text-left transition-all",
+        selected ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200" : "border-slate-200 hover:border-slate-300"
+      )}
+    >
+      <Radio checked={selected} />
+      <span>
+        <b className="block text-[13.5px] font-semibold text-slate-900">{title}</b>
+        <span className="mt-1 block text-[11.5px] leading-relaxed text-slate-500">{desc}</span>
       </span>
     </button>
   );
 }
 
-function RoleCard({
-  role,
+function CapabilityCard({
+  icon,
   title,
-  desc,
-  tag,
-  modelLabel,
-  state,
-  tone,
-  stripText,
-  locked,
-  onConfigure,
-  onTest,
-  onMore
+  subtitle,
+  info = false,
+  children
 }: {
-  role: "brain" | "notebook" | "safety";
+  icon: ReactNode;
   title: string;
-  desc: string;
-  tag: string;
-  modelLabel: string;
-  state: string;
-  tone: Tone;
-  stripText: string;
-  locked?: boolean;
-  onConfigure?: () => void;
-  onTest?: () => void;
-  onMore?: () => void;
+  subtitle: string;
+  info?: boolean;
+  children: ReactNode;
 }) {
-  const Icon = roleIcon[role];
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white">
-      <div className="flex items-center gap-4 p-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-400/15 text-brand-600">
-          <Icon width={22} height={22} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[14px] font-semibold text-slate-900">{title}</span>
-            <StateDot tone={tone} label={state} />
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="text-slate-500">{icon}</span>
+          <div>
+            <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
+            <p className="mt-0.5 text-[11.5px] text-slate-500">{subtitle}</p>
           </div>
-          <p className="mt-0.5 text-[12px] text-slate-500">{desc}</p>
-          <span className="mt-1.5 inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">{tag}</span>
         </div>
-        <div className="max-w-[220px] text-right">
-          <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-            <span className="truncate">{modelLabel}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2 pl-2">
-          {locked ? (
-            <button className="rounded-lg bg-slate-100 px-3 py-1.5 text-[12.5px] text-slate-400">已锁定</button>
-          ) : (
-            <>
-              <button
-                onClick={onConfigure}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50"
-              >
-                配置
-              </button>
-              {onTest ? (
-                <button
-                  onClick={onTest}
-                  className="rounded-lg bg-brand-400/20 px-3 py-1.5 text-[12.5px] font-medium text-brand-700 hover:bg-brand-400/30"
-                >
-                  测试
-                </button>
-              ) : null}
-            </>
-          )}
-          {onMore ? (
-            <button onClick={onMore} className="text-slate-400 hover:text-slate-600">
-              <DotsIcon />
-            </button>
-          ) : null}
-        </div>
+        {info && <InfoIcon className="text-slate-300" />}
       </div>
-      <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-4 py-2.5">
-        <span className="inline-flex items-center gap-2 text-[12px] text-slate-500">
-          <CheckIcon width={14} height={14} className="text-brand-600" />
-          {stripText}
-        </span>
-      </div>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
 
-function RecommendItem({
-  item,
-  progress,
-  busy,
-  onPull,
-  onUse
+function ModelSelect({
+  label,
+  labelDesc,
+  options,
+  value,
+  onChange
 }: {
-  item: ModelCatalogItem;
-  progress: ModelPullProgress | null;
-  busy: boolean;
-  onPull: () => void;
-  onUse: () => void;
+  label: string;
+  labelDesc?: string;
+  options: SelectOption[];
+  value: string;
+  onChange: (v: string) => void;
 }) {
-  const downloading = progress && (progress.phase === "downloading" || progress.phase === "resolving" || progress.phase === "verifying");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.name === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   return (
-    <div className={`rounded-2xl border bg-white p-4 ${item.active ? "border-brand-400" : "border-slate-200"}`}>
-      <div className="mb-2 flex items-center justify-between">
-        <span
-          className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-            item.badge === "推荐" ? "bg-brand-400/20 text-brand-700" : "bg-slate-100 text-slate-500"
-          }`}
+    <div>
+      <p className="text-[12.5px] font-medium text-slate-700">{label}</p>
+      {labelDesc && <p className="mt-0.5 text-[11px] text-slate-400">{labelDesc}</p>}
+      <div ref={ref} className="relative mt-2">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-slate-300"
         >
-          {item.badge}
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-[11.5px] text-slate-500">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-          {item.feature}
-        </span>
-      </div>
-      <p className="text-[14px] font-semibold text-slate-900">{item.displayName}</p>
-      <p className="mt-1 text-[11.5px] leading-relaxed text-slate-500">{item.description}</p>
-      <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[11.5px] text-slate-400">
-          <GearIcon width={13} height={13} />
-          {item.approxSizeGB} GB · 建议 {item.recommendedRamGB}GB+
-        </div>
-        {downloading ? (
-          <span className="text-[12px] font-medium text-brand-600">{progress!.percent}%</span>
-        ) : item.active ? (
-          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-600">
-            <CheckIcon width={13} height={13} /> 使用中
+          <span className={cn("h-2 w-2 rounded-full", TONE_DOT[current?.tone ?? "ok"])} />
+          <span className="text-[12.5px] font-medium text-slate-800">{current?.name ?? "无可用模型"}</span>
+          <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+            {current?.tag}
           </span>
-        ) : item.installed ? (
-          <button onClick={onUse} className="rounded-lg border border-brand-200 px-3 py-1 text-[12px] font-medium text-brand-600 hover:bg-brand-400/10">
-            设为大脑
-          </button>
-        ) : (
-          <button
-            disabled={busy}
-            onClick={onPull}
-            className="rounded-lg border border-slate-200 px-3 py-1 text-[12px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-          >
-            下载
-          </button>
+          <ChevronDown width={16} className={cn("ml-auto text-slate-400 transition-transform", open && "rotate-180")} />
+        </button>
+        {open && (
+          <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+            {options.map((o) => (
+              <button
+                key={o.name}
+                onClick={() => {
+                  onChange(o.name);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-slate-50",
+                  o.name === value && "bg-brand-50/50"
+                )}
+              >
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", TONE_DOT[o.tone ?? "ok"])} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[12.5px] text-slate-800">{o.name}</span>
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{o.tag}</span>
+                  </span>
+                  {o.note && <span className={cn("mt-0.5 block text-[10.5px]", TONE_TEXT[o.tone ?? "ok"])}>{o.note}</span>}
+                </span>
+                {o.name === value && <CheckIcon width={14} className="ml-auto shrink-0 text-brand-600" />}
+              </button>
+            ))}
+          </div>
         )}
       </div>
-      {downloading ? (
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <span className="block h-full rounded-full bg-brand-500" style={{ width: `${progress!.percent}%` }} />
+    </div>
+  );
+}
+
+function StatusLine({ option }: { option?: SelectOption }) {
+  const tone = option?.tone ?? "ok";
+  return (
+    <div className="mt-3">
+      <p className="text-[11px] text-slate-400">状态</p>
+      <p className={cn("mt-1 flex items-center gap-1.5 text-[12px] font-medium", TONE_TEXT[tone])}>
+        <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {option?.note ?? "已就绪"}
+      </p>
+    </div>
+  );
+}
+
+function AutoPrepareNote() {
+  return (
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-3">
+      <span className="mt-0.5 text-brand-600">
+        <SparkIcon width={16} />
+      </span>
+      <span>
+        <b className="block text-[11.5px] font-medium text-slate-700">如未安装，将在需要时自动准备</b>
+        <span className="mt-0.5 block text-[10.5px] text-slate-400">无需手动下载或管理存储空间</span>
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ 模型库 */
+
+type ModelStatus =
+  | { kind: "ready" }
+  | { kind: "downloading"; progress: number }
+  | { kind: "update"; from: string; to: string }
+  | { kind: "missing" };
+
+interface LibModel {
+  name: string;
+  size: string;
+  version: string;
+  status: ModelStatus;
+  usedBy: string;
+}
+
+interface LibGroup {
+  id: string;
+  title: string;
+  models: LibModel[];
+}
+
+const libGroups: LibGroup[] = [
+  {
+    id: "stt",
+    title: "负责听 · 语音识别",
+    models: [
+      { name: "Whisper Large v3", size: "1.55 GB", version: "3.2.1", status: { kind: "ready" }, usedBy: "默认助手, 客服助手" },
+      { name: "Paraformer SenseTime", size: "420 MB", version: "2.1.0", status: { kind: "downloading", progress: 68 }, usedBy: "会议助手" },
+      { name: "FunASR Paraformer v2", size: "312 MB", version: "1.0.6", status: { kind: "update", from: "1.0.6", to: "1.1.0" }, usedBy: "智能家居助手" },
+      { name: "Vosk Small CN", size: "48 MB", version: "0.3.45", status: { kind: "missing" }, usedBy: "–" }
+    ]
+  },
+  {
+    id: "llm",
+    title: "负责想 · 语言模型",
+    models: [
+      { name: "Qwen2.5-7B-Instruct", size: "4.68 GB", version: "1.2.0", status: { kind: "ready" }, usedBy: "默认助手, 编程助手" },
+      { name: "ChatGLM3-6B", size: "3.62 GB", version: "1.0.4", status: { kind: "downloading", progress: 35 }, usedBy: "学术助手" },
+      { name: "Llama-3.1-8B-Instruct", size: "4.92 GB", version: "1.0.1", status: { kind: "update", from: "1.0.1", to: "1.1.0" }, usedBy: "创作助手" }
+    ]
+  },
+  {
+    id: "tts",
+    title: "负责说 · 语音合成",
+    models: [
+      { name: "CosyVoice 2", size: "1.6 GB", version: "2.0.1", status: { kind: "ready" }, usedBy: "默认助手" },
+      { name: "Edge TTS", size: "0.6 GB", version: "1.4.0", status: { kind: "ready" }, usedBy: "客服助手" },
+      { name: "Fish Speech 1.4", size: "2.5 GB", version: "1.4.0", status: { kind: "missing" }, usedBy: "–" }
+    ]
+  }
+];
+
+type LibFilter = "all" | "installed" | "downloadable" | "update";
+
+const filters: { id: LibFilter; label: string }[] = [
+  { id: "all", label: "全部" },
+  { id: "installed", label: "已安装" },
+  { id: "downloadable", label: "可下载" },
+  { id: "update", label: "有更新" }
+];
+
+function matchesFilter(status: ModelStatus, filter: LibFilter): boolean {
+  switch (filter) {
+    case "installed":
+      return status.kind === "ready" || status.kind === "update";
+    case "downloadable":
+      return status.kind === "missing";
+    case "update":
+      return status.kind === "update";
+    default:
+      return true;
+  }
+}
+
+function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const [filter, setFilter] = useState<LibFilter>("all");
+  const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ tts: true });
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return libGroups
+      .map((g) => ({
+        ...g,
+        models: g.models.filter((m) => matchesFilter(m.status, filter) && (q === "" || m.name.toLowerCase().includes(q)))
+      }))
+      .filter((g) => g.models.length > 0);
+  }, [filter, query]);
+
+  const rootDir = model.snapshot.storage.rootDir || "D:\\AI\\VoiceAssistant\\Models";
+
+  return (
+    <div className="space-y-5">
+      {/* 顶部：存储 + 筛选 */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,400px)_1fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h3 className="text-[13px] font-semibold text-slate-900">存储空间</h3>
+          <div className="mt-3 flex items-center gap-4">
+            <StorageRing percent={62} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] text-slate-600">
+                已使用 <b className="text-slate-900">198.7 GB</b>
+                <span className="text-slate-400"> / 共 320 GB</span>
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: "62%" }} />
+              </div>
+              <div className="mt-3 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-slate-400">存储位置</p>
+                  <p className="truncate text-[11.5px] text-slate-600">{rootDir}</p>
+                </div>
+                <button
+                  onClick={() => void model.chooseStorageRoot()}
+                  className="shrink-0 text-[11.5px] font-medium text-brand-700 hover:underline"
+                >
+                  更改位置
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      ) : null}
+
+        <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+          <div className="flex items-center gap-1.5">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                  filter === f.id
+                    ? "border-brand-400 bg-brand-50/50 text-brand-700"
+                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5">
+            <SearchIcon className="text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索模型名称"
+              className="w-40 bg-transparent text-[12px] text-slate-700 outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <button className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-300">
+            <SlidersIcon width={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* 分组表格 */}
+      <div className="space-y-4">
+        {groups.map((g) => {
+          const isCollapsed = collapsed[g.id];
+          return (
+            <div key={g.id} className="rounded-2xl border border-slate-200 bg-white">
+              <button
+                onClick={() => setCollapsed((c) => ({ ...c, [g.id]: !c[g.id] }))}
+                className="flex w-full items-center gap-2 px-5 py-4 text-left"
+              >
+                <ChevronDown
+                  width={16}
+                  className={cn("text-slate-400 transition-transform", isCollapsed && "-rotate-90")}
+                />
+                <h3 className="text-[13.5px] font-semibold text-slate-900">{g.title}</h3>
+                <span className="text-[13px] text-slate-400">({g.models.length})</span>
+              </button>
+
+              {!isCollapsed && (
+                <div className="px-5 pb-4">
+                  <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_1.3fr_1.4fr_auto] items-center gap-4 border-b border-slate-100 pb-2 text-[11px] font-medium text-slate-400">
+                    <span>模型名称</span>
+                    <span>大小</span>
+                    <span>版本</span>
+                    <span className="flex items-center gap-1">状态 <InfoIcon width={13} className="text-slate-300" /></span>
+                    <span className="flex items-center gap-1">被使用于 <InfoIcon width={13} className="text-slate-300" /></span>
+                    <span className="text-right">操作</span>
+                  </div>
+                  {g.models.map((m) => (
+                    <LibRow key={m.name} m={m} model={model} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="flex items-center gap-2 pt-1 text-[11.5px] text-slate-400">
+        <InfoIcon width={14} /> 模型被使用时无法卸载。请先在配置中移除引用后再操作。
+      </p>
+    </div>
+  );
+}
+
+function LibRow({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
+  return (
+    <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_1.3fr_1.4fr_auto] items-center gap-4 border-b border-slate-50 py-3.5 last:border-b-0">
+      <span className="text-[12.5px] font-medium text-slate-800">{m.name}</span>
+      <span className="text-[12px] text-slate-500">{m.size}</span>
+      <span className="text-[12px] text-slate-500">{m.version}</span>
+      <StatusCell status={m.status} />
+      <span className="truncate text-[12px] text-slate-500">{m.usedBy}</span>
+      <div className="flex items-center justify-end gap-2">
+        <RowAction m={m} model={model} />
+        <button className="text-slate-300 hover:text-slate-500">
+          <DotsIcon width={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatusCell({ status }: { status: ModelStatus }) {
+  switch (status.kind) {
+    case "ready":
+      return (
+        <span className="flex items-center gap-1.5 text-[12px] text-slate-600">
+          <span className="h-2 w-2 rounded-full bg-brand-500" /> 已就绪
+        </span>
+      );
+    case "downloading":
+      return (
+        <div className="pr-4">
+          <p className="text-[11.5px] text-slate-600">下载中 {status.progress}%</p>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-brand-500" style={{ width: `${status.progress}%` }} />
+          </div>
+        </div>
+      );
+    case "update":
+      return (
+        <span className="text-[12px]">
+          <span className="flex items-center gap-1.5 font-medium text-sky-600">
+            <RefreshIcon width={13} /> 有更新
+          </span>
+          <span className="mt-0.5 block text-[10.5px] text-slate-400">
+            {status.from} → {status.to}
+          </span>
+        </span>
+      );
+    case "missing":
+      return (
+        <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
+          <span className="h-2 w-2 rounded-full border border-slate-300" /> 未下载
+        </span>
+      );
+  }
+}
+
+function RowAction({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
+  switch (m.status.kind) {
+    case "ready":
+      return (
+        <button
+          onClick={() => void model.removeModel(m.name)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+        >
+          卸载
+        </button>
+      );
+    case "downloading":
+      return (
+        <button
+          onClick={() => void model.cancelPull()}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+        >
+          暂停
+        </button>
+      );
+    case "update":
+      return (
+        <button
+          onClick={() => void model.pull(m.name)}
+          className="rounded-lg border border-brand-400 px-3 py-1.5 text-[11.5px] font-medium text-brand-700 hover:bg-brand-50"
+        >
+          更新
+        </button>
+      );
+    case "missing":
+      return (
+        <button
+          onClick={() => void model.pull(m.name)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+        >
+          下载
+        </button>
+      );
+  }
+}
+
+function StorageRing({ percent }: { percent: number }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - percent / 100);
+  return (
+    <div className="relative grid h-[76px] w-[76px] shrink-0 place-items-center">
+      <svg width="76" height="76" viewBox="0 0 76 76" className="-rotate-90">
+        <circle cx="38" cy="38" r={r} fill="none" stroke="#e2e8f0" strokeWidth="7" />
+        <circle
+          cx="38"
+          cy="38"
+          r={r}
+          fill="none"
+          stroke="#a3d100"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="absolute text-[14px] font-bold text-slate-700">{percent}%</span>
     </div>
   );
 }

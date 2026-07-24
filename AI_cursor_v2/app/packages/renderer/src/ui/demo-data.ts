@@ -259,11 +259,11 @@ export const modelCenterData = {
 };
 
 export const navItems = [
-  { id: "dashboard", label: "工作台", icon: "home", badge: null },
-  { id: "task", label: "任务空间", icon: "monitor", badge: "Demo" },
+  { id: "dashboard", label: "首页 / 工作台", icon: "home", badge: null },
   { id: "workflows", label: "工作流", icon: "workflow", badge: null },
   { id: "sessions", label: "Session 记录", icon: "list", badge: null },
-  { id: "models", label: "模型中心", icon: "nodes", badge: null },
-  { id: "devices", label: "设备", icon: "headphones", badge: null },
+  { id: "task", label: "知识库", icon: "grid", badge: "Demo" },
+  { id: "devices", label: "集成中心", icon: "nodes", badge: "Demo" },
+  { id: "models", label: "模型中心", icon: "headphones", badge: null },
   { id: "settings", label: "设置", icon: "settings", badge: null }
 ] as const;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DemoBadge, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { HeadphonesIcon, MicIcon, MonitorIcon, ShieldIcon } from "../icons.js";
+import { Button, Card } from "../../design-system/index.js";
 
 const options = [
   {
@@ -38,7 +39,7 @@ export function ConversationEntryPage({ onContinue }: { onContinue: () => void }
         action={<DemoBadge dark />}
       />
       <div className="mx-auto grid max-w-[1120px] grid-cols-[1fr_340px] gap-5">
-        <section className="rounded-[22px] border border-ink-700 bg-ink-850/80 p-5">
+        <Card variant="default" padding="lg" className="border-ink-700 bg-ink-850/80">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-[15px] font-semibold text-white">对话方式</h2>
@@ -54,14 +55,14 @@ export function ConversationEntryPage({ onContinue }: { onContinue: () => void }
                 <button
                   key={option.id}
                   onClick={() => setSelected(option.id)}
-                  className={`flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-colors ${
+                  className={`flex w-full items-center gap-4 rounded-2xl border p-4 text-left shadow-sm transition-all ${
                     active
-                      ? "border-brand-400 bg-brand-400/8"
-                      : "border-ink-700 bg-ink-900/60 hover:border-ink-600"
+                      ? "border-brand-400 bg-brand-400/8 shadow-[0_0_0_2px_rgba(163,209,0,0.15)]"
+                      : "border-ink-700 bg-ink-900/60 hover:border-ink-600 hover:bg-ink-900/80"
                   }`}
                 >
                   <span
-                    className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${
+                    className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl shadow-sm ${
                       active ? "bg-brand-400 text-ink-900" : "bg-ink-700 text-slate-400"
                     }`}
                   >
@@ -73,43 +74,48 @@ export function ConversationEntryPage({ onContinue }: { onContinue: () => void }
                     <span className="mt-2 block text-[11px] text-slate-400">{option.device}</span>
                   </span>
                   <span
-                    className={`h-4 w-4 rounded-full border-2 ${
-                      active ? "border-brand-400 bg-brand-400 shadow-[inset_0_0_0_3px_#141916]" : "border-ink-600"
+                    className={`h-4 w-4 rounded-full border-2 transition-all ${
+                      active
+                        ? "border-brand-400 bg-brand-400 shadow-[inset_0_0_0_3px_#141916,0_0_8px_rgba(163,209,0,0.3)]"
+                        : "border-ink-600"
                     }`}
                   />
                 </button>
               );
             })}
           </div>
-          <button
+          <Button
+            variant="primary"
+            size="lg"
             onClick={onContinue}
-            className="mt-5 w-full rounded-xl bg-brand-400 py-3 text-[13px] font-semibold text-ink-900 hover:bg-brand-300"
+            animated
+            className="mt-5 w-full bg-gradient-to-r from-brand-400 to-brand-500 text-ink-900 hover:from-brand-500 hover:to-brand-600"
           >
             进入任务空间预览
-          </button>
-        </section>
+          </Button>
+        </Card>
 
         <aside className="space-y-4">
-          <section className="rounded-[22px] border border-ink-700 bg-ink-850/80 p-5">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-400/12 text-brand-400">
+          <Card variant="default" padding="lg" className="border-ink-700 bg-ink-850/80">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-400/12 text-brand-400 shadow-sm">
               <ShieldIcon width={20} height={20} />
             </span>
             <h2 className="mt-4 text-[14px] font-semibold text-white">本地控制始终优先</h2>
             <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
               暂停、取消、停止和接管不会被设计成 Provider 侧动作。真实 Runtime 接入后，这些控制仍需通过本地安全通道生效。
             </p>
-          </section>
-          <section className="rounded-[22px] border border-ink-700 bg-ink-850/80 p-5">
+          </Card>
+          <Card variant="default" padding="lg" className="border-ink-700 bg-ink-850/80">
             <h2 className="text-[14px] font-semibold text-white">开始前检查</h2>
             <div className="mt-3 space-y-2">
               {["麦克风权限", "输出设备", "本地停止通道", "Session 存储"].map((item) => (
-                <div key={item} className="flex items-center justify-between rounded-xl bg-ink-900 px-3 py-2.5">
+                <div key={item} className="flex items-center justify-between rounded-xl bg-ink-900 px-3 py-2.5 shadow-sm">
                   <span className="text-[12px] text-slate-300">{item}</span>
                   <ToneBadge dark tone="neutral">待接入</ToneBadge>
                 </div>
               ))}
             </div>
-          </section>
+          </Card>
         </aside>
       </div>
     </div>

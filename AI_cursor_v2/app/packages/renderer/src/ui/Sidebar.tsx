@@ -1,7 +1,6 @@
 import { BrandLogo } from "./Brand.js";
 import {
   ChevronDown,
-  CloseIcon,
   GridIcon,
   HeadphonesIcon,
   HomeIcon,
@@ -40,19 +39,16 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800";
   const active = dark
     ? "bg-ink-800 text-white"
-    : "bg-brand-400/15 text-brand-700";
+    : "bg-[linear-gradient(90deg,rgba(234,247,192,.78),rgba(245,251,227,.55))] text-brand-700 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:rounded-full before:bg-brand-600";
   const footerText = dark ? "text-slate-600" : "text-slate-400";
 
   return (
-    <aside className={`flex h-full w-[248px] shrink-0 flex-col border-r ${shell}`}>
-      <div className="flex items-center justify-between px-5 pb-5 pt-6">
+    <aside className={`flex h-full w-[216px] shrink-0 flex-col border-r ${shell}`}>
+      <div className="flex items-center px-6 pb-7 pt-7">
         <BrandLogo theme={theme} />
-        <button className={`grid h-7 w-7 place-items-center rounded-lg ${idle}`} aria-label="collapse">
-          <CloseIcon width={16} height={16} />
-        </button>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+      <nav className="flex flex-1 flex-col gap-1.5 px-4">
         {navItems.map((item) => {
           const Icon = iconMap[item.icon as keyof typeof iconMap];
           const isActive = activeNav === item.id;
@@ -60,7 +56,7 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13.5px] font-medium transition-colors ${
+              className={`relative flex h-10 items-center gap-3 rounded-md px-3.5 text-[12.5px] font-medium outline-none transition-[background-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 ${
                 isActive ? active : idle
               }`}
             >
@@ -71,26 +67,26 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
                   {item.badge}
                 </span>
               )}
-              {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400" />}
+
             </button>
           );
         })}
       </nav>
 
-      <div className="px-3 pb-3">
+      <div className="px-4 pb-4">
         <button
-          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 ${
+          className={`flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2.5 text-left outline-none transition hover:border-slate-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 ${
             dark ? "bg-ink-800/80" : "bg-slate-100"
           }`}
         >
           <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-400 text-[12px] font-bold text-ink-900">
-            J
+            Lin
           </span>
           <span className="flex flex-col items-start leading-tight">
             <span className={`text-[13px] font-semibold ${dark ? "text-white" : "text-slate-800"}`}>
-              Jacob
+              Lin
             </span>
-            <span className="text-[11px] text-brand-500">本地工作区</span>
+            <span className="text-[11px] text-slate-400">Pro Plan</span>
           </span>
           <ChevronDown className={`ml-auto ${dark ? "text-slate-500" : "text-slate-400"}`} />
         </button>

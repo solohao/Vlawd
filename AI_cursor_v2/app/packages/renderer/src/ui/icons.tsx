@@ -265,3 +265,73 @@ export const MinimizeIcon = (p: IconProps) => (
     <path d="M5 12h14" />
   </svg>
 );
+
+export const DownloadIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3v12M8 11l4 4 4-4" />
+    <path d="M3 17v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
+  </svg>
+);
+
+export const EarIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M6 8.5a6 6 0 0 1 12 0c0 3-2.2 4-3.4 5.2-1 1-1.1 2-1.1 3a2.5 2.5 0 0 1-5 0" />
+    <path d="M9 8.5a3 3 0 0 1 6 0" />
+  </svg>
+);
+
+export const SpeakerIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9v6h4l5 4V5L8 9z" />
+    <path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8 8 0 0 1 0 12" />
+  </svg>
+);
+
+export const PencilIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+  </svg>
+);
+
+export const SlidersIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M18 18h2" />
+    <circle cx="15" cy="6" r="2" />
+    <circle cx="9" cy="12" r="2" />
+    <circle cx="15" cy="18" r="2" />
+  </svg>
+);
+
+export const LockIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="5" y="11" width="14" height="9" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </svg>
+);
+
+export const BoltIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+  </svg>
+);
+
+export const InfoIcon = (p: IconProps) => (
+  <svg {...base({ width: 15, height: 15, ...p })}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </svg>
+);
+
+export const ArrowLeft = (p: IconProps) => (
+  <svg {...base({ width: 18, height: 18, ...p })}>
+    <path d="M19 12H5M11 18l-6-6 6-6" />
+  </svg>
+);
+
+export const SearchIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.2-3.2" />
+  </svg>
+);
