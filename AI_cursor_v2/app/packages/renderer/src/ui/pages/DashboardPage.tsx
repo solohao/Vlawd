@@ -1,23 +1,23 @@
-import type { ReactNode } from "react";
-import { AiEmployeeMascot } from "../Brand.js";
+import { useEffect, type ReactNode } from "react";
 import { useConversation } from "../../runtime/useConversation.js";
-import { useModelCenter } from "../../runtime/useModelCenter.js";
 import {
-  ArrowRight,
-  BrainIcon,
+  BoltIcon,
   CheckIcon,
-  FileIcon,
+  ChevronDown,
+  ChevronRight,
+  DocIcon,
   GearIcon,
   GridIcon,
-  HeadphonesIcon,
+  HelpIcon,
+  LockIcon,
   MicIcon,
   MonitorIcon,
-  ShieldIcon,
-  SparkIcon,
-  SunIcon
+  PencilIcon,
+  RefreshIcon,
+  SearchIcon,
+  ShieldIcon
 } from "../icons.js";
-import { Button, Card, StatusDot, Badge, cn } from "../../design-system/index.js";
-import { motion } from "framer-motion";
+import { cn } from "../../design-system/index.js";
 
 interface DashboardPageProps {
   onStartTask: () => void;
@@ -27,517 +27,315 @@ interface DashboardPageProps {
 
 export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: DashboardPageProps) {
   const convo = useConversation();
-  const model = useModelCenter();
 
   const startVoice = () => {
     void convo.toggleMic();
+    onStartTask();
   };
 
-  const engineLabel = "Bose QC Ultra";
-  const localInference = model.snapshot.backend.status === "running";
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (e.code === "Space" && !typing) {
+        e.preventDefault();
+        startVoice();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div className="flex h-screen gap-0 overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/30">
-      {/* 主内容区 */}
-      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
-        {/* 顶部问候和状态 */}
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[26px] font-bold text-slate-950">下午好，Lin</h1>
-            <SunIcon width={24} className="text-amber-500" />
-          </div>
-          <div className="flex items-center gap-4">
-            <StatusBadge
-              icon={<ShieldIcon width={16} />}
-              label="安全防护"
-              value="已激活"
-              status="active"
-              detail="本地全面防护，高风险需确认"
-            />
-            <StatusBadge
-              icon={<MonitorIcon width={16} />}
-              label="服务提供者"
-              value="就绪"
-              status="ready"
-              detail="AI 员工已启动，随时执行"
-            />
-            <StatusBadge
-              icon={<HeadphonesIcon width={16} />}
-              label="当前语音引擎"
-              value={engineLabel}
-              status="active"
-              detail="本地运行 • 完全离线"
-              highlight
-            />
-          </div>
-        </header>
-
-        <p className="text-[13px] text-slate-600">
-          请尽可能直接 AI 员工，随时待命，按你指令去执行任务。
-        </p>
-
-        {/* 主语音交互区 */}
-        <Card variant="default" padding="none" className="relative overflow-hidden bg-gradient-to-br from-brand-50/60 via-white to-white">
-          {/* 装饰背景 */}
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute left-[10%] top-[45%] h-32 w-32 rounded-full bg-brand-400/10 blur-3xl" />
-            <div className="absolute right-[15%] top-[35%] h-40 w-40 rounded-full bg-brand-300/8 blur-3xl" />
-            <svg className="absolute left-0 right-0 top-1/2 -translate-y-1/2" width="100%" height="120" viewBox="0 0 1200 120" preserveAspectRatio="none">
-              <path d="M0,60 Q300,20 600,60 T1200,60" fill="none" stroke="rgba(163,209,0,0.08)" strokeWidth="2" strokeDasharray="8,8" />
-              <path d="M0,60 Q300,100 600,60 T1200,60" fill="none" stroke="rgba(163,209,0,0.08)" strokeWidth="2" strokeDasharray="8,8" />
-            </svg>
-          </div>
-
-          {/* 内容 */}
-          <div className="relative z-10 flex flex-col items-center py-10">
-            <AiEmployeeMascot size={110} />
-            <h2 className="mt-4 text-[24px] font-bold text-slate-950">只需开口说出你的目标</h2>
-            <p className="mt-2.5 max-w-md text-center text-[13px] leading-relaxed text-slate-600">
-              我会理解你的目标，规划并执行，完成后为你汇报结果。
-            </p>
-
-            <Button
-              variant="voice"
-              size="xl"
-              onClick={() => void startVoice()}
-              disabled={!convo.micSupported && convo.available}
-              animated
-              className="mt-6 w-full max-w-[480px] gap-4"
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+          {/* 顶部状态条 */}
+          <div className="flex justify-end gap-2.5">
+            <span className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600">
+              <span className="h-2 w-2 rounded-full bg-brand-500" />
+              本地运行中
+              <ChevronDown width={14} className="text-slate-400" />
+            </span>
+            <span className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600">
+              <ShieldIcon width={15} className="text-slate-500" /> 隐私保护
+            </span>
+            <button
+              onClick={onOpenModels}
+              className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-slate-300"
             >
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-600 text-white shadow-[0_0_0_8px_rgba(163,209,0,0.12)]">
-                <MicIcon width={22} />
-              </span>
-              <span className="flex flex-col items-start">
-                <span className="text-[15px] font-semibold text-slate-950">开始语音对话</span>
-                <span className="text-[11px] text-slate-500">点击说话，或按 Space 开始</span>
-              </span>
-            </Button>
-
-            <p className={cn("mt-3.5 flex items-center gap-2.5 text-[11px]", convo.micActive ? "text-brand-700" : "text-slate-400")}>
-              <StatusDot active={convo.micActive} pulse={convo.micActive} />
-              {convo.micActive ? "语音连接已建立 · 全双工进行中" : "语音连接已建立 · 全双工进行中"}
-            </p>
+              <GearIcon width={16} />
+            </button>
           </div>
-        </Card>
 
-        {/* 当前任务 */}
-        <CurrentTaskPanel />
+          {/* 问候 */}
+          <div className="mt-4">
+            <h1 className="text-[26px] font-bold tracking-tight text-slate-900">上午好，张明</h1>
+            <p className="mt-1.5 text-[13px] text-slate-500">随时为您待命，您说目标，我来完成。</p>
+          </div>
 
-        {/* 快速开始 */}
-        <QuickActionsPanel onStartTask={onStartTask} onOpenModels={onOpenModels} />
+          {/* 语音区 + 助手状态 */}
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
+            <section className="flex items-center gap-8 rounded-2xl border border-slate-200 bg-white px-8 py-9">
+              <button
+                onClick={startVoice}
+                className="relative grid h-[136px] w-[136px] shrink-0 place-items-center"
+              >
+                <span className="absolute inset-0 rounded-full border border-dashed border-brand-300/70" />
+                <span className="absolute inset-3 rounded-full border border-dashed border-brand-200/60" />
+                <span className="grid h-[92px] w-[92px] place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-transform hover:scale-105">
+                  <MicIcon width={30} className="text-slate-700" />
+                </span>
+              </button>
+              <div className="min-w-0">
+                <h2 className="text-[22px] font-bold text-slate-900">请说出您的目标</h2>
+                <p className="mt-2 text-[13px] text-slate-500">例时：帮我整理上周会议纪要并生成报告</p>
+                <div className="mt-4 flex flex-wrap gap-2.5">
+                  <Chip icon={<MicIcon width={13} />} label="语音输入为主" />
+                  <Chip icon={<BoltIcon width={13} />} label="自动规划与执行" />
+                  <Chip icon={<CheckIcon width={13} />} label="完成后汇报结果" />
+                </div>
+              </div>
+            </section>
 
-        {/* 最近会话 */}
-        <RecentSessionsPanel onOpenSessions={onOpenSessions} />
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[14px] font-semibold text-slate-900">助手状态</h3>
+                <span className="flex items-center gap-1.5 text-[12px] font-medium text-brand-700">
+                  <span className="h-2 w-2 rounded-full bg-brand-500" /> 随时待命
+                </span>
+              </div>
+              <div className="mt-4 space-y-3">
+                <StatusRow icon={<MonitorIcon width={15} />} label="运行环境" value="本地运行" />
+                <StatusRow icon={<LockIcon width={15} />} label="数据隐私" value="完全本地存储" />
+                <StatusRow icon={<CheckIcon width={15} />} label="响应状态" value="随时可用" />
+                <StatusRow icon={<RefreshIcon width={15} />} label="上次活跃" value="2 分钟前" />
+              </div>
+              <button
+                onClick={onOpenModels}
+                className="mt-5 w-full rounded-xl border border-slate-200 py-2.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+              >
+                查看安全与隐私
+              </button>
+            </section>
+          </div>
+
+          {/* 常用操作 */}
+          <div className="mt-7 flex items-center justify-between">
+            <h3 className="text-[14px] font-semibold text-slate-900">常用操作</h3>
+            <button className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-600">
+              更多 <ChevronRight width={14} />
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3.5 sm:grid-cols-3 xl:grid-cols-5">
+            <ActionCard icon={<DocIcon width={18} />} title="整理会议纪要" desc="提炼要点并生成报告" onClick={onStartTask} />
+            <ActionCard icon={<GridIcon width={18} />} title="数据分析" desc="分析数据并生成图表" onClick={onStartTask} />
+            <ActionCard icon={<SearchIcon width={18} />} title="信息调研" desc="搜索并总结关键信息" onClick={onStartTask} />
+            <ActionCard icon={<PencilIcon width={18} />} title="内容撰写" desc="撰写文档与方案" onClick={onStartTask} />
+            <ActionCard icon={<CheckIcon width={18} />} title="待办管理" desc="整理并跟进待办事项" onClick={onStartTask} />
+          </div>
+
+          {/* 当前任务 + 最近使用 */}
+          <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
+            <CurrentTaskPanel />
+            <RecentUsePanel onOpenSessions={onOpenSessions} />
+          </div>
+        </div>
       </div>
 
-      {/* 右侧边栏 */}
-      <aside className="w-[340px] shrink-0 space-y-4 overflow-y-auto border-l border-slate-200/60 bg-white/40 px-5 py-5 backdrop-blur-sm">
-        <VoiceSettingsPanel engine={engineLabel} local={localInference} onOpenModels={onOpenModels} />
-        <SafetyPanel />
-        <ExecutionBrainPanel model={model} />
-        <RecordNotebookPanel />
-        <AuditTrailPanel count={128} />
-      </aside>
+      {/* 底部语音提示 */}
+      <div className="relative flex shrink-0 items-center justify-center border-t border-slate-200/70 bg-white/70 py-3.5 text-[12px] text-slate-500 backdrop-blur">
+        按住
+        <kbd className="mx-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          Space
+        </kbd>
+        开始语音输入
+        <button className="absolute right-6 grid h-8 w-8 place-items-center rounded-full text-slate-300 hover:text-slate-500">
+          <HelpIcon width={18} />
+        </button>
+      </div>
     </div>
   );
 }
 
-function StatusBadge({
+function Chip({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11.5px] text-slate-600">
+      <span className="text-slate-400">{icon}</span>
+      {label}
+    </span>
+  );
+}
+
+function StatusRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-[12.5px]">
+      <span className="flex items-center gap-2 text-slate-500">
+        <span className="text-slate-400">{icon}</span>
+        {label}
+      </span>
+      <span className="font-medium text-slate-800">{value}</span>
+    </div>
+  );
+}
+
+function ActionCard({
   icon,
-  label,
-  value,
-  status,
-  detail,
-  highlight = false
+  title,
+  desc,
+  onClick
 }: {
   icon: ReactNode;
-  label: string;
-  value: string;
-  status: "ready" | "active";
-  detail: string;
-  highlight?: boolean;
+  title: string;
+  desc: string;
+  onClick: () => void;
 }) {
   return (
-    <div className={cn(
-      "flex items-center gap-3 rounded-xl border px-4 py-2.5",
-      highlight ? "border-brand-300 bg-brand-50/60" : "border-slate-200 bg-white"
-    )}>
-      <span className={cn(
-        "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
-        status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-brand-50 text-brand-700"
-      )}>
-        {icon}
+    <button
+      onClick={onClick}
+      className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-slate-300 hover:shadow-[0_2px_12px_rgba(15,23,42,0.05)]"
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600">{icon}</span>
+      <span className="min-w-0">
+        <b className="block text-[12.5px] font-semibold text-slate-900">{title}</b>
+        <span className="mt-0.5 block text-[11px] text-slate-500">{desc}</span>
       </span>
-      <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-0.5 text-[13px] font-semibold text-slate-950">{value}</p>
-        <p className="mt-0.5 text-[10px] text-slate-600">{detail}</p>
-      </div>
-    </div>
+    </button>
   );
 }
 
 function CurrentTaskPanel() {
   const steps = [
-    { label: "提炼目标", desc: "分析用户意图" },
-    { label: "规划步骤", desc: "策划执行计划" },
-    { label: "执行中", desc: "正在执行任务" },
-    { label: "等待确认", desc: "需要用户确认" },
-    { label: "已送达", desc: "完成并归档" }
+    { icon: <MicIcon width={18} />, label: "理解目标", desc: "语义理解与目标拆解", state: "done" as const },
+    { icon: <GridIcon width={18} />, label: "执行中", desc: "正在处理相关资料", state: "current" as const },
+    { icon: <CheckIcon width={18} />, label: "即将完成", desc: "生成报告并汇报结果", state: "todo" as const }
   ];
-  const currentStep = 2;
+  const plan = [
+    { label: "收集上周所有会议记录", state: "done" as const, time: "已完成 09:12" },
+    { label: "提炼关键信息与行动项", state: "current" as const, time: "进行中" },
+    { label: "生成结构化报告", state: "todo" as const, time: "待执行" },
+    { label: "汇总并准备汇报", state: "todo" as const, time: "待执行" }
+  ];
 
   return (
-    <Card variant="default" padding="lg">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-700">
-            <CheckIcon width={16} />
-          </span>
-          <div>
-            <h3 className="text-[14px] font-semibold text-slate-950">当前任务</h3>
-            <p className="text-[11px] text-slate-600">整理会议记录并生成行动项</p>
-          </div>
-        </div>
-        <Button variant="brandGhost" size="sm">
-          查看任务详情 →
-        </Button>
-      </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <p className="text-[12px] text-slate-400">当前任务</p>
+      <h3 className="mt-1 text-[15px] font-semibold text-slate-900">整理上周会议纪要并生成报告</h3>
 
-      <div className="flex items-center gap-3">
-        {steps.map((step, index) => (
-          <div key={step.label} className="flex flex-1 flex-col items-center">
-            <div className="flex w-full items-center">
-              <div className="flex flex-col items-center gap-2">
-                <span
-                  className={cn(
-                    "grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold transition-all",
-                    index < currentStep
-                      ? "bg-brand-600 text-white shadow-sm"
-                      : index === currentStep
-                        ? "border-2 border-brand-600 bg-white text-brand-600 ring-4 ring-brand-100"
-                        : "border-2 border-slate-200 bg-white text-slate-400"
-                  )}
-                >
-                  {index < currentStep ? <CheckIcon width={14} /> : index + 1}
-                </span>
-                <div className="text-center">
-                  <p className={cn("text-[11px] font-medium", index <= currentStep ? "text-slate-900" : "text-slate-400")}>
-                    {step.label}
-                  </p>
-                  <p className="text-[9px] text-slate-500">{step.desc}</p>
-                </div>
-              </div>
-              {index < steps.length - 1 && (
-                <div className="mx-2 h-[2px] flex-1 rounded-full bg-slate-200">
-                  <div
-                    className="h-full rounded-full bg-brand-600 transition-all duration-500"
-                    style={{ width: index < currentStep ? "100%" : "0%" }}
-                  />
-                </div>
-              )}
+      <div className="mt-5 flex items-center">
+        {steps.map((s, i) => (
+          <div key={s.label} className="flex flex-1 items-center last:flex-none">
+            <div className="flex flex-col items-center text-center">
+              <span
+                className={cn(
+                  "grid h-11 w-11 place-items-center rounded-full",
+                  s.state === "done"
+                    ? "bg-brand-50 text-brand-600"
+                    : s.state === "current"
+                      ? "border-2 border-brand-500 bg-white text-brand-600"
+                      : "border border-slate-200 bg-white text-slate-300"
+                )}
+              >
+                {s.icon}
+              </span>
+              <p className={cn("mt-2 text-[12px] font-medium", s.state === "todo" ? "text-slate-400" : "text-slate-800")}>
+                {s.label}
+              </p>
+              <p className="mt-0.5 text-[10.5px] text-slate-400">{s.desc}</p>
             </div>
+            {i < steps.length - 1 && <div className="mx-3 h-px flex-1 bg-slate-200" />}
           </div>
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-brand-200 bg-brand-50/40 px-4 py-2.5">
-          <p className="text-[10px] text-slate-600">本地系统</p>
-          <p className="mt-1 text-[13px] font-semibold text-slate-950">开启</p>
+      <div className="mt-5">
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <span />
+          <span>65%</span>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-          <p className="text-[10px] text-slate-600">提供配置</p>
-          <p className="mt-1 text-[13px] font-semibold text-slate-950">AI 正在配置中...</p>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-brand-500" style={{ width: "65%" }} />
         </div>
       </div>
-    </Card>
-  );
-}
 
-function QuickActionsPanel({ onStartTask, onOpenModels }: { onStartTask: () => void; onOpenModels: () => void }) {
-  const actions = [
-    { Icon: SparkIcon, title: "开始新任务", desc: "语音或文字执行", action: onStartTask },
-    { Icon: FileIcon, title: "导入任务", desc: "从文件或剪贴板", action: () => {} },
-    { Icon: GridIcon, title: "新建工作流", desc: "定制你的流程", action: () => {} },
-    { Icon: MicIcon, title: "语音设置", desc: "管理语音和精度", action: onOpenModels },
-    { Icon: GridIcon, title: "查看知识库", desc: "访问本地知识", action: () => {} }
-  ];
-
-  return (
-    <Card variant="default" padding="lg">
-      <h3 className="mb-3 text-[13px] font-semibold text-slate-950">快速开始</h3>
-      <div className="grid grid-cols-5 gap-3">
-        {actions.map(({ Icon, title, desc, action }) => (
-          <Card
-            key={title}
-            variant="default"
-            padding="md"
-            hoverable
-            animated
-            onClick={action}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2.5 py-4 text-center"
-          >
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700">
-              <Icon width={20} />
-            </span>
-            <span>
-              <span className="block text-[11.5px] font-semibold text-slate-950">{title}</span>
-              <span className="mt-0.5 block text-[9.5px] text-slate-500">{desc}</span>
-            </span>
-          </Card>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function RecentSessionsPanel({ onOpenSessions }: { onOpenSessions: () => void }) {
-  const sessions = [
-    { id: 1, title: "处理客户反馈邮件并生成总结", type: "邮件处理", time: "今天 14:32", status: "已完成" },
-    { id: 2, title: "调研竞品定价策略", type: "网页浏览", time: "今天 11:08", status: "已完成" },
-    { id: 3, title: "填写供应商信息表单", type: "表单填写", time: "昨天 16:45", status: "已完成" },
-    { id: 4, title: "整理会议记录并生成行动项", type: "文档处理", time: "昨天 10:22", status: "执行中" },
-    { id: 5, title: "下载财务报告（已取消）", type: "文件操作", time: "5月26日 09:15", status: "已取消" }
-  ];
-
-  return (
-    <Card variant="default" padding="none" className="overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
-        <h3 className="text-[13px] font-semibold text-slate-950">最近 Session</h3>
-        <Button variant="brandGhost" size="sm" onClick={onOpenSessions}>
-          查看全部 Session →
-        </Button>
-      </div>
-
-      <div className="divide-y divide-slate-50">
-        <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 py-2 text-[10px] font-medium text-slate-500">
-          <span>任务/Session</span>
-          <span>类别</span>
-          <span>状态</span>
-          <span>时间</span>
-          <span></span>
-        </div>
-        {sessions.map((s) => (
-          <div key={s.id} className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 py-3 transition-colors hover:bg-slate-50/50">
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-600">
-                <FileIcon width={16} />
+      <div className="mt-5 rounded-xl border border-slate-200 p-4">
+        <p className="text-[12px] font-medium text-slate-600">任务计划（自动生成）</p>
+        <div className="mt-3 space-y-2.5">
+          {plan.map((p) => (
+            <div key={p.label} className="flex items-center gap-2.5 text-[12px]">
+              <span
+                className={cn(
+                  "grid h-4 w-4 shrink-0 place-items-center rounded-full",
+                  p.state === "done"
+                    ? "bg-brand-500 text-white"
+                    : p.state === "current"
+                      ? "border-2 border-brand-500"
+                      : "border border-slate-300"
+                )}
+              >
+                {p.state === "done" && <CheckIcon width={10} />}
+                {p.state === "current" && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
+              </span>
+              <span className={cn("flex-1", p.state === "todo" ? "text-slate-400" : "text-slate-700")}>{p.label}</span>
+              <span className={cn("text-[11px]", p.state === "current" ? "text-brand-700" : "text-slate-400")}>
+                {p.time}
               </span>
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-[12px] font-medium text-slate-900">{s.title}</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">{s.type}</p>
-            </div>
-            <span className={cn(
-              "flex items-center gap-1.5 text-[10.5px]",
-              s.status === "已完成" ? "text-brand-700" : s.status === "已取消" ? "text-slate-400" : "text-amber-600"
-            )}>
-              <StatusDot active={s.status === "已完成"} />
-              {s.status}
-            </span>
-            <span className="text-[10.5px] text-slate-400">{s.time}</span>
-            <span className="text-[10.5px] text-slate-400">...</span>
-          </div>
-        ))}
+          ))}
+        </div>
+        <button className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-[12px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50">
+          查看详情
+        </button>
       </div>
-    </Card>
+    </section>
   );
 }
 
-function VoiceSettingsPanel({
-  engine,
-  local,
-  onOpenModels
-}: {
-  engine: string;
-  local: boolean;
-  onOpenModels: () => void;
-}) {
-  return (
-    <Card variant="default" padding="md">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-        <h3 className="text-[13px] font-semibold text-slate-950">当前语音设置</h3>
-        <Button variant="brandGhost" size="sm" onClick={onOpenModels}>
-          管理语音
-        </Button>
-      </div>
-
-      <div className="mt-3 space-y-2.5">
-        <SettingRow label="预设模式" value="平衡模式（Balanced）" />
-        <SettingRow label="语音引擎" value={engine} />
-        <SettingRow label="运行模式" value="完全离线 • 本地运行" badge />
-      </div>
-
-      <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/50 p-3">
-        <p className="flex items-center gap-2 text-[10px] font-medium text-brand-700">
-          <ShieldIcon width={14} />
-          当前会话完全离线处理，不会连接云端服务。
-        </p>
-      </div>
-    </Card>
-  );
-}
-
-function SettingRow({ label, value, badge = false }: { label: string; value: string; badge?: boolean }) {
-  return (
-    <div className="flex items-center justify-between text-[11px]">
-      <span className="text-slate-600">{label}</span>
-      {badge ? (
-        <Badge variant="brand" size="sm">{value}</Badge>
-      ) : (
-        <span className="font-medium text-slate-900">{value}</span>
-      )}
-    </div>
-  );
-}
-
-function SafetyPanel() {
-  return (
-    <Card variant="default" padding="md">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
-            <ShieldIcon width={18} />
-          </span>
-          <div>
-            <h3 className="text-[13px] font-semibold text-slate-950">安全引擎</h3>
-            <p className="flex items-center gap-1.5 text-[10px] text-emerald-700">
-              <StatusDot active pulse color="success" size="sm" />
-              运行中
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        <SafetyItem icon={<ShieldIcon width={14} />} label="风险检测" value="已启用" />
-        <SafetyItem icon={<ShieldIcon width={14} />} label="数据保护" value="已启用" />
-        <SafetyItem icon={<ShieldIcon width={14} />} label="高风险拦截" value="已启用" />
-      </div>
-    </Card>
-  );
-}
-
-function SafetyItem({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <span className="text-emerald-600">{icon}</span>
-        <span className="text-[11px] text-slate-700">{label}</span>
-      </div>
-      <span className="text-[10px] text-slate-500">{value}</span>
-    </div>
-  );
-}
-
-function ExecutionBrainPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  return (
-    <Card variant="default" padding="md">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="text-brand-700">
-            <BrainIcon width={18} />
-          </span>
-          <h3 className="text-[13px] font-semibold text-slate-950">执行大脑</h3>
-        </div>
-        <span className="flex items-center gap-1.5 text-[10.5px] font-medium text-brand-700">
-          <StatusDot active pulse color="brand" size="sm" />
-          就绪
-        </span>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        <div className="flex justify-between text-[11px]">
-          <span className="text-slate-600">模型</span>
-          <span className="font-medium text-slate-900">Claude 3.5 Sonnet</span>
-        </div>
-        <div className="flex justify-between text-[11px]">
-          <span className="text-slate-600">上下文</span>
-          <span className="font-medium text-slate-900">200K</span>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function RecordNotebookPanel() {
-  return (
-    <Card variant="default" padding="md">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="text-brand-700">
-            <FileIcon width={18} />
-          </span>
-          <h3 className="text-[13px] font-semibold text-slate-950">记录笔记本</h3>
-        </div>
-        <span className="flex items-center gap-1.5 text-[10.5px] font-medium text-amber-600">
-          <StatusDot active color="warning" size="sm" />
-          同步中
-        </span>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        <div className="flex justify-between text-[11px]">
-          <span className="text-slate-600">存储位置</span>
-          <span className="font-medium text-slate-900">本地加密存储</span>
-        </div>
-        <div className="flex justify-between text-[11px]">
-          <span className="text-slate-600">记录状态</span>
-          <span className="font-medium text-slate-900">正常</span>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function AuditTrailPanel({ count }: { count: number }) {
-  const bars = [28, 28, 56, 10, 6, 28, 28, 56, 10, 6, 28, 28, 56, 10, 6, 28, 28, 56, 10, 6];
-  const legend = [
-    { label: "指令", value: 28, color: "bg-brand-500" },
-    { label: "AI 回复", value: 28, color: "bg-brand-400" },
-    { label: "动作执行", value: 56, color: "bg-slate-400" },
-    { label: "用户确认", value: 10, color: "bg-slate-300" },
-    { label: "中断/取消", value: 6, color: "bg-slate-200" }
+function RecentUsePanel({ onOpenSessions }: { onOpenSessions: () => void }) {
+  const items = [
+    { icon: <DocIcon width={16} />, title: "整理上周会议纪要并生成报告", time: "今天 09:30", status: "进行中" as const },
+    { icon: <SearchIcon width={16} />, title: "调研 AI 助手产品竞品", time: "昨天 16:45", status: "已完成" as const },
+    { icon: <GridIcon width={16} />, title: "汇总销售数据并生成图表", time: "昨天 10:20", status: "已完成" as const },
+    { icon: <MonitorIcon width={16} />, title: "准备产品发布会资料", time: "5月26日 14:10", status: "已完成" as const },
+    { icon: <CheckIcon width={16} />, title: "分析用户反馈", time: "5月25日 11:05", status: "已完成" as const }
   ];
 
   return (
-    <Card variant="default" padding="md">
+    <section className="rounded-2xl border border-slate-200 bg-white p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-[13px] font-semibold text-slate-950">审计轨迹</h3>
-          <p className="text-[10px] text-slate-600">本地记录，完整可追溯</p>
-        </div>
-        <Button variant="brandGhost" size="sm">
-          查看全部 →
-        </Button>
+        <h3 className="text-[15px] font-semibold text-slate-900">最近使用</h3>
+        <button onClick={onOpenSessions} className="text-[12px] text-slate-400 hover:text-slate-600">
+          查看全部
+        </button>
       </div>
-
-      <div className="mt-4 flex items-end gap-2">
-        <div>
-          <p className="text-[32px] font-bold leading-none text-brand-600">{count}</p>
-          <p className="mt-1 text-[9.5px] text-slate-500">条操作</p>
-        </div>
-        <div className="flex h-16 flex-1 items-end gap-[2px]">
-          {bars.map((height, i) => (
+      <div className="mt-4 space-y-1">
+        {items.map((it) => (
+          <button
+            key={it.title}
+            onClick={onOpenSessions}
+            className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-slate-50"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-500">
+              {it.icon}
+            </span>
+            <span className="min-w-0 flex-1">
+              <b className="block truncate text-[12.5px] font-medium text-slate-800">{it.title}</b>
+              <span className="mt-0.5 block text-[11px] text-slate-400">{it.time}</span>
+            </span>
             <span
-              key={i}
-              className={cn("flex-1 rounded-t", legend[i % legend.length].color)}
-              style={{ height: `${(height / 60) * 100}%` }}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-3 gap-2 text-[9px]">
-        {legend.map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5">
-            <span className={cn("h-2 w-2 rounded-sm", item.color)} />
-            <span className="text-slate-600">{item.label}</span>
-            <span className="font-semibold text-slate-900">{item.value}</span>
-          </div>
+              className={cn(
+                "shrink-0 rounded-md border px-2 py-0.5 text-[10.5px] font-medium",
+                it.status === "进行中"
+                  ? "border-brand-200 bg-brand-50 text-brand-700"
+                  : "border-slate-200 bg-slate-50 text-slate-500"
+              )}
+            >
+              {it.status}
+            </span>
+          </button>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }

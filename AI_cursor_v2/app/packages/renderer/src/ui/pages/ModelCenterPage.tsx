@@ -1,476 +1,1024 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useModelCenter } from "../../runtime/useModelCenter.js";
-import { useConversation } from "../../runtime/useConversation.js";
-import type { ModelBackendKind, ModelCatalogItem } from "@ai-cursor-v2/shared";
 import {
+  ArrowLeft,
+  BoltIcon,
+  BrainIcon,
   CheckIcon,
   ChevronDown,
-  CubeIcon,
-  DownloadIcon,
-  GearIcon,
-  HeadphonesIcon,
-  MicIcon,
+  ChevronRight,
+  DotsIcon,
+  EarIcon,
+  GlobeIcon,
+  InfoIcon,
+  LockIcon,
+  NotebookIcon,
+  PencilIcon,
+  PlusIcon,
   RefreshIcon,
-  SparkIcon
+  SearchIcon,
+  SlidersIcon,
+  SparkIcon,
+  SpeakerIcon
 } from "../icons.js";
-import { Button, Card, StatusDot, Badge, Progress, cn } from "../../design-system/index.js";
-import { motion } from "framer-motion";
+import { Button, cn } from "../../design-system/index.js";
 
-const backendLabels: Record<ModelBackendKind, string> = {
-  ollama: "Ollama",
-  lmstudio: "LM Studio",
-  custom: "自定义接口"
-};
+type Tab = "config" | "library";
 
-const formatGB = (gb: number) => `${gb.toFixed(1)} GB`;
+interface Preset {
+  id: string;
+  name: string;
+  desc: string;
+  current?: boolean;
+  custom?: boolean;
+  lastUsed?: string;
+  stt: string;
+  llm: string;
+  tts: string;
+  perf: string;
+  perfDesc: string;
+  privacy: string;
+  privacyDesc: string;
+  scene: string;
+  sceneDesc: string;
+}
+
+const presets: Preset[] = [
+  {
+    id: "balanced",
+    name: "推荐 · 均衡模式",
+    desc: "速度与质量的平衡，适合大多数日常使用。",
+    current: true,
+    stt: "Whisper Large v3",
+    llm: "Aurora 7B Instruct",
+    tts: "CosyVoice 2",
+    perf: "均衡",
+    perfDesc: "在响应速度与回答质量之间取得良好平衡",
+    privacy: "较高",
+    privacyDesc: "部分使用本地模型，聊天内容加密传输",
+    scene: "通用",
+    sceneDesc: "日常问答、写作、翻译、信息查询等"
+  },
+  {
+    id: "speed",
+    name: "极速模式",
+    desc: "响应更快，适合快速问答与效率优先任务。",
+    stt: "Whisper Small",
+    llm: "Qwen 2.5 3B Instruct",
+    tts: "Edge TTS",
+    perf: "极速",
+    perfDesc: "以更低延迟优先，响应速度最快",
+    privacy: "中等",
+    privacyDesc: "混合本地与云端，兼顾速度与效果",
+    scene: "快问快答",
+    sceneDesc: "简短问答、指令执行、效率优先场景"
+  },
+  {
+    id: "quality",
+    name: "高质量模式",
+    desc: "更深入的思考与更高质量的回答。",
+    stt: "Whisper Large v3",
+    llm: "Llama 3.1 70B Instruct",
+    tts: "CosyVoice 2",
+    perf: "高质量",
+    perfDesc: "以更强的理解与更高质量输出为优先",
+    privacy: "较高",
+    privacyDesc: "部分使用本地模型，聊天内容加密传输",
+    scene: "创作与深度交流",
+    sceneDesc: "写作、分析、复杂任务与深度对话"
+  },
+  {
+    id: "local",
+    name: "本地隐私模式",
+    desc: "主要使用本地模型，数据不离开你的设备。",
+    stt: "Whisper Large v3",
+    llm: "Qwen 2.5 14B Instruct",
+    tts: "Fish Speech 1.4",
+    perf: "偏均衡",
+    perfDesc: "全本地运行，性能取决于本机设备",
+    privacy: "最高",
+    privacyDesc: "全部本地处理，数据不离开你的设备",
+    scene: "隐私敏感场景",
+    sceneDesc: "机密资料、离线环境、隐私优先场景"
+  },
+  {
+    id: "chinese",
+    name: "中文优化模式",
+    desc: "针对中文理解与表达进行了优化。",
+    stt: "Paraformer v2",
+    llm: "Qwen 2.5 14B Instruct",
+    tts: "CosyVoice 2",
+    perf: "均衡",
+    perfDesc: "面向中文优化，兼顾速度与效果",
+    privacy: "较高",
+    privacyDesc: "部分使用本地模型，聊天内容加密传输",
+    scene: "中文办公",
+    sceneDesc: "中文写作、翻译、会议与办公场景"
+  },
+  {
+    id: "custom",
+    name: "我的自定义配置",
+    desc: "上次使用：2 天前",
+    custom: true,
+    lastUsed: "2 天前",
+    stt: "Whisper Large v3",
+    llm: "Llama 3.1 70B Instruct",
+    tts: "Azure Neural TTS",
+    perf: "自定义",
+    perfDesc: "由你亲自调整的模型组合",
+    privacy: "较高",
+    privacyDesc: "部分使用本地模型，聊天内容加密传输",
+    scene: "个性化",
+    sceneDesc: "根据你的偏好定制的使用场景"
+  }
+];
 
 export function ModelCenterPage() {
   const model = useModelCenter();
-  const convo = useConversation();
-  const [architecture, setArchitecture] = useState<"pipeline" | "duplex">("pipeline");
+  const [tab, setTab] = useState<Tab>("config");
+  const [editing, setEditing] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("balanced");
-  const [selectedStt, setSelectedStt] = useState("whisper-large-v3");
-  const [selectedLlm, setSelectedLlm] = useState("qwen-2.5-7b");
-  const [selectedTts, setSelectedTts] = useState("cosyvoice-2");
-  const [advancedOpen, setAdvancedOpen] = useState(true);
 
-  const voiceReady = convo.micSupported && convo.sttSupported && convo.ttsSupported;
-  const realLocal = model.snapshot.backend.status === "running" && voiceReady;
-
-  const oneClickReady = async () => {
-    if (model.snapshot.backend.status !== "running") {
-      await model.installOllama();
-    }
-    await model.refreshBackend();
-  };
-
-  const presets = [
-    {
-      id: "speed",
-      name: "极速模式",
-      desc: "响应最快，资源占用低\n适合轻量对话与快速响应",
-      feature: "低延迟 · 低占用",
-      recommended: false
-    },
-    {
-      id: "balanced",
-      name: "均衡模式",
-      desc: "性能与效果兼顾平衡\n适合大多数日常使用场景",
-      feature: "均衡性能 · 稳定可靠",
-      recommended: true
-    },
-    {
-      id: "quality",
-      name: "高质量模式",
-      desc: "更强理解与更高质量\n适合复杂对话与深度交流",
-      feature: "高质量 · 高表现",
-      recommended: false
-    },
-    {
-      id: "offline",
-      name: "完全本地模式",
-      desc: "全本地运行，数据私密\n适合机密场合与隐私需要",
-      feature: "隐私安全 · 离线可用",
-      recommended: false
-    },
-    {
-      id: "chinese",
-      name: "中文优先模式",
-      desc: "针对中文优化的模型组合\n更适合中文理解与表达",
-      feature: "中文化 · 本达更自然",
-      recommended: false
-    }
-  ];
-
-  const sttModels = [
-    { id: "whisper-large-v3", name: "Whisper Large V3", tags: ["中英全能"], feature: "本地高效", size: "8.1 GB", recommended: true },
-    { id: "paraformer-v2", name: "Paraformer v2", tags: ["中文"], feature: "高准确度", size: "1.2 GB", recommended: false },
-    { id: "whisper-small", name: "Whisper Small", tags: ["多语言"], feature: "轻量快速", size: "244 MB", recommended: false }
-  ];
-
-  const llmModels = [
-    { id: "qwen-2.5-7b", name: "Qwen 2.5 7B Instruct", tags: ["中文优质"], feature: "通用理解", size: "4.7 GB", recommended: true },
-    { id: "llama-3.1-8b", name: "Llama 3.1 8B Instruct", tags: ["多语言"], feature: "轻量高效", size: "4.9 GB", recommended: false },
-    { id: "phi-3.5-mini", name: "Phi-3.5 Mini Instruct", tags: ["多语言"], feature: "轻量高效", size: "2.2 GB", recommended: false }
-  ];
-
-  const ttsModels = [
-    { id: "cosyvoice-2", name: "CosyVoice 2", tags: ["中文自然"], feature: "情感丰富", size: "1.6 GB", recommended: true },
-    { id: "edge-tts", name: "Edge TTS", tags: ["中英品质"], feature: "音质优良", size: "0.6 GB", recommended: false },
-    { id: "fish-speech-1.4", name: "Fish Speech 1.4", tags: ["多语言"], feature: "高保真", size: "2.5 GB", recommended: false }
-  ];
+  if (editing) {
+    return <EditConfigView presetName="均衡模式" onBack={() => setEditing(false)} />;
+  }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/30">
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1420px] px-6 py-5">
-          {/* 页面标题 */}
-          <header className="mb-4 flex items-start justify-between">
+        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+          <header className="flex items-start justify-between">
             <div>
-              <h1 className="flex items-center gap-2.5 text-[24px] font-bold text-slate-950">
-                模型中心 <CubeIcon className="text-brand-600" width={26} />
-              </h1>
-              <p className="mt-1.5 text-[12.5px] text-slate-600">
-                一键配置语音模型栈，无需技术知识，立即开始对话。
+              <h1 className="text-[24px] font-bold tracking-tight text-slate-900">模型中心</h1>
+              <p className="mt-1.5 text-[12.5px] text-slate-500">
+                选择最适合你的模型配置，助手已根据你的设备为你准备好推荐方案。
               </p>
             </div>
-            <div className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px]",
-              voiceReady ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-400"
-            )}>
-              <StatusDot active={voiceReady} />
-              {voiceReady ? "AI 员工已就绪" : "等待配置"}
-            </div>
+            <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+              <PlusIcon width={15} /> 新建配置
+            </Button>
           </header>
 
-          {/* 一键就绪横幅 */}
-          <Card variant="brand" padding="lg" className="mb-4 overflow-hidden bg-[linear-gradient(110deg,rgba(245,251,227,.85),rgba(255,255,255,.95))]">
-            <div className="flex items-center gap-5">
-              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border-2 border-brand-300 bg-brand-50 text-[30px] font-bold text-brand-700 shadow-[inset_0_0_0_8px_white]">
-                ⚡
-              </span>
-              <div className="w-[260px] shrink-0">
-                <h2 className="text-[17px] font-bold text-slate-950">一键就绪，立即开始</h2>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">
-                  AI Cursor 自动检测您的设备与语言偏好，为您配置最佳语音模型栈。
-                </p>
-              </div>
-              <div className="flex h-[64px] min-w-0 flex-1 items-center gap-4 rounded-xl border border-slate-200 bg-white/90 px-4 text-[10px]">
-                <DeviceFact icon={<HeadphonesIcon width={18} />} title="NVIDIA GeForce RTX 4060 Laptop GPU" detail="GPU · 8.0 GB 显存" />
-                <DeviceFact icon={<GearIcon width={18} />} title="内存 16.0 GB" detail="系统内存" />
-                <DeviceFact icon={<SparkIcon width={18} />} title="语言 中文（简体）" detail="界面语言" last />
-              </div>
-              <Button
-                variant="primary"
-                size="lg"
-                disabled={model.busy}
-                onClick={() => void oneClickReady()}
-                animated
-                className="h-12 w-[140px] shrink-0"
-              >
-                {model.busy ? "配置中..." : "一键就绪"}
-              </Button>
-            </div>
-          </Card>
-
-          {/* 预设模式选择 */}
-          <SectionLabel>选择预设模式</SectionLabel>
-          <div className="mb-4 grid grid-cols-5 gap-3">
-            {presets.map((item) => (
-              <Card
-                key={item.id}
-                variant={selectedPreset === item.id ? "brand" : "default"}
-                padding="md"
-                hoverable
-                animated
-                onClick={() => setSelectedPreset(item.id)}
-                className={cn(
-                  "relative flex min-h-[140px] cursor-pointer flex-col items-start justify-between",
-                  selectedPreset === item.id && "ring-2 ring-brand-200"
-                )}
-              >
-                {item.recommended && (
-                  <Badge variant="brand" className="absolute right-0 top-0 rounded-bl-lg rounded-tr-lg">
-                    推荐
-                  </Badge>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "grid h-5 w-5 place-items-center rounded-full border-2",
-                    selectedPreset === item.id ? "border-brand-600 bg-white" : "border-slate-300 bg-white"
-                  )}>
-                    {selectedPreset === item.id && <span className="h-2.5 w-2.5 rounded-full bg-brand-600" />}
-                  </span>
-                  <b className="text-[13px] text-slate-900">{item.name}</b>
-                </div>
-                <p className="mt-2 whitespace-pre-line text-[10px] leading-[1.6] text-slate-600">{item.desc}</p>
-                <Badge variant="brand" size="sm" className="mt-2">
-                  {item.feature}
-                </Badge>
-              </Card>
-            ))}
+          <div className="mt-5 flex items-center gap-6 border-b border-slate-200">
+            <TabButton active={tab === "config"} onClick={() => setTab("config")}>
+              配置
+            </TabButton>
+            <TabButton active={tab === "library"} onClick={() => setTab("library")}>
+              模型库
+            </TabButton>
           </div>
 
-          {/* 架构选择 */}
-          <SectionLabel>选择架构</SectionLabel>
-          <div className="mb-4 grid grid-cols-2 gap-4">
-            <ArchitectureCard
-              selected={architecture === "pipeline"}
-              onClick={() => setArchitecture("pipeline")}
-              title="流水线架构（分离式）"
-              subtitle="听（语音识别）→ 想（语言模型）→ 说（语音合成）"
-              detail="模块可独立验证与调试，灵活性高度"
-            />
-            <ArchitectureCard
-              selected={architecture === "duplex"}
-              onClick={() => setArchitecture("duplex")}
-              title="原生全双工架构（端到端）"
-              subtitle="单一模型驱动架构，超低延迟，对话实时性更佳"
-              detail="需要专用 Provider（如 OpenAI Realtime API）"
-            />
+          <div className="pt-6">
+            {tab === "config" ? (
+              <ConfigView
+                selectedPreset={selectedPreset}
+                onSelect={setSelectedPreset}
+                onEdit={() => setEditing(true)}
+              />
+            ) : (
+              <LibraryView model={model} />
+            )}
           </div>
-
-          {/* 高级配置 */}
-          <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
-            <h2 className="text-[13px] font-semibold text-slate-950">
-              高级配置 <span className="font-normal text-slate-500">（可选）</span>
-            </h2>
-            <Button variant="ghost" size="sm" onClick={() => setAdvancedOpen(!advancedOpen)}>
-              {advancedOpen ? "收起" : "展开"} <ChevronDown width={14} className={cn("transition-transform", advancedOpen && "rotate-180")} />
-            </Button>
-          </div>
-
-          {advancedOpen && architecture === "pipeline" && (
-            <div className="mb-4 grid grid-cols-3 gap-4">
-              <ModelSlot
-                title="听（语音识别 STT）"
-                models={sttModels}
-                selected={selectedStt}
-                onSelect={setSelectedStt}
-              />
-              <ModelSlot
-                title="想（语音模型 LLM）"
-                models={llmModels}
-                selected={selectedLlm}
-                onSelect={setSelectedLlm}
-              />
-              <ModelSlot
-                title="说（语音合成 TTS）"
-                models={ttsModels}
-                selected={selectedTts}
-                onSelect={setSelectedTts}
-              />
-            </div>
-          )}
-
-          {advancedOpen && architecture === "duplex" && (
-            <Card variant="outline" padding="xl" className="mb-4 text-center">
-              <p className="text-[12px] text-slate-600">
-                原生全双工架构需要专用 Provider 支持，如 OpenAI Realtime API。
-              </p>
-              <p className="mt-2 text-[11px] text-slate-500">
-                当前暂未配置，流水线架构仍可继续使用。
-              </p>
-            </Card>
-          )}
-
-          {/* 底部状态区 */}
-          <Card variant="default" padding="none" className="grid grid-cols-[1.2fr_1fr_280px] divide-x divide-slate-200 overflow-hidden">
-            <StoragePanel model={model} />
-            <DownloadPanel model={model} />
-            <section className="p-4">
-              <h3 className="flex items-center gap-2 text-[11.5px] font-semibold text-slate-950">
-                <MicIcon width={15} className="text-brand-700" />
-                语音引擎状态
-              </h3>
-              <Card variant={realLocal ? "brand" : "outline"} padding="sm" className="mt-3">
-                <p className={cn("flex items-center gap-2 text-[11px] font-semibold", realLocal ? "text-brand-700" : "text-slate-600")}>
-                  <StatusDot active={realLocal} />
-                  {realLocal ? "本地模型运行中" : "等待配置"}
-                </p>
-                <p className="mt-1.5 text-[9.5px] leading-relaxed text-slate-500">
-                  {realLocal ? "端到端语音对话已就绪，无需连接云端服务" : "本地端到端语音对话待配置"}
-                </p>
-              </Card>
-            </section>
-          </Card>
         </div>
       </div>
     </div>
   );
 }
 
-function SectionLabel({ children }: { children: ReactNode }) {
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <h2 className="mb-2 flex items-center gap-2 text-[12px] font-semibold text-slate-950">
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative -mb-px pb-2.5 text-[14px] font-medium transition-colors",
+        active ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+      )}
+    >
       {children}
-    </h2>
+      {active && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-500" />}
+    </button>
   );
 }
 
-function DeviceFact({ icon, title, detail, last = false }: { icon: ReactNode; title: string; detail: string; last?: boolean }) {
+/* ------------------------------------------------------------------ 配置 */
+
+function ConfigView({
+  selectedPreset,
+  onSelect,
+  onEdit
+}: {
+  selectedPreset: string;
+  onSelect: (id: string) => void;
+  onEdit: () => void;
+}) {
+  const preset = presets.find((p) => p.id === selectedPreset) ?? presets[0];
+
   return (
-    <div className={cn("flex min-w-0 flex-1 items-center gap-2.5", !last && "border-r border-slate-200 pr-4")}>
-      <span className="text-slate-500">{icon}</span>
-      <span className="min-w-0">
-        <b className="block truncate text-[11px] font-semibold text-slate-700">{title}</b>
-        <small className="block truncate text-[9.5px] text-slate-500">{detail}</small>
-      </span>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,480px)_1fr]">
+      {/* 选择配置 */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
+        <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
+
+        <div className="mt-4 space-y-2.5">
+          {presets.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p.id)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all",
+                selectedPreset === p.id
+                  ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              )}
+            >
+              <Radio checked={selectedPreset === p.id} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <b className="text-[13.5px] font-semibold text-slate-900">{p.name}</b>
+                  {p.current && (
+                    <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                      当前使用
+                    </span>
+                  )}
+                  {p.custom && (
+                    <span className="ml-auto text-slate-300">
+                      <DotsIcon width={16} />
+                    </span>
+                  )}
+                </span>
+                <span className="mt-1 block text-[11.5px] leading-relaxed text-slate-500">{p.desc}</span>
+              </span>
+            </button>
+          ))}
+
+          <button
+            onClick={onEdit}
+            className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
+          >
+            <span className="min-w-0 flex-1">
+              <b className="block text-[13px] font-semibold text-slate-800">管理配置</b>
+              <span className="mt-0.5 block text-[11px] text-slate-500">重命名、编辑或恢复配置</span>
+            </span>
+            <ChevronRight width={16} className="text-slate-400" />
+          </button>
+        </div>
+      </section>
+
+      {/* 当前配置概览 */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
+        <p className="mt-1 text-[12px] text-slate-500">助手将使用以下模型为你提供最佳体验</p>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" model={preset.stt} />
+          <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型" model={preset.llm} />
+          <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" model={preset.tts} />
+        </div>
+
+        <div className="my-5 h-px bg-slate-100" />
+
+        <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
+        <div className="mt-3 space-y-1">
+          <AboutRow icon={<BoltIcon width={16} />} label="性能" desc={preset.perfDesc} value={preset.perf} />
+          <AboutRow icon={<LockIcon width={16} />} label="隐私" desc={preset.privacyDesc} value={preset.privacy} />
+          <AboutRow icon={<GlobeIcon width={16} />} label="适用场景" desc={preset.sceneDesc} value={preset.scene} />
+        </div>
+
+        <div className="mt-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-[13.5px] font-semibold text-slate-900">切换配置后</h3>
+            <p className="mt-1 max-w-md text-[12px] leading-relaxed text-slate-500">
+              系统会自动检查并准备所需模型，无需手动下载或设置。
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-[11.5px] font-medium text-brand-700">
+            <CheckIcon width={14} /> 准备就绪
+          </span>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-5">
+          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+            <PencilIcon width={14} /> 重命名
+          </Button>
+          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onEdit}>
+            <SlidersIcon width={14} /> 编辑配置
+          </Button>
+          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+            <RefreshIcon width={14} /> 恢复默认
+          </Button>
+          <Button variant="primary" size="sm" className="h-9 gap-1.5" animated={false}>
+            <CheckIcon width={14} /> 应用此配置
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
 
-function ArchitectureCard({
+function CapabilitySummary({
+  icon,
+  title,
+  kind,
+  model
+}: {
+  icon: ReactNode;
+  title: string;
+  kind: string;
+  model: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center gap-2 text-slate-600">
+        <span className="text-slate-500">{icon}</span>
+        <span className="text-[13px] font-semibold text-slate-900">{title}</span>
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">{kind}</p>
+      <p className="mt-1 text-[13px] font-medium text-slate-800">{model}</p>
+      <p className="mt-3 flex items-center gap-1.5 text-[11.5px] font-medium text-brand-700">
+        <CheckIcon width={14} /> 就绪
+      </p>
+    </div>
+  );
+}
+
+function AboutRow({
+  icon,
+  label,
+  desc,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  desc: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg px-1 py-2.5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-500">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[12.5px] font-semibold text-slate-900">{label}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">{desc}</p>
+      </div>
+      <span className="text-[12.5px] font-medium text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+function Radio({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={cn(
+        "mt-0.5 grid h-4.5 w-4.5 shrink-0 place-items-center rounded-full border-2",
+        checked ? "border-brand-600" : "border-slate-300"
+      )}
+      style={{ height: 18, width: 18 }}
+    >
+      {checked && <span className="h-2 w-2 rounded-full bg-brand-600" />}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ 编辑配置 */
+
+const sttOptions = [
+  { name: "Whisper Large-V3", tag: "高精度" },
+  { name: "Paraformer v2", tag: "中文" },
+  { name: "Whisper Small", tag: "轻量" }
+];
+const brainOptions = [
+  { name: "Llama 3.1 70B Instruct", tag: "强大" },
+  { name: "Qwen 2.5 14B Instruct", tag: "均衡" },
+  { name: "Qwen 2.5 7B Instruct", tag: "轻量" }
+];
+const notebookOptions = [
+  { name: "Qwen 2.5 14B Instruct", tag: "轻量" },
+  { name: "Phi-3.5 Mini Instruct", tag: "极轻" },
+  { name: "Llama 3.1 8B Instruct", tag: "均衡" }
+];
+const ttsOptions = [
+  { name: "Azure Neural TTS (Xiaoxiao)", tag: "自然" },
+  { name: "CosyVoice 2", tag: "情感" },
+  { name: "Edge TTS", tag: "轻量" }
+];
+
+function EditConfigView({ presetName, onBack }: { presetName: string; onBack: () => void }) {
+  const [mode, setMode] = useState<"pipeline" | "duplex">("pipeline");
+  const [stt, setStt] = useState(sttOptions[0].name);
+  const [brain, setBrain] = useState(brainOptions[0].name);
+  const [notebook, setNotebook] = useState(notebookOptions[0].name);
+  const [tts, setTts] = useState(ttsOptions[0].name);
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+            >
+              <ArrowLeft width={18} />
+            </button>
+            <h1 className="text-[20px] font-bold tracking-tight text-slate-900">编辑配置</h1>
+          </div>
+
+          {/* 头部信息 */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center gap-4">
+              <span className="grid h-14 w-14 place-items-center rounded-full border border-slate-200 text-slate-400">
+                <NotebookIcon width={24} />
+              </span>
+              <div>
+                <p className="text-[11.5px] text-slate-400">正在编辑（已创建个人副本）</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <h2 className="text-[19px] font-bold text-slate-900">{presetName}（我的副本）</h2>
+                  <PencilIcon width={15} className="text-slate-400" />
+                </div>
+                <p className="mt-1 text-[11.5px] text-slate-500">
+                  基于官方推荐配置「{presetName}」创建的个人副本
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-5">
+              <div className="space-y-1.5 text-[11.5px] text-slate-500">
+                <p className="flex items-center gap-1.5">
+                  <CheckIcon width={14} className="text-brand-600" /> 官方推荐配置的个人副本
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <CheckIcon width={14} className="text-brand-600" /> 原始配置保持不变
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onBack}>
+                <RefreshIcon width={14} /> 重置为推荐配置
+              </Button>
+            </div>
+          </div>
+
+          {/* 处理方式 */}
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-[14px] font-semibold text-slate-900">处理方式</h3>
+                <p className="mt-0.5 text-[12px] text-slate-500">选择助手处理请求的整体方式</p>
+              </div>
+              <InfoIcon className="text-slate-300" />
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <ModeCard
+                selected={mode === "pipeline"}
+                onClick={() => setMode("pipeline")}
+                title="分步处理（听 → 想 → 说）"
+                desc="依次使用听觉模型、思考模型、发声模型，适合复杂任务与高质量回复"
+              />
+              <ModeCard
+                selected={mode === "duplex"}
+                onClick={() => setMode("duplex")}
+                title="端到端处理（一步到位）"
+                desc="单一模型直接处理全部流程，适合快速响应与简单场景"
+              />
+            </div>
+          </div>
+
+          {/* 听 / 想 / 说 */}
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <CapabilityCard icon={<EarIcon width={20} />} title="听（Hearing）" subtitle="将语音转换为文本">
+              <ModelSelect label="听觉模型" options={sttOptions} value={stt} onChange={setStt} />
+              <StatusLine />
+              <AutoPrepareNote />
+            </CapabilityCard>
+
+            <CapabilityCard
+              icon={<BrainIcon width={20} />}
+              title="想（Thinking）"
+              subtitle="由两个协同大脑共同思考与记录"
+              info
+            >
+              <ModelSelect
+                label="执行大脑（Execution Brain）"
+                labelDesc="负责规划、推理与执行任务"
+                options={brainOptions}
+                value={brain}
+                onChange={setBrain}
+              />
+              <StatusLine />
+              <div className="my-4 h-px bg-slate-100" />
+              <ModelSelect
+                label="记录笔记本（Record Notebook）"
+                labelDesc="负责记忆、整理与检索信息"
+                options={notebookOptions}
+                value={notebook}
+                onChange={setNotebook}
+              />
+              <StatusLine />
+              <AutoPrepareNote />
+            </CapabilityCard>
+
+            <CapabilityCard icon={<SpeakerIcon width={20} />} title="说（Speaking）" subtitle="将文本转换为语音">
+              <ModelSelect label="发声模型" options={ttsOptions} value={tts} onChange={setTts} />
+              <StatusLine />
+              <AutoPrepareNote />
+            </CapabilityCard>
+          </div>
+
+          {/* 底部操作 */}
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-5">
+            <p className="flex items-center gap-2 text-[12px] text-slate-500">
+              <span className="text-brand-600">
+                <CheckIcon width={15} />
+              </span>
+              所有更改将保存到你的个人配置，不会影响原始推荐配置
+            </p>
+            <div className="flex items-center gap-2.5">
+              <Button variant="secondary" size="sm" className="h-9 px-5" animated={false} onClick={onBack}>
+                取消
+              </Button>
+              <Button variant="primary" size="sm" className="h-9 px-6" animated={false} onClick={onBack}>
+                保存并应用
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeCard({
   selected,
   onClick,
   title,
-  subtitle,
-  detail
+  desc
 }: {
   selected: boolean;
   onClick: () => void;
   title: string;
-  subtitle: string;
-  detail: string;
+  desc: string;
 }) {
   return (
-    <Card
-      variant={selected ? "brand" : "default"}
-      padding="md"
-      hoverable
-      animated
+    <button
       onClick={onClick}
-      className={cn("flex cursor-pointer items-start gap-3", selected && "ring-2 ring-brand-200")}
+      className={cn(
+        "flex items-start gap-3 rounded-xl border px-4 py-4 text-left transition-all",
+        selected ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200" : "border-slate-200 hover:border-slate-300"
+      )}
     >
-      <span className={cn(
-        "mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2",
-        selected ? "border-brand-600" : "border-slate-300"
-      )}>
-        {selected && <span className="h-2.5 w-2.5 rounded-full bg-brand-600" />}
+      <Radio checked={selected} />
+      <span>
+        <b className="block text-[13.5px] font-semibold text-slate-900">{title}</b>
+        <span className="mt-1 block text-[11.5px] leading-relaxed text-slate-500">{desc}</span>
       </span>
-      <span className="min-w-0">
-        <b className="block text-[13px] text-slate-900">{title}</b>
-        <span className="mt-1.5 block text-[10.5px] leading-relaxed text-slate-600">{subtitle}</span>
-        <small className="mt-1 block text-[9.5px] text-slate-500">{detail}</small>
-      </span>
-    </Card>
+    </button>
   );
 }
 
-interface ModelItem {
-  id: string;
-  name: string;
-  tags: string[];
-  feature: string;
-  size: string;
-  recommended: boolean;
-}
-
-function ModelSlot({
+function CapabilityCard({
+  icon,
   title,
-  models,
-  selected,
-  onSelect
+  subtitle,
+  info = false,
+  children
 }: {
+  icon: ReactNode;
   title: string;
-  models: ModelItem[];
-  selected: string;
-  onSelect: (id: string) => void;
+  subtitle: string;
+  info?: boolean;
+  children: ReactNode;
 }) {
   return (
-    <Card variant="default" padding="none" className="flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <h3 className="text-[11.5px] font-semibold text-slate-950">{title}</h3>
-        <ChevronDown width={14} className="text-slate-400" />
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        <p className="px-4 pt-2 text-[9px] font-medium text-brand-700">推荐</p>
-        <div className="space-y-1.5 p-2">
-          {models.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              className={cn(
-                "flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all",
-                selected === item.id ? "border-brand-500 bg-brand-50/30" : "border-slate-100 hover:border-brand-200"
-              )}
-            >
-              <span className={cn(
-                "mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border",
-                selected === item.id ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300"
-              )}>
-                {selected === item.id && <CheckIcon width={10} />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <b className="text-[11px] font-semibold text-slate-900">{item.name}</b>
-                  <span className="text-[9.5px] text-slate-500">{item.size}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-1.5">
-                  {item.tags.map((tag) => (
-                    <Badge key={tag} variant="default" size="sm">{tag}</Badge>
-                  ))}
-                </div>
-                <p className="mt-1 text-[9px] text-slate-500">{item.feature}</p>
-              </span>
-            </button>
-          ))}
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="text-slate-500">{icon}</span>
+          <div>
+            <h3 className="text-[14px] font-semibold text-slate-900">{title}</h3>
+            <p className="mt-0.5 text-[11.5px] text-slate-500">{subtitle}</p>
+          </div>
         </div>
+        {info && <InfoIcon className="text-slate-300" />}
       </div>
-    </Card>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
-function StoragePanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  const { storage } = model.snapshot;
-  const usedGB = 38.6;
-  const totalGB = 200;
-  const pct = Math.round((usedGB / totalGB) * 100);
+function ModelSelect({
+  label,
+  labelDesc,
+  options,
+  value,
+  onChange
+}: {
+  label: string;
+  labelDesc?: string;
+  options: { name: string; tag: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.name === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   return (
-    <section className="p-4">
-      <h3 className="mb-2 text-[11.5px] font-semibold text-slate-950">
-        模型存储位置
-      </h3>
-      <div className="flex items-center gap-2">
+    <div>
+      <p className="text-[12.5px] font-medium text-slate-700">{label}</p>
+      {labelDesc && <p className="mt-0.5 text-[11px] text-slate-400">{labelDesc}</p>}
+      <div ref={ref} className="relative mt-2">
         <button
-          onClick={() => void model.chooseStorageRoot()}
-          className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[10.5px] text-slate-600 hover:border-slate-300"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-slate-300"
         >
-          {storage.rootDir || "D:\\AI Cursor\\Models"}
+          <span className="text-slate-400">
+            <SparkIcon width={16} />
+          </span>
+          <span className="text-[12.5px] font-medium text-slate-800">{current.name}</span>
+          <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+            {current.tag}
+          </span>
+          <ChevronDown width={16} className={cn("ml-auto text-slate-400 transition-transform", open && "rotate-180")} />
         </button>
-        {storage.rootDir && (
-          <Button variant="brandGhost" size="sm" onClick={() => void model.openStorageLocation()}>
-            打开
-          </Button>
+        {open && (
+          <div className="absolute left-0 right-0 z-20 mt-1.5 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+            {options.map((o) => (
+              <button
+                key={o.name}
+                onClick={() => {
+                  onChange(o.name);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-slate-50",
+                  o.name === value && "bg-brand-50/50"
+                )}
+              >
+                <span className="text-[12.5px] text-slate-800">{o.name}</span>
+                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{o.tag}</span>
+                {o.name === value && <CheckIcon width={14} className="ml-auto text-brand-600" />}
+              </button>
+            ))}
+          </div>
         )}
       </div>
-      <div className="mt-2 flex justify-between text-[9.5px] text-slate-500">
-        <span>已用空间：{usedGB} GB / {totalGB} GB</span>
-        <span>{pct}% 可用</span>
-      </div>
-      <Progress value={pct} max={100} color="brand" size="md" className="mt-1.5" />
-    </section>
+    </div>
   );
 }
 
-function DownloadPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  const downloading = true; // Demo state
-  const downloadModel = "Qwen 2.5 7B Instruct";
-  const downloadProgress = 45;
-  const downloadSpeed = "19.6 MB/s";
-  const downloadSize = "2.1 GB / 4.7 GB";
+function StatusLine() {
+  return (
+    <div className="mt-3">
+      <p className="text-[11px] text-slate-400">状态</p>
+      <p className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-brand-700">
+        <span className="h-2 w-2 rounded-full bg-brand-500" /> 已就绪
+      </p>
+    </div>
+  );
+}
+
+function AutoPrepareNote() {
+  return (
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-3">
+      <span className="mt-0.5 text-brand-600">
+        <SparkIcon width={16} />
+      </span>
+      <span>
+        <b className="block text-[11.5px] font-medium text-slate-700">如未安装，将在需要时自动准备</b>
+        <span className="mt-0.5 block text-[10.5px] text-slate-400">无需手动下载或管理存储空间</span>
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ 模型库 */
+
+type ModelStatus =
+  | { kind: "ready" }
+  | { kind: "downloading"; progress: number }
+  | { kind: "update"; from: string; to: string }
+  | { kind: "missing" };
+
+interface LibModel {
+  name: string;
+  size: string;
+  version: string;
+  status: ModelStatus;
+  usedBy: string;
+}
+
+interface LibGroup {
+  id: string;
+  title: string;
+  models: LibModel[];
+}
+
+const libGroups: LibGroup[] = [
+  {
+    id: "stt",
+    title: "负责听 · 语音识别",
+    models: [
+      { name: "Whisper Large v3", size: "1.55 GB", version: "3.2.1", status: { kind: "ready" }, usedBy: "默认助手, 客服助手" },
+      { name: "Paraformer SenseTime", size: "420 MB", version: "2.1.0", status: { kind: "downloading", progress: 68 }, usedBy: "会议助手" },
+      { name: "FunASR Paraformer v2", size: "312 MB", version: "1.0.6", status: { kind: "update", from: "1.0.6", to: "1.1.0" }, usedBy: "智能家居助手" },
+      { name: "Vosk Small CN", size: "48 MB", version: "0.3.45", status: { kind: "missing" }, usedBy: "–" }
+    ]
+  },
+  {
+    id: "llm",
+    title: "负责想 · 语言模型",
+    models: [
+      { name: "Qwen2.5-7B-Instruct", size: "4.68 GB", version: "1.2.0", status: { kind: "ready" }, usedBy: "默认助手, 编程助手" },
+      { name: "ChatGLM3-6B", size: "3.62 GB", version: "1.0.4", status: { kind: "downloading", progress: 35 }, usedBy: "学术助手" },
+      { name: "Llama-3.1-8B-Instruct", size: "4.92 GB", version: "1.0.1", status: { kind: "update", from: "1.0.1", to: "1.1.0" }, usedBy: "创作助手" }
+    ]
+  },
+  {
+    id: "tts",
+    title: "负责说 · 语音合成",
+    models: [
+      { name: "CosyVoice 2", size: "1.6 GB", version: "2.0.1", status: { kind: "ready" }, usedBy: "默认助手" },
+      { name: "Edge TTS", size: "0.6 GB", version: "1.4.0", status: { kind: "ready" }, usedBy: "客服助手" },
+      { name: "Fish Speech 1.4", size: "2.5 GB", version: "1.4.0", status: { kind: "missing" }, usedBy: "–" }
+    ]
+  }
+];
+
+type LibFilter = "all" | "installed" | "downloadable" | "update";
+
+const filters: { id: LibFilter; label: string }[] = [
+  { id: "all", label: "全部" },
+  { id: "installed", label: "已安装" },
+  { id: "downloadable", label: "可下载" },
+  { id: "update", label: "有更新" }
+];
+
+function matchesFilter(status: ModelStatus, filter: LibFilter): boolean {
+  switch (filter) {
+    case "installed":
+      return status.kind === "ready" || status.kind === "update";
+    case "downloadable":
+      return status.kind === "missing";
+    case "update":
+      return status.kind === "update";
+    default:
+      return true;
+  }
+}
+
+function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const [filter, setFilter] = useState<LibFilter>("all");
+  const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ tts: true });
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return libGroups
+      .map((g) => ({
+        ...g,
+        models: g.models.filter((m) => matchesFilter(m.status, filter) && (q === "" || m.name.toLowerCase().includes(q)))
+      }))
+      .filter((g) => g.models.length > 0);
+  }, [filter, query]);
+
+  const rootDir = model.snapshot.storage.rootDir || "D:\\AI\\VoiceAssistant\\Models";
 
   return (
-    <section className="p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-[11.5px] font-semibold text-slate-950">
-          <DownloadIcon width={15} className="text-slate-600" />
-          下载进度
-        </h3>
-        <Button variant="ghost" size="sm" onClick={() => void model.refreshBackend()} className="h-auto p-0">
-          <RefreshIcon width={14} className="text-slate-400 hover:text-slate-600" />
-        </Button>
-      </div>
-      {downloading ? (
-        <div>
-          <p className="truncate text-[10.5px] text-slate-700">
-            正在下载 {downloadModel}
-          </p>
-          <Progress value={downloadProgress} max={100} color="brand" size="md" className="mt-2" showLabel />
-          <div className="mt-1.5 flex justify-between text-[9.5px] text-slate-500">
-            <span>{downloadSize}</span>
-            <span>{downloadSpeed}</span>
-          </div>
-          <div className="mt-1 flex justify-end">
-            <Button variant="link" size="sm" onClick={() => void model.cancelPull()} className="h-auto p-0 text-rose-500">
-              取消
-            </Button>
+    <div className="space-y-5">
+      {/* 顶部：存储 + 筛选 */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,400px)_1fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h3 className="text-[13px] font-semibold text-slate-900">存储空间</h3>
+          <div className="mt-3 flex items-center gap-4">
+            <StorageRing percent={62} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] text-slate-600">
+                已使用 <b className="text-slate-900">198.7 GB</b>
+                <span className="text-slate-400"> / 共 320 GB</span>
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: "62%" }} />
+              </div>
+              <div className="mt-3 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-slate-400">存储位置</p>
+                  <p className="truncate text-[11.5px] text-slate-600">{rootDir}</p>
+                </div>
+                <button
+                  onClick={() => void model.chooseStorageRoot()}
+                  className="shrink-0 text-[11.5px] font-medium text-brand-700 hover:underline"
+                >
+                  更改位置
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      ) : (
-        <p className="text-[10.5px] text-slate-400">当前没有下载任务</p>
-      )}
-    </section>
+
+        <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+          <div className="flex items-center gap-1.5">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                  filter === f.id
+                    ? "border-brand-400 bg-brand-50/50 text-brand-700"
+                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5">
+            <SearchIcon className="text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索模型名称"
+              className="w-40 bg-transparent text-[12px] text-slate-700 outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <button className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-300">
+            <SlidersIcon width={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* 分组表格 */}
+      <div className="space-y-4">
+        {groups.map((g) => {
+          const isCollapsed = collapsed[g.id];
+          return (
+            <div key={g.id} className="rounded-2xl border border-slate-200 bg-white">
+              <button
+                onClick={() => setCollapsed((c) => ({ ...c, [g.id]: !c[g.id] }))}
+                className="flex w-full items-center gap-2 px-5 py-4 text-left"
+              >
+                <ChevronDown
+                  width={16}
+                  className={cn("text-slate-400 transition-transform", isCollapsed && "-rotate-90")}
+                />
+                <h3 className="text-[13.5px] font-semibold text-slate-900">{g.title}</h3>
+                <span className="text-[13px] text-slate-400">({g.models.length})</span>
+              </button>
+
+              {!isCollapsed && (
+                <div className="px-5 pb-4">
+                  <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_1.3fr_1.4fr_auto] items-center gap-4 border-b border-slate-100 pb-2 text-[11px] font-medium text-slate-400">
+                    <span>模型名称</span>
+                    <span>大小</span>
+                    <span>版本</span>
+                    <span className="flex items-center gap-1">状态 <InfoIcon width={13} className="text-slate-300" /></span>
+                    <span className="flex items-center gap-1">被使用于 <InfoIcon width={13} className="text-slate-300" /></span>
+                    <span className="text-right">操作</span>
+                  </div>
+                  {g.models.map((m) => (
+                    <LibRow key={m.name} m={m} model={model} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="flex items-center gap-2 pt-1 text-[11.5px] text-slate-400">
+        <InfoIcon width={14} /> 模型被使用时无法卸载。请先在配置中移除引用后再操作。
+      </p>
+    </div>
+  );
+}
+
+function LibRow({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
+  return (
+    <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_1.3fr_1.4fr_auto] items-center gap-4 border-b border-slate-50 py-3.5 last:border-b-0">
+      <span className="text-[12.5px] font-medium text-slate-800">{m.name}</span>
+      <span className="text-[12px] text-slate-500">{m.size}</span>
+      <span className="text-[12px] text-slate-500">{m.version}</span>
+      <StatusCell status={m.status} />
+      <span className="truncate text-[12px] text-slate-500">{m.usedBy}</span>
+      <div className="flex items-center justify-end gap-2">
+        <RowAction m={m} model={model} />
+        <button className="text-slate-300 hover:text-slate-500">
+          <DotsIcon width={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatusCell({ status }: { status: ModelStatus }) {
+  switch (status.kind) {
+    case "ready":
+      return (
+        <span className="flex items-center gap-1.5 text-[12px] text-slate-600">
+          <span className="h-2 w-2 rounded-full bg-brand-500" /> 已就绪
+        </span>
+      );
+    case "downloading":
+      return (
+        <div className="pr-4">
+          <p className="text-[11.5px] text-slate-600">下载中 {status.progress}%</p>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-brand-500" style={{ width: `${status.progress}%` }} />
+          </div>
+        </div>
+      );
+    case "update":
+      return (
+        <span className="text-[12px]">
+          <span className="flex items-center gap-1.5 font-medium text-sky-600">
+            <RefreshIcon width={13} /> 有更新
+          </span>
+          <span className="mt-0.5 block text-[10.5px] text-slate-400">
+            {status.from} → {status.to}
+          </span>
+        </span>
+      );
+    case "missing":
+      return (
+        <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
+          <span className="h-2 w-2 rounded-full border border-slate-300" /> 未下载
+        </span>
+      );
+  }
+}
+
+function RowAction({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
+  switch (m.status.kind) {
+    case "ready":
+      return (
+        <button
+          onClick={() => void model.removeModel(m.name)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+        >
+          卸载
+        </button>
+      );
+    case "downloading":
+      return (
+        <button
+          onClick={() => void model.cancelPull()}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+        >
+          暂停
+        </button>
+      );
+    case "update":
+      return (
+        <button
+          onClick={() => void model.pull(m.name)}
+          className="rounded-lg border border-brand-400 px-3 py-1.5 text-[11.5px] font-medium text-brand-700 hover:bg-brand-50"
+        >
+          更新
+        </button>
+      );
+    case "missing":
+      return (
+        <button
+          onClick={() => void model.pull(m.name)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+        >
+          下载
+        </button>
+      );
+  }
+}
+
+function StorageRing({ percent }: { percent: number }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - percent / 100);
+  return (
+    <div className="relative grid h-[76px] w-[76px] shrink-0 place-items-center">
+      <svg width="76" height="76" viewBox="0 0 76 76" className="-rotate-90">
+        <circle cx="38" cy="38" r={r} fill="none" stroke="#e2e8f0" strokeWidth="7" />
+        <circle
+          cx="38"
+          cy="38"
+          r={r}
+          fill="none"
+          stroke="#a3d100"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="absolute text-[14px] font-bold text-slate-700">{percent}%</span>
+    </div>
   );
 }
