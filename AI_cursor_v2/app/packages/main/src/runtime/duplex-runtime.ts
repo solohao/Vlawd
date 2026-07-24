@@ -95,10 +95,11 @@ export class DuplexConversationRuntime {
     return this.session;
   }
 
-  /** 连接对话入口：进入 listening 并广播快照。 */
-  connect(): DuplexConversationSnapshot {
+  /** 连接对话入口：进入 listening，完成健康检查，然后返回最新快照。 */
+  async connect(): Promise<DuplexConversationSnapshot> {
     this.paused = false;
     this.setState("listening");
+    await this.checkProviderHealth();
     this.emitSnapshot();
     return this.getSnapshot();
   }
