@@ -22,125 +22,108 @@ import {
   SpeakerIcon
 } from "../icons.js";
 import { Button, cn } from "../../design-system/index.js";
+import { intentTemplates, modelCatalog } from "./model-catalog.js";
+import {
+  deviceFromProbe,
+  rankSlot,
+  resolvePreset,
+  type DeviceProfile,
+  type IntentTemplate,
+  type RankedModel,
+  type ResolvedSlot,
+  type Runnability
+} from "./model-resolver.js";
 
 type Tab = "config" | "library";
 
-interface Preset {
+type Tone = "ok" | "warn" | "bad";
+
+interface SelectOption {
+  name: string;
+  tag: string;
+  note?: string;
+  tone?: Tone;
+}
+
+interface ConfigRow {
   id: string;
   name: string;
   desc: string;
   current?: boolean;
   custom?: boolean;
-  lastUsed?: string;
-  stt: string;
-  llm: string;
-  tts: string;
-  perf: string;
-  perfDesc: string;
-  privacy: string;
-  privacyDesc: string;
-  scene: string;
-  sceneDesc: string;
 }
 
-const presets: Preset[] = [
-  {
-    id: "balanced",
-    name: "推荐 · 均衡模式",
-    desc: "速度与质量的平衡，适合大多数日常使用。",
-    current: true,
-    stt: "Whisper Large v3",
-    llm: "Aurora 7B Instruct",
-    tts: "CosyVoice 2",
-    perf: "均衡",
-    perfDesc: "在响应速度与回答质量之间取得良好平衡",
-    privacy: "较高",
-    privacyDesc: "部分使用本地模型，聊天内容加密传输",
-    scene: "通用",
-    sceneDesc: "日常问答、写作、翻译、信息查询等"
-  },
-  {
-    id: "speed",
-    name: "极速模式",
-    desc: "响应更快，适合快速问答与效率优先任务。",
-    stt: "Whisper Small",
-    llm: "Qwen 2.5 3B Instruct",
-    tts: "Edge TTS",
-    perf: "极速",
-    perfDesc: "以更低延迟优先，响应速度最快",
-    privacy: "中等",
-    privacyDesc: "混合本地与云端，兼顾速度与效果",
-    scene: "快问快答",
-    sceneDesc: "简短问答、指令执行、效率优先场景"
-  },
-  {
-    id: "quality",
-    name: "高质量模式",
-    desc: "更深入的思考与更高质量的回答。",
-    stt: "Whisper Large v3",
-    llm: "Llama 3.1 70B Instruct",
-    tts: "CosyVoice 2",
-    perf: "高质量",
-    perfDesc: "以更强的理解与更高质量输出为优先",
-    privacy: "较高",
-    privacyDesc: "部分使用本地模型，聊天内容加密传输",
-    scene: "创作与深度交流",
-    sceneDesc: "写作、分析、复杂任务与深度对话"
-  },
-  {
-    id: "local",
-    name: "本地隐私模式",
-    desc: "主要使用本地模型，数据不离开你的设备。",
-    stt: "Whisper Large v3",
-    llm: "Qwen 2.5 14B Instruct",
-    tts: "Fish Speech 1.4",
-    perf: "偏均衡",
-    perfDesc: "全本地运行，性能取决于本机设备",
-    privacy: "最高",
-    privacyDesc: "全部本地处理，数据不离开你的设备",
-    scene: "隐私敏感场景",
-    sceneDesc: "机密资料、离线环境、隐私优先场景"
-  },
-  {
-    id: "chinese",
-    name: "中文优化模式",
-    desc: "针对中文理解与表达进行了优化。",
-    stt: "Paraformer v2",
-    llm: "Qwen 2.5 14B Instruct",
-    tts: "CosyVoice 2",
-    perf: "均衡",
-    perfDesc: "面向中文优化，兼顾速度与效果",
-    privacy: "较高",
-    privacyDesc: "部分使用本地模型，聊天内容加密传输",
-    scene: "中文办公",
-    sceneDesc: "中文写作、翻译、会议与办公场景"
-  },
-  {
-    id: "custom",
-    name: "我的自定义配置",
-    desc: "上次使用：2 天前",
-    custom: true,
-    lastUsed: "2 天前",
-    stt: "Whisper Large v3",
-    llm: "Llama 3.1 70B Instruct",
-    tts: "Azure Neural TTS",
-    perf: "自定义",
-    perfDesc: "由你亲自调整的模型组合",
-    privacy: "较高",
-    privacyDesc: "部分使用本地模型，聊天内容加密传输",
-    scene: "个性化",
-    sceneDesc: "根据你的偏好定制的使用场景"
-  }
+/** 自定义配置：不是官方模板，取向沿用均衡，作为"改出来的"方案的落点。 */
+const customTemplate: IntentTemplate = {
+  id: "custom",
+  name: "我的自定义配置",
+  description: "由你亲自调整的模型组合。",
+  official: false,
+  weights: { quality: 5, speed: 3.5, chinese: 1.5 },
+  requireLocal: false,
+  allowCloudFallback: true,
+  perf: "由你亲自调整的模型组合",
+  privacy: "取决于你所选择的模型",
+  scene: "根据你的偏好定制的使用场景"
+};
+
+const configRows: ConfigRow[] = [
+  ...intentTemplates.map((t) => ({ id: t.id, name: t.name, desc: t.description, current: t.id === "balanced" })),
+  { id: "custom", name: customTemplate.name, desc: "上次使用：2 天前", custom: true }
 ];
+
+function templateById(id: string): IntentTemplate {
+  if (id === "custom") {
+    return customTemplate;
+  }
+  return intentTemplates.find((t) => t.id === id) ?? intentTemplates[0];
+}
+
+function toneOf(runnability: Runnability): Tone {
+  if (runnability === "smooth") {
+    return "ok";
+  }
+  return runnability === "insufficient" ? "bad" : "warn";
+}
+
+const TONE_DOT: Record<Tone, string> = {
+  ok: "bg-brand-500",
+  warn: "bg-amber-500",
+  bad: "bg-rose-500"
+};
+
+const TONE_TEXT: Record<Tone, string> = {
+  ok: "text-brand-700",
+  warn: "text-amber-700",
+  bad: "text-rose-600"
+};
+
+function toSelectOptions(ranked: RankedModel[]): SelectOption[] {
+  return ranked.map((r) => ({
+    name: r.model.name,
+    tag: r.model.local ? r.model.quant ?? "本地" : "云端",
+    note: r.annotation,
+    tone: toneOf(r.runnability)
+  }));
+}
+
+function deviceSummary(device: DeviceProfile): string {
+  if (!device.hasGpu) {
+    return `CPU 运行 · ${device.ramGB}GB 内存`;
+  }
+  const vramGB = Math.round(device.vramMB / 1024);
+  return `${device.gpuName ?? "独立显卡"} · ${vramGB}GB 显存 · ${device.ramGB}GB 内存`;
+}
 
 export function ModelCenterPage() {
   const model = useModelCenter();
   const [tab, setTab] = useState<Tab>("config");
   const [editing, setEditing] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("balanced");
+  const device = useMemo(() => deviceFromProbe(model.snapshot.environment), [model.snapshot.environment]);
 
   if (editing) {
-    return <EditConfigView presetName="均衡模式" onBack={() => setEditing(false)} />;
+    return <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />;
   }
 
   return (
@@ -172,6 +155,7 @@ export function ModelCenterPage() {
             {tab === "config" ? (
               <ConfigView
                 selectedPreset={selectedPreset}
+                device={device}
                 onSelect={setSelectedPreset}
                 onEdit={() => setEditing(true)}
               />
@@ -204,14 +188,24 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function ConfigView({
   selectedPreset,
+  device,
   onSelect,
   onEdit
 }: {
   selectedPreset: string;
+  device: DeviceProfile;
   onSelect: (id: string) => void;
   onEdit: () => void;
 }) {
-  const preset = presets.find((p) => p.id === selectedPreset) ?? presets[0];
+  const template = templateById(selectedPreset);
+  // 概览按默认"分步"架构，为当前设备解析出实际组合。
+  const resolved = useMemo(
+    () => resolvePreset(template, modelCatalog, device, "pipeline"),
+    [template, device]
+  );
+  const hearing = resolved.slots.hearing;
+  const brain = resolved.slots.executionBrain;
+  const speaking = resolved.slots.speaking;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,480px)_1fr]">
@@ -221,7 +215,7 @@ function ConfigView({
         <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
 
         <div className="mt-4 space-y-2.5">
-          {presets.map((p) => (
+          {configRows.map((p) => (
             <button
               key={p.id}
               onClick={() => onSelect(p.id)}
@@ -267,33 +261,45 @@ function ConfigView({
 
       {/* 当前配置概览 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
-        <p className="mt-1 text-[12px] text-slate-500">助手将使用以下模型为你提供最佳体验</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
+            <p className="mt-1 text-[12px] text-slate-500">已根据你的设备为该方案解析出实际模型</p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-600">
+            <BoltIcon width={13} /> {deviceSummary(device)}
+          </span>
+        </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" model={preset.stt} />
-          <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型" model={preset.llm} />
-          <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" model={preset.tts} />
+          <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
+          <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
+          <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
         </div>
 
         <div className="my-5 h-px bg-slate-100" />
 
         <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
         <div className="mt-3 space-y-1">
-          <AboutRow icon={<BoltIcon width={16} />} label="性能" desc={preset.perfDesc} value={preset.perf} />
-          <AboutRow icon={<LockIcon width={16} />} label="隐私" desc={preset.privacyDesc} value={preset.privacy} />
-          <AboutRow icon={<GlobeIcon width={16} />} label="适用场景" desc={preset.sceneDesc} value={preset.scene} />
+          <AboutRow icon={<BoltIcon width={16} />} label="性能" desc={template.perf} />
+          <AboutRow icon={<LockIcon width={16} />} label="隐私" desc={template.privacy} />
+          <AboutRow icon={<GlobeIcon width={16} />} label="适用场景" desc={template.scene} />
         </div>
 
         <div className="mt-6 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-[13.5px] font-semibold text-slate-900">切换配置后</h3>
             <p className="mt-1 max-w-md text-[12px] leading-relaxed text-slate-500">
-              系统会自动检查并准备所需模型，无需手动下载或设置。
+              {resolved.notes[0] ?? "系统会自动检查并准备所需模型，无需手动下载或设置。"}
             </p>
           </div>
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-[11.5px] font-medium text-brand-700">
-            <CheckIcon width={14} /> 准备就绪
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium",
+              resolved.notes.length > 0 ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"
+            )}
+          >
+            <CheckIcon width={14} /> {resolved.notes.length > 0 ? "可运行（有提示）" : "准备就绪"}
           </span>
         </div>
 
@@ -320,13 +326,14 @@ function CapabilitySummary({
   icon,
   title,
   kind,
-  model
+  slot
 }: {
   icon: ReactNode;
   title: string;
   kind: string;
-  model: string;
+  slot: ResolvedSlot;
 }) {
+  const tone = slot.needsCloud ? "warn" : toneOf(slot.runnability);
   return (
     <div className="rounded-xl border border-slate-200 p-4">
       <div className="flex items-center gap-2 text-slate-600">
@@ -334,9 +341,9 @@ function CapabilitySummary({
         <span className="text-[13px] font-semibold text-slate-900">{title}</span>
       </div>
       <p className="mt-3 text-[11px] text-slate-400">{kind}</p>
-      <p className="mt-1 text-[13px] font-medium text-slate-800">{model}</p>
-      <p className="mt-3 flex items-center gap-1.5 text-[11.5px] font-medium text-brand-700">
-        <CheckIcon width={14} /> 就绪
+      <p className="mt-1 text-[13px] font-medium text-slate-800">{slot.model?.name ?? "暂无可用模型"}</p>
+      <p className={cn("mt-3 flex items-center gap-1.5 text-[11.5px] font-medium", TONE_TEXT[tone])}>
+        <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
       </p>
     </div>
   );
@@ -351,7 +358,7 @@ function AboutRow({
   icon: ReactNode;
   label: string;
   desc: string;
-  value: string;
+  value?: string;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg px-1 py-2.5">
@@ -360,7 +367,7 @@ function AboutRow({
         <p className="text-[12.5px] font-semibold text-slate-900">{label}</p>
         <p className="mt-0.5 text-[11px] text-slate-500">{desc}</p>
       </div>
-      <span className="text-[12.5px] font-medium text-slate-700">{value}</span>
+      {value && <span className="text-[12.5px] font-medium text-slate-700">{value}</span>}
     </div>
   );
 }
@@ -381,33 +388,31 @@ function Radio({ checked }: { checked: boolean }) {
 
 /* ------------------------------------------------------------------ 编辑配置 */
 
-const sttOptions = [
-  { name: "Whisper Large-V3", tag: "高精度" },
-  { name: "Paraformer v2", tag: "中文" },
-  { name: "Whisper Small", tag: "轻量" }
-];
-const brainOptions = [
-  { name: "Llama 3.1 70B Instruct", tag: "强大" },
-  { name: "Qwen 2.5 14B Instruct", tag: "均衡" },
-  { name: "Qwen 2.5 7B Instruct", tag: "轻量" }
-];
-const notebookOptions = [
-  { name: "Qwen 2.5 14B Instruct", tag: "轻量" },
-  { name: "Phi-3.5 Mini Instruct", tag: "极轻" },
-  { name: "Llama 3.1 8B Instruct", tag: "均衡" }
-];
-const ttsOptions = [
-  { name: "Azure Neural TTS (Xiaoxiao)", tag: "自然" },
-  { name: "CosyVoice 2", tag: "情感" },
-  { name: "Edge TTS", tag: "轻量" }
-];
-
-function EditConfigView({ presetName, onBack }: { presetName: string; onBack: () => void }) {
+function EditConfigView({
+  templateId,
+  device,
+  onBack
+}: {
+  templateId: string;
+  device: DeviceProfile;
+  onBack: () => void;
+}) {
+  const template = templateById(templateId);
+  const presetName = template.name.replace(/^推荐\s*·\s*/, "");
   const [mode, setMode] = useState<"pipeline" | "duplex">("pipeline");
-  const [stt, setStt] = useState(sttOptions[0].name);
-  const [brain, setBrain] = useState(brainOptions[0].name);
-  const [notebook, setNotebook] = useState(notebookOptions[0].name);
-  const [tts, setTts] = useState(ttsOptions[0].name);
+
+  // 每个角色的候选列表都由同一解析引擎按设备排序 + 标注（手动选取出口）。
+  const sttOptions = useMemo(() => toSelectOptions(rankSlot("hearing", modelCatalog, template, device)), [template, device]);
+  const brainOptions = useMemo(() => toSelectOptions(rankSlot("thinking", modelCatalog, template, device)), [template, device]);
+  const notebookOptions = brainOptions;
+  const ttsOptions = useMemo(() => toSelectOptions(rankSlot("speaking", modelCatalog, template, device)), [template, device]);
+
+  const [stt, setStt] = useState(sttOptions[0]?.name ?? "");
+  const [brain, setBrain] = useState(brainOptions[0]?.name ?? "");
+  const [notebook, setNotebook] = useState(brainOptions[1]?.name ?? brainOptions[0]?.name ?? "");
+  const [tts, setTts] = useState(ttsOptions[0]?.name ?? "");
+
+  const findOption = (options: SelectOption[], name: string) => options.find((o) => o.name === name);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
@@ -484,7 +489,7 @@ function EditConfigView({ presetName, onBack }: { presetName: string; onBack: ()
           <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
             <CapabilityCard icon={<EarIcon width={20} />} title="听（Hearing）" subtitle="将语音转换为文本">
               <ModelSelect label="听觉模型" options={sttOptions} value={stt} onChange={setStt} />
-              <StatusLine />
+              <StatusLine option={findOption(sttOptions, stt)} />
               <AutoPrepareNote />
             </CapabilityCard>
 
@@ -501,7 +506,7 @@ function EditConfigView({ presetName, onBack }: { presetName: string; onBack: ()
                 value={brain}
                 onChange={setBrain}
               />
-              <StatusLine />
+              <StatusLine option={findOption(brainOptions, brain)} />
               <div className="my-4 h-px bg-slate-100" />
               <ModelSelect
                 label="记录笔记本（Record Notebook）"
@@ -510,13 +515,13 @@ function EditConfigView({ presetName, onBack }: { presetName: string; onBack: ()
                 value={notebook}
                 onChange={setNotebook}
               />
-              <StatusLine />
+              <StatusLine option={findOption(notebookOptions, notebook)} />
               <AutoPrepareNote />
             </CapabilityCard>
 
             <CapabilityCard icon={<SpeakerIcon width={20} />} title="说（Speaking）" subtitle="将文本转换为语音">
               <ModelSelect label="发声模型" options={ttsOptions} value={tts} onChange={setTts} />
-              <StatusLine />
+              <StatusLine option={findOption(ttsOptions, tts)} />
               <AutoPrepareNote />
             </CapabilityCard>
           </div>
@@ -611,7 +616,7 @@ function ModelSelect({
 }: {
   label: string;
   labelDesc?: string;
-  options: { name: string; tag: string }[];
+  options: SelectOption[];
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -641,17 +646,15 @@ function ModelSelect({
           onClick={() => setOpen((v) => !v)}
           className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-slate-300"
         >
-          <span className="text-slate-400">
-            <SparkIcon width={16} />
-          </span>
-          <span className="text-[12.5px] font-medium text-slate-800">{current.name}</span>
+          <span className={cn("h-2 w-2 rounded-full", TONE_DOT[current?.tone ?? "ok"])} />
+          <span className="text-[12.5px] font-medium text-slate-800">{current?.name ?? "无可用模型"}</span>
           <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
-            {current.tag}
+            {current?.tag}
           </span>
           <ChevronDown width={16} className={cn("ml-auto text-slate-400 transition-transform", open && "rotate-180")} />
         </button>
         {open && (
-          <div className="absolute left-0 right-0 z-20 mt-1.5 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          <div className="absolute left-0 right-0 z-20 mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
             {options.map((o) => (
               <button
                 key={o.name}
@@ -664,9 +667,15 @@ function ModelSelect({
                   o.name === value && "bg-brand-50/50"
                 )}
               >
-                <span className="text-[12.5px] text-slate-800">{o.name}</span>
-                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{o.tag}</span>
-                {o.name === value && <CheckIcon width={14} className="ml-auto text-brand-600" />}
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", TONE_DOT[o.tone ?? "ok"])} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[12.5px] text-slate-800">{o.name}</span>
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{o.tag}</span>
+                  </span>
+                  {o.note && <span className={cn("mt-0.5 block text-[10.5px]", TONE_TEXT[o.tone ?? "ok"])}>{o.note}</span>}
+                </span>
+                {o.name === value && <CheckIcon width={14} className="ml-auto shrink-0 text-brand-600" />}
               </button>
             ))}
           </div>
@@ -676,12 +685,13 @@ function ModelSelect({
   );
 }
 
-function StatusLine() {
+function StatusLine({ option }: { option?: SelectOption }) {
+  const tone = option?.tone ?? "ok";
   return (
     <div className="mt-3">
       <p className="text-[11px] text-slate-400">状态</p>
-      <p className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-brand-700">
-        <span className="h-2 w-2 rounded-full bg-brand-500" /> 已就绪
+      <p className={cn("mt-1 flex items-center gap-1.5 text-[12px] font-medium", TONE_TEXT[tone])}>
+        <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {option?.note ?? "已就绪"}
       </p>
     </div>
   );
