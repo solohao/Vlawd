@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { DemoBadge, EmptyState, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { CheckIcon, FileIcon, GlobeIcon, ListIcon, MailIcon, NodesIcon } from "../icons.js";
 import { Button, Card } from "../../design-system/index.js";
 import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
-import { useMarkFeature } from "../../app/feature-status.js";
+import { FeatureSection } from "../../app/feature-status.js";
 
 const typeIcons = { 研究: NodesIcon, 邮件: MailIcon, 网页: GlobeIcon, 文件: FileIcon };
 
@@ -18,17 +18,8 @@ const typeLabels: Record<string, string> = {
 
 export function SessionsPage() {
   const desktop = useDesktopRuntime();
-  const mark = useMarkFeature();
-  const markedRef = useRef(false);
   const { snapshot } = desktop;
   const { session } = snapshot;
-
-  useEffect(() => {
-    if (session.chunks.length > 0 && !markedRef.current) {
-      markedRef.current = true;
-      mark("ui.sessions", "done");
-    }
-  }, [session.chunks.length, mark]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const currentChunk = session.chunks.find((chunk) => chunk.id === selected);
@@ -36,6 +27,7 @@ export function SessionsPage() {
   const listItems = session.chunks.slice().reverse();
 
   return (
+    <FeatureSection id="ui.sessions" title="Session 记录" autoReady={session.chunks.length > 0} className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="Session 记录"
@@ -116,5 +108,6 @@ export function SessionsPage() {
         </Card>
       </div>
     </div>
+    </FeatureSection>
   );
 }

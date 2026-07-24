@@ -1,6 +1,7 @@
 import { DemoBadge, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { ArrowRight, MailIcon, PlusIcon, ShieldIcon, TableIcon, WorkflowIcon } from "../icons.js";
 import { Button, Card, Badge } from "../../design-system/index.js";
+import { FeatureSection } from "../../app/feature-status.js";
 
 const workflows = [
   { title: "市场调研助手", description: "检索来源、提取 Evidence、生成带引用摘要。", icon: WorkflowIcon, state: "草稿" },
@@ -10,6 +11,7 @@ const workflows = [
 
 export function WorkflowsPage() {
   return (
+    <FeatureSection id="ui.workflows" title="工作流库" autoReady={false} className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="工作流库"
@@ -63,5 +65,6 @@ export function WorkflowsPage() {
         </div>
       </Card>
     </div>
+    </FeatureSection>
   );
 }

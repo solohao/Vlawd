@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { DuplexLatencySample, ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { AiEmployeeMascot } from "../Brand.js";
@@ -17,7 +17,7 @@ import {
   ShieldIcon
 } from "../icons.js";
 import { useConversation } from "../../runtime/useConversation.js";
-import { useMarkFeature } from "../../app/feature-status.js";
+import { FeatureSection } from "../../app/feature-status.js";
 
 const STATE_LABELS: Record<ModelRuntimeState, string> = {
   listening: "Listening",
@@ -79,21 +79,12 @@ export function LiveConversationPage({
 }) {
   const convo = useConversation();
   const { snapshot } = convo;
-  const mark = useMarkFeature();
-  const markedRef = useRef(false);
   const [draft, setDraft] = useState("");
   const [deviceFilter, setDeviceFilter] = useState<"all" | "headset" | "mic" | "speaker">("all");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedInput, setSelectedInput] = useState<string | undefined>(undefined);
   const [selectedOutput, setSelectedOutput] = useState<string | undefined>(undefined);
   const [entered, setEntered] = useState(false);
-
-  useEffect(() => {
-    if (snapshot.turns.some((turn) => turn.role === "assistant" && turn.text.trim()) && !markedRef.current) {
-      markedRef.current = true;
-      mark("ui.conversation", "done");
-    }
-  }, [snapshot.turns, mark]);
 
   const connected = entered && convo.available && !!snapshot.sessionId;
   const active = connected && (snapshot.runtimeState === "speaking" || snapshot.runtimeState === "listening" || snapshot.runtimeState === "thinking");
@@ -165,6 +156,7 @@ export function LiveConversationPage({
   for (const sample of convo.latency) latestByKind.set(sample.kind, sample);
 
   return (
+    <FeatureSection id="ui.conversation" title="对话入口选择" autoReady={readyForConversation(snapshot)} className="h-full">
     <div className="px-8 py-7">
       {/* header */}
       <header className="mb-5 flex items-start justify-between">
@@ -431,6 +423,7 @@ export function LiveConversationPage({
         </aside>
       </div>
     </div>
+    </FeatureSection>
   );
 }
 

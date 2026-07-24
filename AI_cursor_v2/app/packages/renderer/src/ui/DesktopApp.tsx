@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FeaturePaint, FeatureStatusProvider } from "../app/feature-status.js";
+import { FeatureStatusProvider } from "../app/feature-status.js";
 import { DesktopRuntimeProvider } from "../runtime/useDesktopRuntime.js";
 import { Sidebar } from "./Sidebar.js";
 import { LiveConversationPage } from "./pages/LiveConversationPage.js";
@@ -49,49 +49,21 @@ export function DesktopApp() {
           <Sidebar theme={theme} activeNav={page} onNavigate={(id) => setPage(id as DesktopPage)} />
           <main className="relative flex-1 overflow-y-auto">
             {page === "dashboard" && (
-              <FeaturePaint id="ui.dashboard">
-                <DashboardPage
-                  onStartTask={() => setPage("conversation")}
-                  onOpenSessions={() => setPage("sessions")}
-                  onOpenModels={() => setPage("models")}
-                />
-              </FeaturePaint>
+              <DashboardPage
+                onStartTask={() => setPage("conversation")}
+                onOpenSessions={() => setPage("sessions")}
+                onOpenModels={() => setPage("models")}
+              />
             )}
             {page === "conversation" && (
-              <FeaturePaint id="ui.conversation">
-                <LiveConversationPage onBack={() => setPage("dashboard")} onOpenModels={() => setPage("models")} />
-              </FeaturePaint>
+              <LiveConversationPage onBack={() => setPage("dashboard")} onOpenModels={() => setPage("models")} />
             )}
-            {page === "task" && (
-              <FeaturePaint id="ui.task">
-                <TaskWorkspacePage />
-              </FeaturePaint>
-            )}
-            {page === "sessions" && (
-              <FeaturePaint id="ui.sessions">
-                <SessionsPage />
-              </FeaturePaint>
-            )}
-            {page === "workflows" && (
-              <FeaturePaint id="ui.workflows">
-                <WorkflowsPage />
-              </FeaturePaint>
-            )}
-            {page === "models" && (
-              <FeaturePaint id="ui.models">
-                <ModelCenterPage />
-              </FeaturePaint>
-            )}
-            {page === "devices" && (
-              <FeaturePaint id="ui.devices">
-                <DevicesPage />
-              </FeaturePaint>
-            )}
-            {page === "settings" && (
-              <FeaturePaint id="ui.settings">
-                <SettingsPage />
-              </FeaturePaint>
-            )}
+            {page === "task" && <TaskWorkspacePage />}
+            {page === "sessions" && <SessionsPage />}
+            {page === "workflows" && <WorkflowsPage />}
+            {page === "models" && <ModelCenterPage />}
+            {page === "devices" && <DevicesPage />}
+            {page === "settings" && <SettingsPage />}
           </main>
         </div>
       </DesktopRuntimeProvider>
