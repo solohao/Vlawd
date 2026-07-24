@@ -40,10 +40,12 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
     }
   }, [desktop.snapshot.generatedAt, mark]);
 
+  const readyForConversation = (snapshot: typeof convo.snapshot) =>
+    snapshot.providerConnected && snapshot.usingRealInference;
+
   const startVoice = async () => {
     const afterConnect = await convo.connect();
-    const realInference = afterConnect.providerConnected && afterConnect.usingRealInference;
-    if (convo.available && !realInference) {
+    if (convo.available && !readyForConversation(afterConnect)) {
       onOpenModels();
       return;
     }
@@ -55,8 +57,7 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
 
   const startTask = async () => {
     const afterConnect = await convo.connect();
-    const realInference = afterConnect.providerConnected && afterConnect.usingRealInference;
-    if (convo.available && !realInference) {
+    if (convo.available && !readyForConversation(afterConnect)) {
       onOpenModels();
       return;
     }

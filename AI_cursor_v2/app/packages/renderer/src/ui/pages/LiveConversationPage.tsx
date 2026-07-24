@@ -42,8 +42,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   personaplex: "方案 A · PersonaPlex",
   moshi: "方案 A · Moshi",
   "glm-4-voice": "GLM-4-Voice",
-  "cloud-planner": "云端 Planner",
-  mock: "Mock（开发验证）"
+  "cloud-planner": "云端 Planner"
 };
 
 function providerLabel(kind: string): string {
@@ -114,19 +113,18 @@ export function LiveConversationPage({
       .catch(() => undefined);
   }, [convo.micActive]);
 
-  const realInference = snapshot.providerConnected && snapshot.usingRealInference;
+  const readyForConversation = (s: typeof snapshot) =>
+    s.providerConnected && s.usingRealInference;
   const readyLabel = !convo.available
     ? { text: "未连接 Runtime（浏览器预览）", tone: "idle" as const }
-    : realInference
+    : readyForConversation(snapshot)
       ? { text: "AI 员工已就绪", tone: "ready" as const }
       : { text: "离线回退模式", tone: "warn" as const };
 
   const startVoice = async () => {
     setEntered(true);
     const afterConnect = await convo.connect();
-    const realInferenceNow = afterConnect.providerConnected && afterConnect.usingRealInference;
-    // Cycle 1 必须真实 Provider；未就绪时引导到模型中心。
-    if (convo.available && !realInferenceNow) {
+    if (convo.available && !readyForConversation(afterConnect)) {
       onOpenModels?.();
       return;
     }
@@ -139,9 +137,7 @@ export function LiveConversationPage({
 
   const startManual = async () => {
     const afterConnect = await convo.connect();
-    // 没有真实 Provider 时引导到模型中心，不再自动切 mock。
-    const realInference = afterConnect.providerConnected && afterConnect.usingRealInference;
-    if (convo.available && !realInference) {
+    if (convo.available && !readyForConversation(afterConnect)) {
       onOpenModels?.();
       return;
     }
