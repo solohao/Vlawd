@@ -169,7 +169,7 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
 
             {/* 当前任务 + 最近使用 */}
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <CurrentTaskPanel />
+              <CurrentTaskPanel onOpenSessions={onOpenSessions} />
               <RecentUsePanel onOpenSessions={onOpenSessions} />
             </div>
           </div>
@@ -185,87 +185,82 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
 }
 
 
-function CurrentTaskPanel() {
-  const steps = [
-    { icon: <MicIcon width={16} />, label: "理解", state: "done" as const },
-    { icon: <GridIcon width={16} />, label: "执行", state: "current" as const },
-    { icon: <CheckIcon width={16} />, label: "完成", state: "todo" as const }
-  ];
-  const plan = [
-    { label: "收集上周所有会议记录", state: "done" as const },
-    { label: "提炼关键信息与行动项", state: "current" as const },
-    { label: "生成结构化报告", state: "todo" as const },
-    { label: "汇总并准备汇报", state: "todo" as const }
+function CurrentTaskPanel({ onOpenSessions }: { onOpenSessions: () => void }) {
+  // 模拟多个任务数据
+  const tasks = [
+    {
+      id: 1,
+      name: "整理上周会议纪要并生成报告",
+      currentStep: 2,
+      totalSteps: 3,
+      progress: 65,
+      status: "running" as const
+    },
+    {
+      id: 2,
+      name: "调研 AI 助手产品竞品",
+      currentStep: 1,
+      totalSteps: 3,
+      progress: 20,
+      status: "running" as const
+    },
+    {
+      id: 3,
+      name: "准备产品发布会资料",
+      currentStep: 3,
+      totalSteps: 3,
+      progress: 100,
+      status: "completed" as const
+    }
   ];
 
   return (
     <div className="border border-slate-100 rounded-lg overflow-hidden">
-      <div className="bg-slate-50/50 px-4 py-2 border-b border-slate-100">
-        <p className="text-[11px] text-slate-500">当前任务</p>
-        <h3 className="text-[13px] font-semibold text-slate-900">整理上周会议纪要并生成报告</h3>
+      <div className="flex items-center justify-between bg-slate-50/50 px-4 py-2 border-b border-slate-100">
+        <span className="text-[12px] font-medium text-slate-700">当前任务 ({tasks.filter(t => t.status === 'running').length})</span>
+        <button className="text-[11px] text-slate-400 hover:text-slate-600">
+          查看全部
+        </button>
       </div>
-
-      <div className="p-4">
-        <div className="flex items-center justify-between">
-          {steps.map((s, i) => (
-            <div key={s.label} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <span
-                  className={cn(
-                    "grid h-8 w-8 place-items-center rounded-full text-[12px] font-medium",
-                    s.state === "done"
-                      ? "bg-brand-500 text-white"
-                      : s.state === "current"
-                        ? "border-2 border-brand-500 bg-white text-brand-600"
-                        : "border border-slate-200 bg-white text-slate-300"
-                  )}
-                >
-                  {s.icon}
-                </span>
-                <p className={cn("mt-1 text-[11px]", s.state === "todo" ? "text-slate-400" : "text-slate-700")}>
-                  {s.label}
-                </p>
-              </div>
-              {i < steps.length - 1 && <div className="mx-4 h-px w-12 bg-slate-200" />}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-            <span>进度</span>
-            <span>65%</span>
-          </div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-brand-500" style={{ width: "65%" }} />
-          </div>
-        </div>
-      </div>
-
       <List>
-        {plan.map((p) => (
+        {tasks.map((task) => (
           <ListRow
-            key={p.label}
+            key={task.id}
+            onClick={onOpenSessions}
             leading={
-              <span
-                className={cn(
-                  "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full",
-                  p.state === "done"
-                    ? "bg-brand-500 text-white"
-                    : p.state === "current"
-                      ? "border-2 border-brand-500"
-                      : "border border-slate-300"
-                )}
-              >
-                {p.state === "done" && <CheckIcon width={8} />}
-                {p.state === "current" && <span className="h-1 w-1 rounded-full bg-brand-500" />}
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                {task.status === "completed" ? <CheckIcon width={16} /> : <GridIcon width={16} />}
               </span>
             }
-            title={p.label}
+            title={task.name}
+            description={
+              task.status === "completed"
+                ? "已完成"
+                : `步骤 ${task.currentStep}/${task.totalSteps} · 进行中`
+            }
             trailing={
-              <span className={cn("text-[10px]", p.state === "current" ? "text-brand-600" : "text-slate-400")}>
-                {p.state === "done" ? "完成" : p.state === "current" ? "进行中" : "待执行"}
-              </span>
+              <div className="flex items-center gap-2">
+                {task.status === "running" && (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <div className="h-1 w-16 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-brand-500"
+                          style={{ width: `${task.progress}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-slate-500 w-8 text-right">{task.progress}%</span>
+                    </div>
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
+                  </>
+                )}
+                {task.status === "completed" && (
+                  <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    已完成
+                  </span>
+                )}
+                <ChevronRight width={14} className="text-slate-300" />
+              </div>
             }
           />
         ))}
