@@ -68,12 +68,20 @@ function Waveform({ reverse = false, muted = false }: { reverse?: boolean; muted
 
 const card = "rounded-2xl border border-slate-200 bg-white";
 
-export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
+export function LiveConversationPage({
+  onBack,
+  onOpenModels
+}: {
+  onBack?: () => void;
+  onOpenModels?: () => void;
+}) {
   const convo = useConversation();
   const { snapshot } = convo;
   const [draft, setDraft] = useState("");
   const [deviceFilter, setDeviceFilter] = useState<"all" | "headset" | "mic" | "speaker">("all");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedInput, setSelectedInput] = useState<string | undefined>(undefined);
+  const [selectedOutput, setSelectedOutput] = useState<string | undefined>(undefined);
   const [entered, setEntered] = useState(false);
 
   const connected = entered && convo.available && !!snapshot.sessionId;
@@ -85,7 +93,12 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
     }
     navigator.mediaDevices
       .enumerateDevices()
-      .then((list) => setDevices(list.filter((d) => d.kind === "audioinput" || d.kind === "audiooutput")))
+      .then((list) => {
+        const audio = list.filter((d) => d.kind === "audioinput" || d.kind === "audiooutput");
+        setDevices(audio);
+        setSelectedInput((prev) => prev ?? audio.find((d) => d.kind === "audioinput")?.deviceId);
+        setSelectedOutput((prev) => prev ?? audio.find((d) => d.kind === "audiooutput")?.deviceId);
+      })
       .catch(() => undefined);
   }, [convo.micActive]);
 
@@ -99,7 +112,14 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
   const startVoice = async () => {
     setEntered(true);
     await convo.connect();
+    // Cycle 1 要求真实 Provider：未就绪时引导到模型中心，不直接进离线回退。
+    if (convo.available && !realInference) {
+      onOpenModels?.();
+      return;
+    }
     if (convo.micSupported && !convo.micActive) {
+      if (selectedInput) convo.selectInputDevice(selectedInput);
+      if (selectedOutput) convo.selectOutputDevice(selectedOutput);
       await convo.toggleMic();
     }
   };
@@ -119,7 +139,7 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
   };
 
   const latestByKind = new Map<string, DuplexLatencySample>();
-  for (const sample of snapshot.latency) latestByKind.set(sample.kind, sample);
+  for (const sample of convo.latency) latestByKind.set(sample.kind, sample);
 
   return (
     <div className="px-8 py-7">
@@ -174,11 +194,15 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
             <div className="relative flex flex-col items-center">
               <AiEmployeeMascot size={128} />
               <div className="mt-1 flex items-center gap-3">
-                <Waveform muted={!active} />
+                <Waveform muted={!active && !convo.ttsSpeaking} />
                 <span className="text-[16px] font-medium text-slate-700">
-                  {connected ? `${STATE_LABELS[snapshot.runtimeState]}…` : "待命中"}
+                  {convo.whisperLoading
+                    ? `加载模型：${convo.whisperLoading.status}${convo.whisperLoading.progress != null ? ` ${Math.round(convo.whisperLoading.progress * 100)}%` : ""}`
+                    : connected
+                      ? `${STATE_LABELS[snapshot.runtimeState]}…`
+                      : "待命中"}
                 </span>
-                <Waveform reverse muted={!active} />
+                <Waveform reverse muted={!active && !convo.ttsSpeaking} />
               </div>
               <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-[12px] font-medium text-brand-700">
                 <ShieldIcon width={13} height={13} /> 安全抢占已启用
@@ -199,8 +223,8 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
                 <ConfigCard
                   icon={<MicIcon width={18} height={18} />}
                   label="输入设备"
-                  device={devices.find((d) => d.kind === "audioinput")?.label || "系统默认麦克风"}
-                  status="已选择"
+                  device={devices.find((d) => d.deviceId === selectedInput)?.label || devices.find((d) => d.kind === "audioinput")?.label || "系统默认麦克风"}
+                  status={selectedInput ? "已选择" : "默认"}
                 />
                 <div className="flex flex-col items-center justify-center text-slate-300">
                   <ArrowRight width={16} height={16} />
@@ -209,8 +233,8 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
                 <ConfigCard
                   icon={<HeadphonesIcon width={18} height={18} />}
                   label="输出设备"
-                  device={devices.find((d) => d.kind === "audiooutput")?.label || "系统默认扬声器"}
-                  status="已连接"
+                  device={devices.find((d) => d.deviceId === selectedOutput)?.label || devices.find((d) => d.kind === "audiooutput")?.label || "系统默认扬声器"}
+                  status={selectedOutput ? "已选择" : "默认"}
                 />
                 <button
                   onClick={() => void startVoice()}
@@ -263,19 +287,48 @@ export function LiveConversationPage({ onBack }: { onBack?: () => void }) {
               </div>
 
               <div className={`${card} divide-y divide-slate-100`}>
-                <DeviceRow
-                  icon={<HeadphonesIcon width={18} height={18} />}
-                  name="系统音频设备"
-                  badge="推荐"
-                  sub="麦克风 · 扬声器"
-                  action={<button onClick={() => void startVoice()} className="rounded-lg bg-brand-400 px-3 py-1.5 text-[12px] font-semibold text-ink-900 hover:bg-brand-300">连接</button>}
-                />
-                <DeviceRow
-                  icon={<MicIcon width={18} height={18} />}
-                  name={devices.find((d) => d.kind === "audioinput")?.label || "默认麦克风"}
-                  sub="音频输入"
-                  action={<button onClick={() => void startVoice()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50">选接</button>}
-                />
+                {devices
+                  .filter((device) => {
+                    if (deviceFilter === "all") return true;
+                    if (deviceFilter === "mic") return device.kind === "audioinput";
+                    if (deviceFilter === "speaker") return device.kind === "audiooutput";
+                    const label = device.label.toLowerCase();
+                    return (
+                      device.kind === "audioinput" &&
+                      (label.includes("bluetooth") || label.includes("headset") || label.includes("耳机"))
+                    );
+                  })
+                  .map((device) => {
+                    const isInput = device.kind === "audioinput";
+                    const isSelected = isInput
+                      ? device.deviceId === selectedInput
+                      : device.deviceId === selectedOutput;
+                    return (
+                      <DeviceRow
+                        key={device.deviceId}
+                        icon={isInput ? <MicIcon width={18} height={18} /> : <HeadphonesIcon width={18} height={18} />}
+                        name={device.label || (isInput ? "麦克风" : "扬声器")}
+                        badge={isSelected ? "已选" : undefined}
+                        sub={isInput ? "音频输入" : "音频输出"}
+                        action={
+                          <button
+                            onClick={() => {
+                              if (isInput) {
+                                setSelectedInput(device.deviceId);
+                                convo.selectInputDevice(device.deviceId);
+                              } else {
+                                setSelectedOutput(device.deviceId);
+                                convo.selectOutputDevice(device.deviceId);
+                              }
+                            }}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-600 hover:bg-slate-50"
+                          >
+                            选择
+                          </button>
+                        }
+                      />
+                    );
+                  })}
                 <DeviceRow
                   icon={<MonitorIcon width={18} height={18} />}
                   name="手动输入"

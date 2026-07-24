@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, session, shell } from "electron";
 import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -399,6 +399,11 @@ ipcMain.handle("app:quit", () => {
 });
 
 app.whenReady().then(() => {
+  // 允许渲染层请求麦克风/摄像头权限，否则 getUserMedia 会被默认拒绝。
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "media" || permission === "mediaKeySystem");
+  });
+
   createTray();
   // 主窗口是启动时可见的形态；悬浮窗预创建但保持隐藏，最小化时才切过去。
   showMainWindow();

@@ -10,6 +10,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/copy-vad-assets.js",
     "build": "tsc -b",
     "build:renderer": "vite build",
     "dev": "tsx scripts/dev.ts",
@@ -107,6 +108,7 @@
     "@radix-ui/react-slot": "^1.3.1",
     "@radix-ui/react-tabs": "^1.1.19",
     "@radix-ui/react-tooltip": "^1.2.14",
+    "@ricky0123/vad-web": "^0.0.30",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-updater": "^6.3.9",
