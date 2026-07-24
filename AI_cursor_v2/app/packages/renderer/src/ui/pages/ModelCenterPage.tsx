@@ -171,22 +171,22 @@ export function ModelCenterPage() {
       {editing ? (
         <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />
       ) : (
-        <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+        <div className="flex h-screen flex-col overflow-hidden bg-white">
           <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
-              <header className="flex items-start justify-between">
+            <div className="mx-auto w-full max-w-[1400px] px-6 py-4">
+              <header className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
-                  <h1 className="text-[24px] font-bold tracking-tight text-slate-900">模型中心</h1>
-                  <p className="mt-1.5 text-[12.5px] text-slate-500">
-                    选择最适合你的模型配置，助手已根据你的设备为你准备好推荐方案。
+                  <h1 className="text-[20px] font-semibold text-slate-900">模型中心</h1>
+                  <p className="mt-0.5 text-[12px] text-slate-500">
+                    根据你的设备推荐最佳配置
                   </p>
                 </div>
-                <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
-                  <PlusIcon width={15} /> 新建配置
+                <Button variant="secondary" size="sm" className="h-8 gap-1.5 text-[11px]" animated={false}>
+                  <PlusIcon width={14} /> 新建
                 </Button>
               </header>
 
-              <div className="mt-5 flex items-center gap-6 border-b border-slate-200">
+              <div className="mt-3 flex items-center gap-6 border-b border-slate-100">
                 <TabButton active={tab === "config"} onClick={() => setTab("config")}>
                   配置
                 </TabButton>
@@ -195,7 +195,7 @@ export function ModelCenterPage() {
                 </TabButton>
               </div>
 
-              <div className="pt-6">
+              <div className="pt-4">
                 {tab === "config" ? (
                   <ConfigView
                     model={model}
@@ -257,216 +257,169 @@ function ConfigView({
   const speaking = resolved.slots.speaking;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <RunningBackendSection model={model} />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,480px)_1fr]">
-        {/* 选择配置 */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
-          <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
 
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-            <Table hoverable className="table-fixed">
-              <TableHead>
-                <TableRow>
-                  <TableHeader className="w-10" />
-                  <TableHeader>配置名称</TableHeader>
-                  <TableHeader>说明</TableHeader>
-                  <TableHeader className="w-16 text-right" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {configRows.map((p) => (
-                  <TableRow
-                    key={p.id}
-                    selected={selectedPreset === p.id}
-                    onClick={() => onSelect(p.id)}
-                    className="cursor-pointer"
-                  >
-                    <TableCell className="w-10">
-                      <Radio checked={selectedPreset === p.id} />
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-medium text-slate-900">{p.name}</span>
-                        {p.current && (
-                          <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                            当前使用
-                          </span>
-                        )}
-                      </span>
-                    </TableCell>
-                    <TableCell className="truncate text-slate-500">{p.desc}</TableCell>
-                    <TableCell align="right" className="w-16">
-                      {p.custom ? (
-                        <DotsIcon width={16} className="text-slate-300" />
-                      ) : (
-                        <ChevronRight width={16} className="text-slate-400" />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow onClick={onEdit} className="cursor-pointer">
-                  <TableCell className="w-10" />
-                  <TableCell className="font-medium text-slate-900">管理配置</TableCell>
-                  <TableCell className="text-slate-500">重命名、编辑或恢复配置</TableCell>
-                  <TableCell align="right" className="w-16">
-                    <ChevronRight width={16} className="text-slate-400" />
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </section>
-
-        {/* 当前配置概览 */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
-              <p className="mt-1 text-[12px] text-slate-500">已根据你的设备为该方案解析出实际模型</p>
-            </div>
-            <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-600">
-              <BoltIcon width={13} /> {deviceSummary(device)}
-            </span>
-          </div>
-
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-            <Table className="table-fixed">
-              <TableHead>
-                <TableRow>
-                  <TableHeader className="w-12" />
-                  <TableHeader className="w-44">能力</TableHeader>
-                  <TableHeader>当前模型</TableHeader>
-                  <TableHeader className="w-32 text-right">状态 / 推荐</TableHeader>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <CapabilityTableRow icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
-                <CapabilityTableRow icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
-                <CapabilityTableRow icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="my-4 h-px bg-slate-100" />
-
-          <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
-            <Table className="table-fixed">
-              <TableHead>
-                <TableRow>
-                  <TableHeader className="w-28">项目</TableHeader>
-                  <TableHeader>说明</TableHeader>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TableCell>
-                    <span className="flex items-center gap-2 text-slate-700">
-                      <BoltIcon width={16} className="text-slate-400" /> 性能
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium text-slate-800">{perfSummary(template)}</span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">{template.perf}</span>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <span className="flex items-center gap-2 text-slate-700">
-                      <LockIcon width={16} className="text-slate-400" /> 隐私
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium text-slate-800">{template.requireLocal ? "完全本地" : "混合存储"}</span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">{template.privacy}</span>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <span className="flex items-center gap-2 text-slate-700">
-                      <GlobeIcon width={16} className="text-slate-400" /> 适用场景
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium text-slate-800">{sceneSummary(template)}</span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">{template.scene}</span>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="mt-5 flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-[13.5px] font-semibold text-slate-900">切换配置后</h3>
-              <p className="mt-1 max-w-md text-[12px] leading-relaxed text-slate-500">
-                {resolved.notes[0] ?? "系统会自动检查并准备所需模型，无需手动下载或设置。"}
-              </p>
-            </div>
-            <span
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium",
-                resolved.notes.length > 0 ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"
-              )}
+      {/* 配置选择 + 概览 - 合并为一个卡片 */}
+      <div className="border border-slate-100 rounded-lg overflow-hidden">
+        {/* 配置选择 - 改为导航栏 */}
+        <div className="bg-slate-50/50 border-b border-slate-100">
+          <div className="flex items-center gap-1 px-3 py-2 overflow-x-auto">
+            {configRows.slice(0, -1).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onSelect(p.id)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
+                  selectedPreset === p.id
+                    ? "bg-brand-500 text-white"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                )}
+              >
+                {selectedPreset === p.id && <CheckIcon width={12} />}
+                {p.name.replace(/^推荐\s*·\s*/, "")}
+              </button>
+            ))}
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-slate-500 hover:bg-white hover:text-slate-900 transition-colors shrink-0 ml-auto"
             >
-              <CheckIcon width={14} /> {resolved.notes.length > 0 ? "可运行（有提示）" : "准备就绪"}
-            </span>
+              <SlidersIcon width={12} />
+              管理
+            </button>
           </div>
+        </div>
 
-          <ApplyConfigBar model={model} onEdit={onEdit} />
-        </section>
+        {/* 设备信息 */}
+        <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-slate-100">
+          <span className="text-[11px] text-slate-500">当前设备</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700">
+            <BoltIcon width={12} className="text-slate-400" />
+            {deviceSummary(device)}
+          </span>
+        </div>
+
+        {/* 三个能力 - 横向 3 列 */}
+        <div className="grid grid-cols-3 gap-px bg-slate-100">
+          <div className="bg-white px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                <EarIcon width={14} />
+              </span>
+              <span className="text-[11px] font-semibold text-slate-900">听见你</span>
+            </div>
+            <div className="text-[11px] text-slate-600 truncate">{hearing.model?.name ?? "暂无"}</div>
+            <div className="mt-2">
+              <StatusBadge tone={hearing.needsCloud ? "warn" : toneOf(hearing.runnability)} label={hearing.annotation} />
+            </div>
+          </div>
+          <div className="bg-white px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                <BrainIcon width={14} />
+              </span>
+              <span className="text-[11px] font-semibold text-slate-900">理解与思考</span>
+            </div>
+            <div className="text-[11px] text-slate-600 truncate">{brain.model?.name ?? "暂无"}</div>
+            <div className="mt-2">
+              <StatusBadge tone={brain.needsCloud ? "warn" : toneOf(brain.runnability)} label={brain.annotation} />
+            </div>
+          </div>
+          <div className="bg-white px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                <SpeakerIcon width={14} />
+              </span>
+              <span className="text-[11px] font-semibold text-slate-900">回应你</span>
+            </div>
+            <div className="text-[11px] text-slate-600 truncate">{speaking.model?.name ?? "暂无"}</div>
+            <div className="mt-2">
+              <StatusBadge tone={speaking.needsCloud ? "warn" : toneOf(speaking.runnability)} label={speaking.annotation} />
+            </div>
+          </div>
+        </div>
+
+        {/* 配置详情 - 横向 3 列 */}
+        <div className="grid grid-cols-3 gap-px bg-slate-100">
+          <div className="bg-white px-4 py-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <BoltIcon width={12} className="text-slate-400" />
+              <span className="text-[10px] text-slate-500">性能</span>
+            </div>
+            <div className="text-[11px] font-semibold text-slate-900 mb-1">{perfSummary(template)}</div>
+            <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">{template.perf}</p>
+          </div>
+          <div className="bg-white px-4 py-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <LockIcon width={12} className="text-slate-400" />
+              <span className="text-[10px] text-slate-500">隐私</span>
+            </div>
+            <div className="text-[11px] font-semibold text-slate-900 mb-1">{template.requireLocal ? "完全本地" : "混合"}</div>
+            <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">{template.privacy}</p>
+          </div>
+          <div className="bg-white px-4 py-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <GlobeIcon width={12} className="text-slate-400" />
+              <span className="text-[10px] text-slate-500">场景</span>
+            </div>
+            <div className="text-[11px] font-semibold text-slate-900 mb-1">{sceneSummary(template)}</div>
+            <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">{template.scene}</p>
+          </div>
+        </div>
+
+        {/* 底部提示 */}
+        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/30 border-t border-slate-100">
+          <p className="text-[10px] text-slate-600">
+            {resolved.notes[0] ?? "系统会自动检查并准备所需模型"}
+          </p>
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[9px] font-medium ml-3",
+              resolved.notes.length > 0 ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"
+            )}
+          >
+            <CheckIcon width={10} /> {resolved.notes.length > 0 ? "可运行" : "就绪"}
+          </span>
+        </div>
+
+        <ApplyConfigBar model={model} onEdit={onEdit} />
       </div>
     </div>
   );
 }
 
-function CapabilityTableRow({
-  icon,
-  title,
-  kind,
-  slot
-}: {
-  icon: ReactNode;
-  title: string;
-  kind: string;
-  slot: ResolvedSlot;
-}) {
-  const tone = slot.needsCloud ? "warn" : toneOf(slot.runnability);
+function StatusBadge({ tone, label }: { tone: Tone; label: string }) {
   return (
-    <TableRow>
-      <TableCell className="w-12">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
-          {icon}
-        </span>
-      </TableCell>
-      <TableCell className="w-44">
-        <div className="font-medium text-slate-900">{title}</div>
-        <div className="text-[11px] text-slate-500">{kind}</div>
-      </TableCell>
-      <TableCell>
-        <span className="block truncate font-medium text-slate-800">
-          {slot.model?.name ?? "暂无可用模型"}
-        </span>
-      </TableCell>
-      <TableCell align="right" className="w-32">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-medium",
-            tone === "ok"
-              ? "border-brand-200 bg-brand-50 text-brand-700"
-              : tone === "warn"
-                ? "border-amber-200 bg-amber-50 text-amber-700"
-                : "border-rose-200 bg-rose-50 text-rose-700"
-          )}
-        >
-          <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
-        </span>
-      </TableCell>
-    </TableRow>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+        tone === "ok"
+          ? "border-brand-200 bg-brand-50 text-brand-700"
+          : tone === "warn"
+            ? "border-amber-200 bg-amber-50 text-amber-700"
+            : "border-rose-200 bg-rose-50 text-rose-700"
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", TONE_DOT[tone])} /> {label}
+    </span>
   );
 }
+
+function InfoRow({ icon, label, value, desc }: { icon: ReactNode; label: string; value: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-slate-400 mt-0.5">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[11px] text-slate-500">{label}</span>
+          <span className="text-[12px] font-medium text-slate-900">{value}</span>
+        </div>
+        <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
 
 function Radio({ checked }: { checked: boolean }) {
   return (
@@ -1149,50 +1102,41 @@ function StorageRing({ percent }: { percent: number }) {
 
 function RunningBackendSection({ model }: { model: ReturnType<typeof useModelCenter> }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-[15px] font-semibold text-slate-900">运行后端</h2>
-          <p className="mt-1 text-[12px] text-slate-500">选择并启动本地推理引擎，Ollama 可在 App 内直接安装与管理。</p>
-        </div>
-        <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} disabled={model.busy} onClick={() => void model.refreshBackend()}>
-          <RefreshIcon width={14} /> 重新检测
-        </Button>
+    <div className="border border-slate-100 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between bg-slate-50/50 px-4 py-2 border-b border-slate-100">
+        <span className="text-[12px] font-medium text-slate-700">运行后端</span>
+        <button
+          className="text-[11px] text-slate-500 hover:text-slate-700 disabled:opacity-50 flex items-center gap-1"
+          disabled={model.busy}
+          onClick={() => void model.refreshBackend()}
+        >
+          <RefreshIcon width={12} />
+          刷新
+        </button>
       </div>
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-        <Table hoverable className="table-fixed">
-          <TableHead>
-            <TableRow>
-              <TableHeader className="w-12" />
-              <TableHeader className="w-48">推理引擎</TableHeader>
-              <TableHeader>说明</TableHeader>
-              <TableHeader className="w-36 text-right">状态</TableHeader>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <BackendTableRow kind="ollama" title="Ollama" desc="本地下载器 + 自选模型目录" icon={<CubeIcon width={20} />} model={model} />
-            <BackendTableRow kind="lmstudio" title="LM Studio" desc="连接 LM Studio 本地服务器（:1234）" icon={<MonitorIcon width={20} />} model={model} />
-            <BackendTableRow kind="custom" title="自定义端点" desc="任意 OpenAI 兼容端点（vLLM / llama.cpp）" icon={<GlobeIcon width={20} />} model={model} />
-          </TableBody>
-        </Table>
+
+      {/* 横向卡片 */}
+      <div className="grid grid-cols-3 gap-px bg-slate-100">
+        <BackendCard kind="ollama" title="Ollama" icon={<CubeIcon width={18} />} model={model} />
+        <BackendCard kind="lmstudio" title="LM Studio" icon={<MonitorIcon width={18} />} model={model} />
+        <BackendCard kind="custom" title="自定义端点" icon={<GlobeIcon width={18} />} model={model} />
       </div>
-      <div className="mt-4">
+
+      <div className="border-t border-slate-100">
         <BackendDetailPanel model={model} />
       </div>
-    </section>
+    </div>
   );
 }
 
-function BackendTableRow({
+function BackendCard({
   kind,
   title,
-  desc,
   icon,
   model
 }: {
   kind: ModelBackendKind;
   title: string;
-  desc: string;
   icon: ReactNode;
   model: ReturnType<typeof useModelCenter>;
 }) {
@@ -1205,31 +1149,26 @@ function BackendTableRow({
   const disabled = model.busy;
 
   return (
-    <TableRow
-      selected={active}
+    <button
       onClick={disabled ? undefined : () => void model.setBackend(kind)}
-      className={cn(disabled ? "opacity-60" : "cursor-pointer")}
+      disabled={disabled}
+      className={cn(
+        "flex flex-col items-start gap-2 bg-white px-4 py-3 text-left transition-all",
+        active ? "ring-2 ring-inset ring-brand-500 bg-brand-50/20" : "hover:bg-slate-50",
+        disabled && "opacity-60 cursor-not-allowed"
+      )}
     >
-      <TableCell className="w-12">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-600">
+      <div className="flex items-center gap-2 w-full">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
           {icon}
         </span>
-      </TableCell>
-      <TableCell className="w-48">
-        <div className="flex items-center gap-2 font-medium text-slate-900">
-          {icon} {title}
-        </div>
-      </TableCell>
-      <TableCell className="text-slate-500">{desc}</TableCell>
-      <TableCell align="right" className="w-36">
-        <div className="flex flex-col items-end gap-1">
-          <span className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
-            <StatusDot active={active || state?.status === "running"} color={color} size="sm" />
-            {state?.message ?? "检测中"}
-          </span>
-        </div>
-      </TableCell>
-    </TableRow>
+        <span className="text-[11px] font-semibold text-slate-900 truncate">{title}</span>
+      </div>
+      <div className="flex items-center gap-1.5 w-full">
+        <StatusDot active={active || state?.status === "running"} color={color} size="sm" />
+        <span className="text-[10px] text-slate-600 truncate">{state?.message ?? "检测中"}</span>
+      </div>
+    </button>
   );
 }
 
