@@ -212,27 +212,7 @@ export function FeatureSection({
 
   return (
     <div className={cn("relative", className)} onClickCapture={handleClickCapture}>
-      {status === "wip" && (
-        <div className="absolute right-2 top-2 z-10 flex max-w-[260px] flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] shadow-sm">
-          {title && <span className="font-medium text-slate-700">{title}</span>}
-          <span className="font-medium text-amber-600">WIP</span>
-          <span className="text-slate-500">交互 {count} 次</span>
-          {formattedLastUsed && <span className="text-slate-400">· {formattedLastUsed}</span>}
-          <button
-            type="button"
-            onClick={handleVerify}
-            className="rounded bg-brand-400 px-2 py-0.5 font-medium text-ink-900 hover:bg-brand-300"
-          >
-            确认完成
-          </button>
-        </div>
-      )}
       <FeaturePaint id={id} className="h-full">
-        {title && status !== "done" && (
-          <div className="pointer-events-none absolute left-2 top-2 z-0 rounded bg-slate-100/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-            {status === "todo" ? "待接入" : "验证中"}: {title}
-          </div>
-        )}
         {children}
       </FeaturePaint>
     </div>
