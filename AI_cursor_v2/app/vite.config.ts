@@ -2,6 +2,9 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { copyVadAssets } from "./scripts/copy-vad-assets.js";
+
+copyVadAssets();
 
 export default defineConfig({
   // 相对基路径：打包后主进程用 file:// loadFile 加载 index.html，

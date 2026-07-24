@@ -28,12 +28,12 @@ declare global {
 }
 
 function readSavedMode(): PaintMode {
-  // 默认回到"未处理态"（整屏浅灰）：开发进度以填色恢复，闭环验证通过的功能单元才上色。
-  // 读取上次在 DevTools 里手动切换的选择，未选择过则默认 on。
+  // 默认 off：由 FeaturePaint 按功能单元控制去色/上色，不再整屏统一去色。
+  // 读取上次在 DevTools 里手动切换的选择，未选择过则默认 off。
   try {
-    return localStorage.getItem(STORAGE_KEY) === "off" ? "off" : "on";
+    return localStorage.getItem(STORAGE_KEY) === "on" ? "on" : "off";
   } catch {
-    return "on";
+    return "off";
   }
 }
 

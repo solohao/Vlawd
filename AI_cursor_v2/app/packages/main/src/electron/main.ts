@@ -1,9 +1,10 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, session, shell } from "electron";
 import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import type {
   CustomEndpointConfig,
+  DesktopUiSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
   ModelBackendKind,
@@ -11,7 +12,7 @@ import type {
   ModelRole,
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
-import { MockDesktopRuntime } from "../desktop/mock-desktop-runtime.js";
+import { DesktopRuntime } from "../desktop/desktop-runtime.js";
 import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { createProvider } from "../model/provider-registry.js";
 import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
@@ -24,7 +25,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 // 打包后 currentDir 位于 resources/app.asar 内，同样的向上层级指向 asar 根，
 // 渲染层与图标资源仍能从 asar 内读取；仅可写的用户数据目录需要改用系统标准位置。
 const appRoot = resolve(currentDir, "../../../../../../..");
-const runtime = new MockDesktopRuntime();
+const runtime = new DesktopRuntime();
 
 if (!app.isPackaged) {
   // 开发模式：把用户数据放在仓库内，便于查看生成的 Session JSONL。
@@ -242,7 +243,23 @@ function createTray(): void {
   tray.on("click", showMain);
 }
 
-ipcMain.handle("desktop:getSnapshot", () => runtime.getSnapshot());
+function broadcastDesktopSnapshot(snapshot: DesktopUiSnapshot): void {
+  for (const window of [mainWindow, overlayWindow]) {
+    if (window && !window.isDestroyed()) {
+      window.webContents.send("desktop:snapshot", snapshot);
+    }
+  }
+}
+
+async function handleDesktop<T>(action: () => T | Promise<T>): Promise<T> {
+  const result = await action();
+  if (result && typeof result === "object" && "generatedAt" in result) {
+    broadcastDesktopSnapshot((result as unknown) as DesktopUiSnapshot);
+  }
+  return result;
+}
+
+ipcMain.handle("desktop:getSnapshot", () => handleDesktop(() => runtime.getSnapshot()));
 
 ipcMain.handle("desktop:chooseModelStorageRoot", async () => {
   const result = await dialog.showOpenDialog({
@@ -250,17 +267,21 @@ ipcMain.handle("desktop:chooseModelStorageRoot", async () => {
     properties: ["openDirectory", "createDirectory"]
   });
   if (result.canceled || result.filePaths.length === 0) {
-    return runtime.getSnapshot();
+    return handleDesktop(() => runtime.getSnapshot());
   }
-  return runtime.selectModelStorageRoot(result.filePaths[0]);
+  return handleDesktop(() => runtime.selectModelStorageRoot(result.filePaths[0]));
 });
 
-ipcMain.handle("desktop:startModelDownload", (_event, role: ModelRole) => runtime.startModelDownload(role));
-ipcMain.handle("desktop:runHealthCheck", (_event, role: ModelRole) => runtime.runHealthCheck(role));
-ipcMain.handle("desktop:connectAudio", () => runtime.connectAudio());
-ipcMain.handle("desktop:pauseSession", () => runtime.pauseSession());
-ipcMain.handle("desktop:cancelSession", () => runtime.cancelSession());
-ipcMain.handle("desktop:executeRuntimeAction", () => runtime.executeRuntimeAction());
+ipcMain.handle("desktop:startModelDownload", (_event, role: ModelRole) =>
+  handleDesktop(() => runtime.startModelDownload(role))
+);
+ipcMain.handle("desktop:runHealthCheck", (_event, role: ModelRole) =>
+  handleDesktop(() => runtime.runHealthCheck(role))
+);
+ipcMain.handle("desktop:connectAudio", () => handleDesktop(() => runtime.connectAudio()));
+ipcMain.handle("desktop:pauseSession", () => handleDesktop(() => runtime.pauseSession()));
+ipcMain.handle("desktop:cancelSession", () => handleDesktop(() => runtime.cancelSession()));
+ipcMain.handle("desktop:executeRuntimeAction", () => handleDesktop(() => runtime.executeRuntimeAction()));
 
 // ── Cycle 1 会话通道 ────────────────────────────────────────────────
 ipcMain.handle("conversation:snapshot", () => duplexRuntime.getSnapshot());
@@ -399,6 +420,11 @@ ipcMain.handle("app:quit", () => {
 });
 
 app.whenReady().then(() => {
+  // 允许渲染层请求麦克风/摄像头权限，否则 getUserMedia 会被默认拒绝。
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "media" || permission === "mediaKeySystem");
+  });
+
   createTray();
   // 主窗口是启动时可见的形态；悬浮窗预创建但保持隐藏，最小化时才切过去。
   showMainWindow();

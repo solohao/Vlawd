@@ -7,6 +7,7 @@
  */
 import {
   pipeline,
+  WhisperTextStreamer,
   type AutomaticSpeechRecognitionPipeline,
   type ProgressCallback
 } from "@huggingface/transformers";
@@ -21,6 +22,7 @@ export interface WhisperTranscribeRequest {
   id: number;
   audio: Float32Array;
   language?: string;
+  model?: string;
 }
 
 export type WhisperWorkerRequest = WhisperInitRequest | WhisperTranscribeRequest;
@@ -28,6 +30,7 @@ export type WhisperWorkerRequest = WhisperInitRequest | WhisperTranscribeRequest
 export type WhisperWorkerResponse =
   | { type: "ready" }
   | { type: "progress"; status: string; progress?: number }
+  | { type: "partial"; id: number; text: string }
   | { type: "result"; id: number; text: string }
   | { type: "error"; id: number | null; message: string };
 
@@ -72,12 +75,33 @@ self.addEventListener("message", (event: MessageEvent<WhisperWorkerRequest>) => 
     return;
   }
   if (request.type === "transcribe") {
-    loadPipeline(DEFAULT_MODEL)
+    loadPipeline(request.model ?? DEFAULT_MODEL)
       .then(async (asr) => {
-        const output = await asr(request.audio, {
+        const tokenizer = (asr as { tokenizer?: unknown }).tokenizer;
+        const options = {
           language: request.language ?? "chinese",
-          task: "transcribe"
-        });
+          task: "transcribe",
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          return_timestamps: true
+        };
+
+        let output: { text: string } | Array<{ text: string }>;
+        if (tokenizer && typeof WhisperTextStreamer !== "undefined") {
+          let partialText = "";
+          const streamer = new WhisperTextStreamer(tokenizer as any, {
+            skip_prompt: true,
+            skip_special_tokens: true,
+            callback_function: (text: string) => {
+              partialText += text;
+              post({ type: "partial", id: request.id, text: partialText.trim() });
+            }
+          });
+          output = await asr(request.audio, { ...options, streamer });
+        } else {
+          output = await asr(request.audio, options);
+        }
+
         const text = Array.isArray(output)
           ? output.map((part) => part.text).join(" ")
           : output.text;
