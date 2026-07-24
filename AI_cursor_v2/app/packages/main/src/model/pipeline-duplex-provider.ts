@@ -23,16 +23,16 @@ const DEFAULT_SYSTEM_PROMPT = [
 export class PipelineDuplexModelProvider implements DuplexModelProvider {
   readonly kind = "pipeline" as const;
   private realInference: boolean;
-  private readonly fallback: LlmAdapter;
+  private readonly fallback: LlmAdapter | null;
 
   constructor(
     private readonly llm: LlmAdapter,
     private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
     private readonly history: LlmMessage[] = [],
-    fallback?: LlmAdapter
+    fallback: LlmAdapter | null = new EchoLlmAdapter()
   ) {
     this.realInference = llm.usingRealInference;
-    this.fallback = fallback ?? new EchoLlmAdapter();
+    this.fallback = fallback;
   }
 
   /** 反映最近一次生成实际走的是真实端点还是离线回退。 */
@@ -52,57 +52,57 @@ export class PipelineDuplexModelProvider implements DuplexModelProvider {
 
     let spoke = false;
     let realFailed = false;
-    if (this.llm.usingRealInference) {
-      try {
-        for await (const delta of this.llm.stream(messages, signal)) {
-          if (signal?.aborted) {
-            return;
-          }
-          if (!delta) {
-            continue;
-          }
-          if (!spoke) {
-            spoke = true;
-            yield { type: "state", state: "speaking" };
-          }
-          yield { type: "speech", text: delta };
-        }
-        this.realInference = true;
-      } catch (error) {
-        if (isAbortError(error)) {
+    try {
+      for await (const delta of this.llm.stream(messages, signal)) {
+        if (signal?.aborted) {
           return;
         }
-        realFailed = true;
+        if (!delta) {
+          continue;
+        }
+        if (!spoke) {
+          spoke = true;
+          yield { type: "state", state: "speaking" };
+        }
+        yield { type: "speech", text: delta };
       }
+      this.realInference = this.llm.usingRealInference;
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+      realFailed = true;
     }
 
-    // 未配置真实端点，或真实端点在开口前不可用：回退到离线 Echo（明确标注非真实推理）。
+    // 真实端点未开口或不可用：仅在显式提供 fallback 时回退，否则只报告不确定并结束。
     if (!spoke) {
       this.realInference = false;
       if (realFailed) {
         yield {
           type: "uncertainty",
-          reason: "本地推理端点不可用，已切到离线回退语气（非真实推理）。配置并运行本地 Qwen2.5 后即为真实推理。",
+          reason: "本地推理端点不可用，未启用离线回退。请配置并运行本地 Qwen2.5/Ollama。",
           confidence: 0.2
         };
       }
-      try {
-        for await (const delta of this.fallback.stream(messages, signal)) {
-          if (signal?.aborted) {
+      if (this.fallback) {
+        try {
+          for await (const delta of this.fallback.stream(messages, signal)) {
+            if (signal?.aborted) {
+              return;
+            }
+            if (!delta) {
+              continue;
+            }
+            if (!spoke) {
+              spoke = true;
+              yield { type: "state", state: "speaking" };
+            }
+            yield { type: "speech", text: delta };
+          }
+        } catch (error) {
+          if (isAbortError(error)) {
             return;
           }
-          if (!delta) {
-            continue;
-          }
-          if (!spoke) {
-            spoke = true;
-            yield { type: "state", state: "speaking" };
-          }
-          yield { type: "speech", text: delta };
-        }
-      } catch (error) {
-        if (isAbortError(error)) {
-          return;
         }
       }
     } else if (realFailed) {

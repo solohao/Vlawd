@@ -115,20 +115,18 @@ export function LiveConversationPage({
   }, [convo.micActive]);
 
   const realInference = snapshot.providerConnected && snapshot.usingRealInference;
-  const canUseMock = snapshot.activeProviderKind === "mock";
   const readyLabel = !convo.available
     ? { text: "未连接 Runtime（浏览器预览）", tone: "idle" as const }
     : realInference
       ? { text: "AI 员工已就绪", tone: "ready" as const }
-      : canUseMock
-        ? { text: "Mock 验证模式", tone: "warn" as const }
-        : { text: "离线回退模式", tone: "warn" as const };
+      : { text: "离线回退模式", tone: "warn" as const };
 
   const startVoice = async () => {
     setEntered(true);
-    await convo.connect();
-    // Cycle 1 优先真实 Provider；mock 仅用于开发链路验证。
-    if (convo.available && !realInference && !canUseMock) {
+    const afterConnect = await convo.connect();
+    const realInferenceNow = afterConnect.providerConnected && afterConnect.usingRealInference;
+    // Cycle 1 必须真实 Provider；未就绪时引导到模型中心。
+    if (convo.available && !realInferenceNow) {
       onOpenModels?.();
       return;
     }
@@ -141,10 +139,11 @@ export function LiveConversationPage({
 
   const startManual = async () => {
     const afterConnect = await convo.connect();
-    // 没有真实 Provider 时，自动切到 mock 作为 Cycle 1 验证通道。
-    const needsMock = convo.available && !afterConnect.providerConnected && afterConnect.candidateProviderKinds.includes("mock");
-    if (needsMock) {
-      await convo.setProvider("mock");
+    // 没有真实 Provider 时引导到模型中心，不再自动切 mock。
+    const realInference = afterConnect.providerConnected && afterConnect.usingRealInference;
+    if (convo.available && !realInference) {
+      onOpenModels?.();
+      return;
     }
     setEntered(true);
   };

@@ -12,7 +12,7 @@ import type {
   ModelRole,
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
-import { MockDesktopRuntime } from "../desktop/mock-desktop-runtime.js";
+import { DesktopRuntime } from "../desktop/desktop-runtime.js";
 import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { createProvider } from "../model/provider-registry.js";
 import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
@@ -25,7 +25,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 // 打包后 currentDir 位于 resources/app.asar 内，同样的向上层级指向 asar 根，
 // 渲染层与图标资源仍能从 asar 内读取；仅可写的用户数据目录需要改用系统标准位置。
 const appRoot = resolve(currentDir, "../../../../../../..");
-const runtime = new MockDesktopRuntime();
+const runtime = new DesktopRuntime();
 
 if (!app.isPackaged) {
   // 开发模式：把用户数据放在仓库内，便于查看生成的 Session JSONL。
@@ -36,14 +36,11 @@ const userDataDir = app.getPath("userData");
 mkdirSync(userDataDir, { recursive: true });
 
 // ── Cycle 1 真实全双工入口运行时 ─────────────────────────────────────
-// 方案 B（pipeline）作为固定 Provider 先跑；方案 A（bayling-duplex）与 mock 登记为可切换候选。
+// 方案 B（pipeline）作为固定 Provider 先跑；方案 A（bayling-duplex）登记为可切换候选。
 const sessionLogPath = join(userDataDir, "sessions", `duplex_${Date.now()}.jsonl`);
 const duplexRuntime = new DuplexConversationRuntime({
   provider: createProvider(defaultPipelineProviderConfig),
-  candidateProviders: [
-    createProvider(findExecutionBrain("bayling-duplex")),
-    createProvider(findExecutionBrain("mock"))
-  ],
+  candidateProviders: [createProvider(findExecutionBrain("bayling-duplex"))],
   storage: new JsonlSessionStorage(sessionLogPath)
 });
 
