@@ -60,7 +60,7 @@ export function Sidebar({ theme, activeNav, onNavigate }: SidebarProps) {
                 isActive ? active : idle
               }`}
             >
-              <Icon width={18} height={18} />
+              <Icon width={18} height={18} tabIndex={-1} aria-hidden="true" />
               <span>{item.label}</span>
               {item.badge && !isActive && (
                 <span className="ml-auto rounded-md bg-brand-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-brand-500">

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import type {
   CustomEndpointConfig,
+  DesktopUiSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
   ModelBackendKind,
@@ -35,11 +36,14 @@ const userDataDir = app.getPath("userData");
 mkdirSync(userDataDir, { recursive: true });
 
 // ── Cycle 1 真实全双工入口运行时 ─────────────────────────────────────
-// 方案 B（pipeline）作为固定 Provider 先跑；方案 A（bayling-duplex）登记为可切换候选。
+// 方案 B（pipeline）作为固定 Provider 先跑；方案 A（bayling-duplex）与 mock 登记为可切换候选。
 const sessionLogPath = join(userDataDir, "sessions", `duplex_${Date.now()}.jsonl`);
 const duplexRuntime = new DuplexConversationRuntime({
   provider: createProvider(defaultPipelineProviderConfig),
-  candidateProviders: [createProvider(findExecutionBrain("bayling-duplex"))],
+  candidateProviders: [
+    createProvider(findExecutionBrain("bayling-duplex")),
+    createProvider(findExecutionBrain("mock"))
+  ],
   storage: new JsonlSessionStorage(sessionLogPath)
 });
 
@@ -242,7 +246,23 @@ function createTray(): void {
   tray.on("click", showMain);
 }
 
-ipcMain.handle("desktop:getSnapshot", () => runtime.getSnapshot());
+function broadcastDesktopSnapshot(snapshot: DesktopUiSnapshot): void {
+  for (const window of [mainWindow, overlayWindow]) {
+    if (window && !window.isDestroyed()) {
+      window.webContents.send("desktop:snapshot", snapshot);
+    }
+  }
+}
+
+async function handleDesktop<T>(action: () => T | Promise<T>): Promise<T> {
+  const result = await action();
+  if (result && typeof result === "object" && "generatedAt" in result) {
+    broadcastDesktopSnapshot((result as unknown) as DesktopUiSnapshot);
+  }
+  return result;
+}
+
+ipcMain.handle("desktop:getSnapshot", () => handleDesktop(() => runtime.getSnapshot()));
 
 ipcMain.handle("desktop:chooseModelStorageRoot", async () => {
   const result = await dialog.showOpenDialog({
@@ -250,17 +270,21 @@ ipcMain.handle("desktop:chooseModelStorageRoot", async () => {
     properties: ["openDirectory", "createDirectory"]
   });
   if (result.canceled || result.filePaths.length === 0) {
-    return runtime.getSnapshot();
+    return handleDesktop(() => runtime.getSnapshot());
   }
-  return runtime.selectModelStorageRoot(result.filePaths[0]);
+  return handleDesktop(() => runtime.selectModelStorageRoot(result.filePaths[0]));
 });
 
-ipcMain.handle("desktop:startModelDownload", (_event, role: ModelRole) => runtime.startModelDownload(role));
-ipcMain.handle("desktop:runHealthCheck", (_event, role: ModelRole) => runtime.runHealthCheck(role));
-ipcMain.handle("desktop:connectAudio", () => runtime.connectAudio());
-ipcMain.handle("desktop:pauseSession", () => runtime.pauseSession());
-ipcMain.handle("desktop:cancelSession", () => runtime.cancelSession());
-ipcMain.handle("desktop:executeRuntimeAction", () => runtime.executeRuntimeAction());
+ipcMain.handle("desktop:startModelDownload", (_event, role: ModelRole) =>
+  handleDesktop(() => runtime.startModelDownload(role))
+);
+ipcMain.handle("desktop:runHealthCheck", (_event, role: ModelRole) =>
+  handleDesktop(() => runtime.runHealthCheck(role))
+);
+ipcMain.handle("desktop:connectAudio", () => handleDesktop(() => runtime.connectAudio()));
+ipcMain.handle("desktop:pauseSession", () => handleDesktop(() => runtime.pauseSession()));
+ipcMain.handle("desktop:cancelSession", () => handleDesktop(() => runtime.cancelSession()));
+ipcMain.handle("desktop:executeRuntimeAction", () => handleDesktop(() => runtime.executeRuntimeAction()));
 
 // ── Cycle 1 会话通道 ────────────────────────────────────────────────
 ipcMain.handle("conversation:snapshot", () => duplexRuntime.getSnapshot());

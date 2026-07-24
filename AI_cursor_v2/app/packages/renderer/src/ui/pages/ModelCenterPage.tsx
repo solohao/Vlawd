@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useModelCenter } from "../../runtime/useModelCenter.js";
+import { useMarkFeature } from "../../app/feature-status.js";
 import {
   ArrowLeft,
   BoltIcon,
@@ -151,10 +152,19 @@ function sceneSummary(template: IntentTemplate): string {
 
 export function ModelCenterPage() {
   const model = useModelCenter();
+  const mark = useMarkFeature();
+  const markedRef = useRef(false);
   const [tab, setTab] = useState<Tab>("config");
   const [editing, setEditing] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("balanced");
   const device = useMemo(() => deviceFromProbe(model.snapshot.environment), [model.snapshot.environment]);
+
+  useEffect(() => {
+    if (model.snapshot.generatedAt && !markedRef.current) {
+      markedRef.current = true;
+      mark("ui.models", "done");
+    }
+  }, [model.snapshot.generatedAt, mark]);
 
   return (
     <DensityProvider density="compact">

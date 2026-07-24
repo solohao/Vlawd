@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { DuplexLatencySample, ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { AiEmployeeMascot } from "../Brand.js";
@@ -17,6 +17,7 @@ import {
   ShieldIcon
 } from "../icons.js";
 import { useConversation } from "../../runtime/useConversation.js";
+import { useMarkFeature } from "../../app/feature-status.js";
 
 const STATE_LABELS: Record<ModelRuntimeState, string> = {
   listening: "Listening",
@@ -40,7 +41,9 @@ const PROVIDER_LABELS: Record<string, string> = {
   "bayling-duplex": "方案 A · BayLing 原生全双工",
   personaplex: "方案 A · PersonaPlex",
   moshi: "方案 A · Moshi",
-  mock: "Mock（开发）"
+  "glm-4-voice": "GLM-4-Voice",
+  "cloud-planner": "云端 Planner",
+  mock: "Mock（开发验证）"
 };
 
 function providerLabel(kind: string): string {
@@ -77,12 +80,21 @@ export function LiveConversationPage({
 }) {
   const convo = useConversation();
   const { snapshot } = convo;
+  const mark = useMarkFeature();
+  const markedRef = useRef(false);
   const [draft, setDraft] = useState("");
   const [deviceFilter, setDeviceFilter] = useState<"all" | "headset" | "mic" | "speaker">("all");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedInput, setSelectedInput] = useState<string | undefined>(undefined);
   const [selectedOutput, setSelectedOutput] = useState<string | undefined>(undefined);
   const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    if (snapshot.turns.some((turn) => turn.role === "assistant" && turn.text.trim()) && !markedRef.current) {
+      markedRef.current = true;
+      mark("ui.conversation", "done");
+    }
+  }, [snapshot.turns, mark]);
 
   const connected = entered && convo.available && !!snapshot.sessionId;
   const active = connected && (snapshot.runtimeState === "speaking" || snapshot.runtimeState === "listening" || snapshot.runtimeState === "thinking");
@@ -103,17 +115,20 @@ export function LiveConversationPage({
   }, [convo.micActive]);
 
   const realInference = snapshot.providerConnected && snapshot.usingRealInference;
+  const canUseMock = snapshot.activeProviderKind === "mock";
   const readyLabel = !convo.available
     ? { text: "未连接 Runtime（浏览器预览）", tone: "idle" as const }
     : realInference
       ? { text: "AI 员工已就绪", tone: "ready" as const }
-      : { text: "离线回退模式", tone: "warn" as const };
+      : canUseMock
+        ? { text: "Mock 验证模式", tone: "warn" as const }
+        : { text: "离线回退模式", tone: "warn" as const };
 
   const startVoice = async () => {
     setEntered(true);
     await convo.connect();
-    // Cycle 1 要求真实 Provider：未就绪时引导到模型中心，不直接进离线回退。
-    if (convo.available && !realInference) {
+    // Cycle 1 优先真实 Provider；mock 仅用于开发链路验证。
+    if (convo.available && !realInference && !canUseMock) {
       onOpenModels?.();
       return;
     }
@@ -125,9 +140,22 @@ export function LiveConversationPage({
   };
 
   const startManual = async () => {
+    const afterConnect = await convo.connect();
+    // 没有真实 Provider 时，自动切到 mock 作为 Cycle 1 验证通道。
+    const needsMock = convo.available && !afterConnect.providerConnected && afterConnect.candidateProviderKinds.includes("mock");
+    if (needsMock) {
+      await convo.setProvider("mock");
+    }
     setEntered(true);
-    await convo.connect();
   };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onBack?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onBack]);
 
   const send = async () => {
     const text = draft.trim();

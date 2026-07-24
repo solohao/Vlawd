@@ -64,6 +64,19 @@ html[data-paint="on"] #root {
   filter: grayscale(1) contrast(0.62) brightness(1.14);
 }
 
+.feature-paint[data-paint="on"] {
+  filter: grayscale(1) contrast(0.62) brightness(1.14);
+  transition: filter 0.25s ease;
+}
+.feature-paint[data-paint="wip"] {
+  filter: grayscale(0.55) contrast(0.8) brightness(1.05);
+  transition: filter 0.25s ease;
+}
+.feature-paint[data-paint="off"] {
+  filter: none;
+  transition: filter 0.25s ease;
+}
+
 /* frameless-window drag handles */
 .drag {
   -webkit-app-region: drag;

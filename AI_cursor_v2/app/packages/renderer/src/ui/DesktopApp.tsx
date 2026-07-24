@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { FeaturePaint, FeatureStatusProvider } from "../app/feature-status.js";
+import { DesktopRuntimeProvider } from "../runtime/useDesktopRuntime.js";
 import { Sidebar } from "./Sidebar.js";
 import { LiveConversationPage } from "./pages/LiveConversationPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
@@ -36,31 +38,63 @@ export function DesktopApp() {
   const theme = pageThemes[page];
 
   return (
-    <div
-      className={`flex h-screen w-screen overflow-hidden transition-colors ${
-        theme === "dark" ? "bg-ink-900" : "bg-[#fafbf9]"
-      }`}
-      data-theme={theme}
-    >
-      <Sidebar theme={theme} activeNav={page} onNavigate={(id) => setPage(id as DesktopPage)} />
-      <main className="relative flex-1 overflow-y-auto">
-        {page === "dashboard" && (
-          <DashboardPage
-            onStartTask={() => setPage("conversation")}
-            onOpenSessions={() => setPage("sessions")}
-            onOpenModels={() => setPage("models")}
-          />
-        )}
-        {page === "conversation" && (
-          <LiveConversationPage onBack={() => setPage("dashboard")} onOpenModels={() => setPage("models")} />
-        )}
-        {page === "task" && <TaskWorkspacePage />}
-        {page === "sessions" && <SessionsPage />}
-        {page === "workflows" && <WorkflowsPage />}
-        {page === "models" && <ModelCenterPage />}
-        {page === "devices" && <DevicesPage />}
-        {page === "settings" && <SettingsPage />}
-      </main>
-    </div>
+    <FeatureStatusProvider>
+      <DesktopRuntimeProvider>
+        <div
+          className={`flex h-screen w-screen overflow-hidden transition-colors ${
+            theme === "dark" ? "bg-ink-900" : "bg-[#fafbf9]"
+          }`}
+          data-theme={theme}
+        >
+          <Sidebar theme={theme} activeNav={page} onNavigate={(id) => setPage(id as DesktopPage)} />
+          <main className="relative flex-1 overflow-y-auto">
+            {page === "dashboard" && (
+              <FeaturePaint id="ui.dashboard">
+                <DashboardPage
+                  onStartTask={() => setPage("conversation")}
+                  onOpenSessions={() => setPage("sessions")}
+                  onOpenModels={() => setPage("models")}
+                />
+              </FeaturePaint>
+            )}
+            {page === "conversation" && (
+              <FeaturePaint id="ui.conversation">
+                <LiveConversationPage onBack={() => setPage("dashboard")} onOpenModels={() => setPage("models")} />
+              </FeaturePaint>
+            )}
+            {page === "task" && (
+              <FeaturePaint id="ui.task">
+                <TaskWorkspacePage />
+              </FeaturePaint>
+            )}
+            {page === "sessions" && (
+              <FeaturePaint id="ui.sessions">
+                <SessionsPage />
+              </FeaturePaint>
+            )}
+            {page === "workflows" && (
+              <FeaturePaint id="ui.workflows">
+                <WorkflowsPage />
+              </FeaturePaint>
+            )}
+            {page === "models" && (
+              <FeaturePaint id="ui.models">
+                <ModelCenterPage />
+              </FeaturePaint>
+            )}
+            {page === "devices" && (
+              <FeaturePaint id="ui.devices">
+                <DevicesPage />
+              </FeaturePaint>
+            )}
+            {page === "settings" && (
+              <FeaturePaint id="ui.settings">
+                <SettingsPage />
+              </FeaturePaint>
+            )}
+          </main>
+        </div>
+      </DesktopRuntimeProvider>
+    </FeatureStatusProvider>
   );
 }
