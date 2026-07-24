@@ -7,6 +7,8 @@ import {
   CheckIcon,
   ChevronDown,
   ChevronRight,
+  CubeIcon,
+  MonitorIcon,
   DotsIcon,
   EarIcon,
   GlobeIcon,
@@ -21,7 +23,8 @@ import {
   SparkIcon,
   SpeakerIcon
 } from "../icons.js";
-import { Button, cn } from "../../design-system/index.js";
+import { Button, cn, StatusDot, Progress } from "../../design-system/index.js";
+import type { ModelBackendKind, ModelBackendState } from "@ai-cursor-v2/shared";
 import { intentTemplates, modelCatalog } from "./model-catalog.js";
 import {
   deviceFromProbe,
@@ -154,6 +157,7 @@ export function ModelCenterPage() {
           <div className="pt-6">
             {tab === "config" ? (
               <ConfigView
+                model={model}
                 selectedPreset={selectedPreset}
                 device={device}
                 onSelect={setSelectedPreset}
@@ -187,11 +191,13 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 /* ------------------------------------------------------------------ 配置 */
 
 function ConfigView({
+  model,
   selectedPreset,
   device,
   onSelect,
   onEdit
 }: {
+  model: ReturnType<typeof useModelCenter>;
   selectedPreset: string;
   device: DeviceProfile;
   onSelect: (id: string) => void;
@@ -208,8 +214,10 @@ function ConfigView({
   const speaking = resolved.slots.speaking;
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,480px)_1fr]">
-      {/* 选择配置 */}
+    <div className="space-y-6">
+      <RunningBackendSection model={model} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,480px)_1fr]">
+        {/* 选择配置 */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
         <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
@@ -303,21 +311,9 @@ function ConfigView({
           </span>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-5">
-          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
-            <PencilIcon width={14} /> 重命名
-          </Button>
-          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onEdit}>
-            <SlidersIcon width={14} /> 编辑配置
-          </Button>
-          <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
-            <RefreshIcon width={14} /> 恢复默认
-          </Button>
-          <Button variant="primary" size="sm" className="h-9 gap-1.5" animated={false}>
-            <CheckIcon width={14} /> 应用此配置
-          </Button>
-        </div>
+        <ApplyConfigBar model={model} onEdit={onEdit} />
       </section>
+    </div>
     </div>
   );
 }
@@ -704,8 +700,8 @@ function AutoPrepareNote() {
         <SparkIcon width={16} />
       </span>
       <span>
-        <b className="block text-[11.5px] font-medium text-slate-700">如未安装，将在需要时自动准备</b>
-        <span className="mt-0.5 block text-[10.5px] text-slate-400">无需手动下载或管理存储空间</span>
+        <b className="block text-[11.5px] font-medium text-slate-700">模型准备依赖「运行后端」</b>
+        <span className="mt-0.5 block text-[10.5px] text-slate-400">未安装 Ollama 时，请先在配置页安装并启动。</span>
       </span>
     </div>
   );
@@ -1029,6 +1025,382 @@ function StorageRing({ percent }: { percent: number }) {
         />
       </svg>
       <span className="absolute text-[14px] font-bold text-slate-700">{percent}%</span>
+    </div>
+  );
+}
+
+function RunningBackendSection({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-[15px] font-semibold text-slate-900">运行后端</h2>
+          <p className="mt-1 text-[12px] text-slate-500">选择并启动本地推理引擎，Ollama 可在 App 内直接安装与管理。</p>
+        </div>
+        <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} disabled={model.busy} onClick={() => void model.refreshBackend()}>
+          <RefreshIcon width={14} /> 重新检测
+        </Button>
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <BackendCard kind="ollama" title="Ollama" desc="本地下载器 + 自选模型目录" icon={<CubeIcon width={20} />} model={model} />
+        <BackendCard kind="lmstudio" title="LM Studio" desc="连接 LM Studio 本地服务器（:1234）" icon={<MonitorIcon width={20} />} model={model} />
+        <BackendCard kind="custom" title="自定义端点" desc="任意 OpenAI 兼容端点（vLLM / llama.cpp）" icon={<GlobeIcon width={20} />} model={model} />
+      </div>
+      <div className="mt-4">
+        <BackendDetailPanel model={model} />
+      </div>
+    </section>
+  );
+}
+
+function BackendCard({
+  kind,
+  title,
+  desc,
+  icon,
+  model
+}: {
+  kind: ModelBackendKind;
+  title: string;
+  desc: string;
+  icon: ReactNode;
+  model: ReturnType<typeof useModelCenter>;
+}) {
+  const state = model.snapshot.backends.find((b) => b.backend === kind);
+  const active = model.snapshot.activeBackend === kind;
+  const color =
+    state?.status === "running" ? "success" :
+    state?.status === "not_installed" ? "error" :
+    state?.status === "installed_not_running" ? "warning" : "neutral";
+
+  return (
+    <button
+      onClick={() => void model.setBackend(kind)}
+      disabled={model.busy}
+      className={cn(
+        "flex flex-col items-start gap-2 rounded-xl border px-4 py-4 text-left transition-all disabled:opacity-60",
+        active ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200" : "border-slate-200 bg-white hover:border-slate-300"
+      )}
+    >
+      <div className="flex w-full items-center justify-between">
+        <span className="flex items-center gap-2 text-[13.5px] font-semibold text-slate-900">
+          {icon} {title}
+        </span>
+        <StatusDot active={active || state?.status === "running"} color={color} size="sm" />
+      </div>
+      <span className="text-[11.5px] leading-relaxed text-slate-500">{desc}</span>
+      <span className="mt-1 text-[11px] text-slate-400">{state?.message ?? "检测中"}</span>
+    </button>
+  );
+}
+
+function BackendDetailPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  switch (model.snapshot.activeBackend) {
+    case "ollama":
+      return <OllamaPanel model={model} />;
+    case "lmstudio":
+      return <LMStudioPanel model={model} />;
+    case "custom":
+      return <CustomEndpointPanel model={model} />;
+    default:
+      return null;
+  }
+}
+
+function OllamaPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const backend = model.snapshot.backend;
+  if (backend.status === "running") {
+    return <OllamaReadyPanel model={model} />;
+  }
+  if (backend.status === "installed_not_running" || model.snapshot.ollamaInstall.installed) {
+    return <OllamaStartPanel model={model} />;
+  }
+  return <OllamaInstallFlow model={model} />;
+}
+
+function OllamaStartPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4">
+      <div className="flex items-start gap-3">
+        <StatusDot active color="warning" size="md" />
+        <div className="flex-1">
+          <h3 className="text-[13px] font-semibold text-amber-800">Ollama 已安装但未运行</h3>
+          <p className="mt-0.5 text-[11.5px] text-amber-700">{model.snapshot.backend.message}</p>
+        </div>
+        <Button variant="secondary" size="sm" disabled={model.busy} onClick={() => void model.refreshBackend()}>
+          启动并检测
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function OllamaReadyPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const backend = model.snapshot.backend;
+  const env = model.snapshot.environment;
+  const activePull = model.snapshot.activePull;
+  const recommended = env?.recommendedBrainModel ?? "qwen2.5:7b-instruct";
+  const brainReady =
+    model.snapshot.activeBrainModel === recommended &&
+    model.snapshot.providerConnected &&
+    model.snapshot.usingRealInference;
+  const installed = backend.installedModels.some((m) => m.name === recommended);
+
+  const handlePrepareBrain = async () => {
+    if (installed) {
+      await model.useAsBrain(recommended);
+    } else {
+      await model.pull(recommended);
+      if (model.snapshot.activePull?.phase === "success") {
+        await model.useAsBrain(recommended);
+      }
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
+      <div className="flex items-start gap-3">
+        <StatusDot active color="success" size="md" />
+        <div className="flex-1">
+          <h3 className="text-[13px] font-semibold text-emerald-800">{brainReady ? "引擎就绪，直接可用" : "Ollama 运行中"}</h3>
+          <p className="mt-0.5 text-[11.5px] text-emerald-700">{backend.message}</p>
+          {env && (
+            <p className="mt-2 text-[11px] text-emerald-600">
+              {env.gpus.length > 0 ? `GPU: ${env.gpus[0].name} · ` : ""}
+              内存: {env.totalRamGB.toFixed(1)} GB · 已安装模型 {backend.installedModels.length} 个
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" className="gap-1.5" disabled={model.busy} onClick={() => void model.refreshBackend()}>
+            <RefreshIcon width={14} /> 重新检测
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => void model.openStorageLocation()}>
+            打开目录
+          </Button>
+        </div>
+      </div>
+
+      {!brainReady && (
+        <div className="mt-4 rounded-lg border border-emerald-200/50 bg-white p-3">
+          <p className="text-[12px] text-slate-700">
+            推荐执行大脑：<b>{recommended}</b>
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            {installed ? "模型已安装，点击应用即可连接。" : "模型未下载，点击后将自动下载并连接。"}
+          </p>
+          <Button variant="primary" size="sm" className="mt-2" disabled={model.busy || !!activePull} onClick={() => void handlePrepareBrain()}>
+            {installed ? "应用为执行大脑" : "下载并应用"}
+          </Button>
+        </div>
+      )}
+
+      {activePull && (
+        <div className="mt-4">
+          <p className="text-[11.5px] text-slate-600">
+            正在准备模型 {activePull.model}：{activePull.status}
+          </p>
+          <Progress value={activePull.percent} max={100} size="sm" color={activePull.phase === "error" ? "error" : "brand"} className="mt-2" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OllamaInstallFlow({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const { snapshot, busy } = model;
+  const rootDir = snapshot.storage.rootDir;
+  const install = snapshot.ollamaInstall;
+  const recommended = snapshot.environment?.recommendedBrainModel ?? "qwen2.5:7b-instruct";
+
+  const handleInstall = async () => {
+    await model.installOllama();
+    if (model.snapshot.backend.status === "running") {
+      await model.pull(recommended);
+      if (model.snapshot.activePull?.phase === "success") {
+        await model.useAsBrain(recommended);
+      }
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-rose-200 bg-rose-50/30 p-4">
+      <div className="mb-3 flex items-start gap-2.5 text-rose-800">
+        <InfoIcon width={16} className="mt-0.5 shrink-0" />
+        <p className="text-[12.5px]">未检测到 Ollama 引擎。选择位置后可一键安装并自动准备模型。</p>
+      </div>
+      <div className="space-y-4">
+        <Step number={1} title="选择安装 / 模型存储位置">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <span className="min-w-0 truncate text-[12px] text-slate-600">{rootDir || "D:\\AI\\VoiceAssistant\\Models"}</span>
+            <Button variant="secondary" size="sm" disabled={busy} onClick={() => void model.chooseStorageRoot()}>
+              更改...
+            </Button>
+          </div>
+          <p className="mt-1 text-[10.5px] text-slate-400">建议非系统盘、空间充足的目录</p>
+        </Step>
+        <Step number={2} title="安装 Ollama 引擎">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" disabled={busy || install.phase === "installing"} onClick={() => void handleInstall()}>
+              安装 Ollama
+            </Button>
+            <Button variant="secondary" size="sm" disabled={busy} onClick={() => void model.locateOllamaInstaller()}>
+              手动定位安装器...
+            </Button>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void model.openInstallGuide()}>
+              查看安装指南 →
+            </Button>
+          </div>
+          {install.phase === "installing" && (
+            <div className="mt-3">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full w-2/3 rounded-full bg-brand-500 animate-pulse" />
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-600">{install.message}</p>
+            </div>
+          )}
+          {install.phase === "error" && (
+            <p className="mt-2 text-[11px] text-rose-600">{install.message}</p>
+          )}
+        </Step>
+        <Step number={3} title="自动准备所需模型并连接">
+          <p className="text-[11.5px] text-slate-500">引擎安装完成后，将自动下载推荐模型并设为执行大脑。</p>
+        </Step>
+      </div>
+    </div>
+  );
+}
+
+function Step({ number, title, children }: { number: number; title: string; children: ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-600">
+        {number}
+      </span>
+      <div className="flex-1">
+        <p className="text-[12.5px] font-medium text-slate-800">{title}</p>
+        <div className="mt-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function LMStudioPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const backend = model.snapshot.backend;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/30 p-4">
+      <div className="flex items-start gap-3">
+        <StatusDot active color={backend.status === "running" ? "success" : "warning"} size="md" />
+        <div className="flex-1">
+          <h3 className="text-[13px] font-semibold text-slate-900">LM Studio</h3>
+          <p className="mt-0.5 text-[11.5px] text-slate-500">
+            {backend.message || "请在 LM Studio 中启动本地服务器（默认端口 1234）。"}
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" disabled={model.busy} onClick={() => void model.refreshBackend()}>
+          重新检测
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CustomEndpointPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const [baseUrl, setBaseUrl] = useState(model.snapshot.customEndpoint.baseUrl);
+  const [modelName, setModelName] = useState(model.snapshot.customEndpoint.model);
+  const backend = model.snapshot.backend;
+
+  const apply = async () => {
+    await model.setCustomEndpoint({ baseUrl, model: modelName });
+    if (modelName.trim()) {
+      await model.useAsBrain(modelName);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/30 p-4">
+      <div className="space-y-3">
+        <div>
+          <label className="text-[12px] font-medium text-slate-700">Base URL</label>
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="http://127.0.0.1:11434/v1"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400"
+          />
+        </div>
+        <div>
+          <label className="text-[12px] font-medium text-slate-700">Model</label>
+          <input
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+            placeholder="qwen2.5:7b-instruct"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="primary" size="sm" disabled={model.busy || !baseUrl.trim() || !modelName.trim()} onClick={() => void apply()}>
+            设置并应用
+          </Button>
+          <Button variant="secondary" size="sm" disabled={model.busy} onClick={() => void model.refreshBackend()}>
+            重新检测
+          </Button>
+        </div>
+        <p className="text-[11px] text-slate-500">{backend.message}</p>
+      </div>
+    </div>
+  );
+}
+
+function ApplyConfigBar({ model, onEdit }: { model: ReturnType<typeof useModelCenter>; onEdit: () => void }) {
+  const backend = model.snapshot.backend;
+  const activeBackend = model.snapshot.activeBackend;
+  const recommended = model.snapshot.environment?.recommendedBrainModel ?? "qwen2.5:7b-instruct";
+  const isReady =
+    activeBackend === "ollama" &&
+    backend.status === "running" &&
+    model.snapshot.activeBrainModel === recommended &&
+    model.snapshot.providerConnected &&
+    model.snapshot.usingRealInference;
+
+  const handleApply = async () => {
+    if (isReady) {
+      await model.useAsBrain(recommended);
+    }
+  };
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-5">
+      <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+        <PencilIcon width={14} /> 重命名
+      </Button>
+      <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onEdit}>
+        <SlidersIcon width={14} /> 编辑配置
+      </Button>
+      <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+        <RefreshIcon width={14} /> 恢复默认
+      </Button>
+      <div className="flex items-center gap-2">
+        {isReady ? (
+          <span className="flex items-center gap-1 text-[12px] font-medium text-emerald-600">
+            <CheckIcon width={14} /> 准备就绪
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[12px] font-medium text-rose-600">
+            <span className="h-2 w-2 rounded-full bg-rose-500" /> 待引擎就绪
+          </span>
+        )}
+        <Button
+          variant={isReady ? "primary" : "secondary"}
+          size="sm"
+          className="h-9 gap-1.5"
+          animated={false}
+          disabled={!isReady || model.busy}
+          onClick={() => void handleApply()}
+        >
+          <CheckIcon width={14} /> 应用此配置
+        </Button>
+      </div>
     </div>
   );
 }
