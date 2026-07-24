@@ -1,7 +1,7 @@
 import type { DuplexModelEvent, DuplexModelInput, DuplexModelProvider, ProviderConfig } from "@ai-cursor-v2/shared";
 import { MockDuplexModelProvider } from "./mock-duplex-provider.js";
 import { executionBrainCatalog } from "./dual-role-config.js";
-import { EchoLlmAdapter, OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
+import { OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
 import { PipelineDuplexModelProvider } from "./pipeline-duplex-provider.js";
 
 export class StubDuplexModelProvider implements DuplexModelProvider {
@@ -22,10 +22,6 @@ export class StubDuplexModelProvider implements DuplexModelProvider {
       reason: `${this.kind} provider is configured but not connected to a local inference process yet.`,
       confidence: 0.2
     };
-    yield {
-      type: "speech",
-      text: `已收到任务“${input.user_utterance}”，当前使用 ${this.kind} 适配骨架。`
-    };
     yield { type: "state", state: "waiting_confirm" };
   }
 
@@ -35,8 +31,8 @@ export class StubDuplexModelProvider implements DuplexModelProvider {
 }
 
 /**
- * 从 ProviderConfig 构造 LLM 适配器：配置了本地 OpenAI 兼容端点则走真实推理，
- * 否则回退到离线 Echo（不能作为 Cycle 1 通过证据）。
+ * 从 ProviderConfig 构造 LLM 适配器：必须配置本地 OpenAI 兼容端点（baseUrl + model）。
+ * 未配置时直接抛出错误，避免静默回退到离线 Echo 造成模拟数据。
  */
 export function createLlmAdapter(config: ProviderConfig): LlmAdapter {
   const pipeline = config.pipeline;
@@ -49,7 +45,7 @@ export function createLlmAdapter(config: ProviderConfig): LlmAdapter {
       apiKey: pipeline?.llmApiKey
     });
   }
-  return new EchoLlmAdapter();
+  throw new Error(`Provider ${config.kind} 未配置本地 OpenAI 兼容端点（baseUrl + model）。`);
 }
 
 export function createProvider(config: ProviderConfig): DuplexModelProvider {
@@ -57,7 +53,7 @@ export function createProvider(config: ProviderConfig): DuplexModelProvider {
     return new MockDuplexModelProvider();
   }
   if (config.kind === "pipeline") {
-    return new PipelineDuplexModelProvider(createLlmAdapter(config), config.pipeline?.systemPrompt);
+    return new PipelineDuplexModelProvider(createLlmAdapter(config), config.pipeline?.systemPrompt, [], null);
   }
   return new StubDuplexModelProvider(config);
 }

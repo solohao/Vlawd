@@ -42,9 +42,8 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
 
   const startVoice = async () => {
     const realInference = convo.snapshot.providerConnected && convo.snapshot.usingRealInference;
-    const canUseMock = convo.snapshot.activeProviderKind === "mock";
-    // Cycle 1 优先真实 Provider；mock 仅用于开发链路验证。
-    if (convo.available && !realInference && !canUseMock) {
+    // Cycle 1 必须真实 Provider；未就绪时引导到模型中心。
+    if (convo.available && !realInference) {
       onOpenModels();
       return;
     }
@@ -56,12 +55,11 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
   };
 
   const startManual = async () => {
-    if (convo.available) {
-      const afterConnect = await convo.connect();
-      const needsMock = !afterConnect.providerConnected && afterConnect.candidateProviderKinds.includes("mock");
-      if (needsMock) {
-        await convo.setProvider("mock");
-      }
+    const afterConnect = convo.available ? await convo.connect() : convo.snapshot;
+    const realInference = afterConnect.providerConnected && afterConnect.usingRealInference;
+    if (convo.available && !realInference) {
+      onOpenModels();
+      return;
     }
     onStartTask();
   };
