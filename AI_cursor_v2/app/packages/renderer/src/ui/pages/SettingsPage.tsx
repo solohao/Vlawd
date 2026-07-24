@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DemoBadge, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { FileIcon, ShieldIcon } from "../icons.js";
 import { Button, Card } from "../../design-system/index.js";
+import { FeatureSection, FeatureStatusInspector } from "../../app/feature-status.js";
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
   return (
@@ -27,6 +28,7 @@ export function SettingsPage() {
   const [retention, setRetention] = useState(true);
 
   return (
+    <FeatureSection id="ui.settings" title="设置与隐私" autoReady={false} className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="设置与隐私"
@@ -102,6 +104,12 @@ export function SettingsPage() {
           </Card>
         </div>
       </div>
+      <Card variant="default" padding="lg" className="mt-5">
+        <h2 className="text-[14px] font-semibold text-slate-900">功能填色与使用频率</h2>
+        <p className="mt-1 text-[11px] text-slate-500">手动确认功能是否真正可用，并按交互次数决定 UI 去留。</p>
+        <FeatureStatusInspector className="mt-4" />
+      </Card>
     </div>
+    </FeatureSection>
   );
 }

@@ -69,12 +69,15 @@ html[data-paint="on"] #root {
   transition: filter 0.25s ease;
 }
 .feature-paint[data-paint="wip"] {
-  filter: grayscale(0.55) contrast(0.8) brightness(1.05);
-  transition: filter 0.25s ease;
+  filter: grayscale(0.4) contrast(0.85) brightness(1.05);
+  outline: 2px dashed rgba(245, 158, 11, 0.45);
+  outline-offset: -2px;
+  transition: filter 0.25s ease, outline 0.25s ease;
 }
 .feature-paint[data-paint="off"] {
   filter: none;
-  transition: filter 0.25s ease;
+  outline: none;
+  transition: filter 0.25s ease, outline 0.25s ease;
 }
 
 /* frameless-window drag handles */

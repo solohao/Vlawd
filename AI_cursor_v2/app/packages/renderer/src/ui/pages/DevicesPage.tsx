@@ -1,9 +1,8 @@
-import { useEffect, useRef } from "react";
 import { DemoBadge, PageHeader, ToneBadge } from "../UiPrimitives.js";
 import { HeadphonesIcon, MicIcon, MonitorIcon, RefreshIcon, ShieldIcon } from "../icons.js";
 import { Button, Card } from "../../design-system/index.js";
 import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
-import { useMarkFeature } from "../../app/feature-status.js";
+import { FeatureSection } from "../../app/feature-status.js";
 
 const kindLabels: Record<string, string> = {
   "bluetooth-headset": "蓝牙耳机",
@@ -54,17 +53,8 @@ function DeviceCard({
 
 export function DevicesPage(): JSX.Element {
   const desktop = useDesktopRuntime();
-  const mark = useMarkFeature();
-  const markedRef = useRef(false);
   const { snapshot, busy, connectAudio, refresh } = desktop;
   const { audio, runtimeState } = snapshot;
-
-  useEffect(() => {
-    if (audio.connected && !markedRef.current) {
-      markedRef.current = true;
-      mark("ui.devices", "done");
-    }
-  }, [audio.connected, mark]);
 
   const inputLabel = audio.route?.config?.input?.label || "";
   const outputLabel = audio.route?.config?.output?.label || "";
@@ -77,6 +67,7 @@ export function DevicesPage(): JSX.Element {
   ];
 
   return (
+    <FeatureSection id="ui.devices" title="设备中心" autoReady={audio.connected} className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="设备中心"
@@ -176,5 +167,6 @@ export function DevicesPage(): JSX.Element {
         </div>
       </Card>
     </div>
+    </FeatureSection>
   );
 }

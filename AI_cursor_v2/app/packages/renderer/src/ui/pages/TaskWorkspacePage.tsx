@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import { PageHeader, ToneBadge } from "../UiPrimitives.js";
 import {
   BrainIcon,
@@ -11,7 +10,7 @@ import {
 } from "../icons.js";
 import { Button, Card, List, ListRow } from "../../design-system/index.js";
 import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
-import { useMarkFeature } from "../../app/feature-status.js";
+import { FeatureSection } from "../../app/feature-status.js";
 
 const typeLabels: Record<string, string> = {
   user: "用户",
@@ -24,17 +23,8 @@ const typeLabels: Record<string, string> = {
 
 export function TaskWorkspacePage() {
   const desktop = useDesktopRuntime();
-  const mark = useMarkFeature();
-  const markedRef = useRef(false);
   const { snapshot, busy, pauseSession, cancelSession, executeRuntimeAction } = desktop;
   const { runtimeState, session, graph, browser } = snapshot;
-
-  useEffect(() => {
-    if (session.chunks.length > 0 && !markedRef.current) {
-      markedRef.current = true;
-      mark("ui.task", "done");
-    }
-  }, [session.chunks.length, mark]);
 
   const stateTone = runtimeState === "interrupted" ? "danger" : runtimeState === "paused" ? "warning" : "brand";
   const stateText = runtimeState === "paused" ? "Paused" : runtimeState === "interrupted" ? "Interrupted" : runtimeState === "acting" ? "Acting" : "Active";
@@ -42,6 +32,7 @@ export function TaskWorkspacePage() {
   const visibleChunks = [...session.chunks].slice(-6).reverse();
 
   return (
+    <FeatureSection id="ui.task" title="任务空间" autoReady={session.chunks.length > 0} className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title={session.id ? `Session ${session.id.slice(0, 8)}` : "研究中文全双工模型"}
@@ -157,5 +148,6 @@ export function TaskWorkspacePage() {
         </Card>
       </div>
     </div>
+    </FeatureSection>
   );
 }

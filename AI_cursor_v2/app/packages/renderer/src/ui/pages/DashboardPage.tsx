@@ -1,7 +1,7 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useConversation } from "../../runtime/useConversation.js";
 import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
-import { useMarkFeature } from "../../app/feature-status.js";
+import { FeatureSection } from "../../app/feature-status.js";
 import {
   BoltIcon,
   CheckIcon,
@@ -30,15 +30,6 @@ interface DashboardPageProps {
 export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: DashboardPageProps) {
   const convo = useConversation();
   const desktop = useDesktopRuntime();
-  const mark = useMarkFeature();
-  const markedRef = useRef(false);
-
-  useEffect(() => {
-    if (desktop.snapshot.generatedAt && !markedRef.current) {
-      markedRef.current = true;
-      mark("ui.dashboard", "done");
-    }
-  }, [desktop.snapshot.generatedAt, mark]);
 
   const readyForConversation = (snapshot: typeof convo.snapshot) =>
     snapshot.providerConnected && snapshot.usingRealInference;
@@ -91,8 +82,9 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
   }, []);
 
   return (
-    <DensityProvider density="compact">
-      <div className="flex h-screen flex-col overflow-hidden bg-white">
+    <FeatureSection id="ui.dashboard" title="工作台" autoReady={!!desktop.snapshot.generatedAt} className="h-full">
+      <DensityProvider density="compact">
+        <div className="flex h-screen flex-col overflow-hidden bg-white">
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-6 py-4">
             {/* 顶部栏 - 极简化 */}
@@ -224,6 +216,7 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
         </div>
       </div>
     </DensityProvider>
+    </FeatureSection>
   );
 }
 
