@@ -17,7 +17,7 @@ import {
   SearchIcon,
   ShieldIcon
 } from "../icons.js";
-import { cn } from "../../design-system/index.js";
+import { cn, ListRow, KeyValueRow, DensityProvider, Card } from "../../design-system/index.js";
 
 interface DashboardPageProps {
   onStartTask: () => void;
@@ -48,114 +48,121 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
   }, []);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
-          {/* 顶部状态条 */}
-          <div className="flex justify-end gap-2.5">
-            <span className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-brand-500" />
-              本地运行中
-              <ChevronDown width={14} className="text-slate-400" />
-            </span>
-            <span className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600">
-              <ShieldIcon width={15} className="text-slate-500" /> 隐私保护
-            </span>
-            <button
-              onClick={onOpenModels}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-            >
-              <GearIcon width={16} />
-            </button>
-          </div>
-
-          {/* 问候 */}
-          <div className="mt-4">
-            <h1 className="text-[26px] font-bold tracking-tight text-slate-900">上午好，张明</h1>
-            <p className="mt-1.5 text-[13px] text-slate-500">随时为您待命，您说目标，我来完成。</p>
-          </div>
-
-          {/* 语音区 + 助手状态 */}
-          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
-            <section className="flex items-center gap-8 rounded-2xl border border-slate-200 bg-white px-8 py-9">
-              <button
-                onClick={startVoice}
-                className="relative grid h-[136px] w-[136px] shrink-0 place-items-center"
-              >
-                <span className="absolute inset-0 rounded-full border border-dashed border-brand-300/70" />
-                <span className="absolute inset-3 rounded-full border border-dashed border-brand-200/60" />
-                <span className="grid h-[92px] w-[92px] place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-transform hover:scale-105">
-                  <MicIcon width={30} className="text-slate-700" />
-                </span>
-              </button>
-              <div className="min-w-0">
-                <h2 className="text-[22px] font-bold text-slate-900">请说出您的目标</h2>
-                <p className="mt-2 text-[13px] text-slate-500">例时：帮我整理上周会议纪要并生成报告</p>
-                <div className="mt-4 flex flex-wrap gap-2.5">
-                  <Chip icon={<MicIcon width={13} />} label="语音输入为主" />
-                  <Chip icon={<BoltIcon width={13} />} label="自动规划与执行" />
-                  <Chip icon={<CheckIcon width={13} />} label="完成后汇报结果" />
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[14px] font-semibold text-slate-900">助手状态</h3>
-                <span className="flex items-center gap-1.5 text-[12px] font-medium text-brand-700">
-                  <span className="h-2 w-2 rounded-full bg-brand-500" /> 随时待命
-                </span>
-              </div>
-              <div className="mt-4 space-y-3">
-                <StatusRow icon={<MonitorIcon width={15} />} label="运行环境" value="本地运行" />
-                <StatusRow icon={<LockIcon width={15} />} label="数据隐私" value="完全本地存储" />
-                <StatusRow icon={<CheckIcon width={15} />} label="响应状态" value="随时可用" />
-                <StatusRow icon={<RefreshIcon width={15} />} label="上次活跃" value="2 分钟前" />
-              </div>
+    <DensityProvider density="compact">
+      <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+            {/* 顶部状态条 */}
+            <div className="flex justify-end gap-2.5">
+              <span className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600">
+                <span className="h-2 w-2 rounded-full bg-brand-500" />
+                本地运行中
+                <ChevronDown width={14} className="text-slate-400" />
+              </span>
+              <span className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] text-slate-600">
+                <ShieldIcon width={15} className="text-slate-500" /> 隐私保护
+              </span>
               <button
                 onClick={onOpenModels}
-                className="mt-5 w-full rounded-xl border border-slate-200 py-2.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-slate-300"
               >
-                查看安全与隐私
+                <GearIcon width={16} />
               </button>
-            </section>
-          </div>
+            </div>
 
-          {/* 常用操作 */}
-          <div className="mt-7 flex items-center justify-between">
-            <h3 className="text-[14px] font-semibold text-slate-900">常用操作</h3>
-            <button className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-600">
-              更多 <ChevronRight width={14} />
-            </button>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3.5 sm:grid-cols-3 xl:grid-cols-5">
-            <ActionCard icon={<DocIcon width={18} />} title="整理会议纪要" desc="提炼要点并生成报告" onClick={onStartTask} />
-            <ActionCard icon={<GridIcon width={18} />} title="数据分析" desc="分析数据并生成图表" onClick={onStartTask} />
-            <ActionCard icon={<SearchIcon width={18} />} title="信息调研" desc="搜索并总结关键信息" onClick={onStartTask} />
-            <ActionCard icon={<PencilIcon width={18} />} title="内容撰写" desc="撰写文档与方案" onClick={onStartTask} />
-            <ActionCard icon={<CheckIcon width={18} />} title="待办管理" desc="整理并跟进待办事项" onClick={onStartTask} />
-          </div>
+            {/* 问候 */}
+            <div className="mt-4">
+              <h1 className="text-[26px] font-bold tracking-tight text-slate-900">上午好，张明</h1>
+              <p className="mt-1.5 text-[13px] text-slate-500">随时为您待命，您说目标，我来完成。</p>
+            </div>
 
-          {/* 当前任务 + 最近使用 */}
-          <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
-            <CurrentTaskPanel />
-            <RecentUsePanel onOpenSessions={onOpenSessions} />
+            {/* 语音区 + 助手状态 */}
+            <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
+              <section className="flex items-center gap-6 rounded-2xl border border-slate-200 bg-white px-6 py-7">
+                <button
+                  onClick={startVoice}
+                  className="relative grid h-[120px] w-[120px] shrink-0 place-items-center"
+                >
+                  <span className="absolute inset-0 rounded-full border border-dashed border-brand-300/70" />
+                  <span className="absolute inset-3 rounded-full border border-dashed border-brand-200/60" />
+                  <span className="grid h-[80px] w-[80px] place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-transform hover:scale-105">
+                    <MicIcon width={28} className="text-slate-700" />
+                  </span>
+                </button>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[22px] font-bold text-slate-900">请说出您的目标</h2>
+                  <p className="mt-2 text-[13px] text-slate-500">例时：帮我整理上周会议纪要并生成报告</p>
+                  <div className="mt-4 flex flex-wrap gap-2.5">
+                    <Chip icon={<MicIcon width={13} />} label="语音输入为主" />
+                    <Chip icon={<BoltIcon width={13} />} label="自动规划与执行" />
+                    <Chip icon={<CheckIcon width={13} />} label="完成后汇报结果" />
+                  </div>
+                </div>
+                <div className="hidden shrink-0 flex-col gap-2 border-l border-slate-100 pl-5 lg:flex">
+                  <p className="text-[11px] font-semibold text-slate-600">快捷键</p>
+                  <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">Space 说话</span>
+                  <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">Esc 取消</span>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[14px] font-semibold text-slate-900">助手状态</h3>
+                  <span className="flex items-center gap-1.5 text-[12px] font-medium text-brand-700">
+                    <span className="h-2 w-2 rounded-full bg-brand-500" /> 随时待命
+                  </span>
+                </div>
+                <div className="mt-4 space-y-1">
+                  <StatusRow icon={<MonitorIcon width={15} />} label="运行环境" value="本地运行" />
+                  <StatusRow icon={<LockIcon width={15} />} label="数据隐私" value="完全本地存储" />
+                  <StatusRow icon={<CheckIcon width={15} />} label="响应状态" value="随时可用" />
+                  <StatusRow icon={<RefreshIcon width={15} />} label="上次活跃" value="2 分钟前" />
+                </div>
+                <button
+                  onClick={onOpenModels}
+                  className="mt-5 w-full rounded-xl border border-slate-200 py-2.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                >
+                  查看安全与隐私
+                </button>
+              </section>
+            </div>
+
+            {/* 常用操作 */}
+            <div className="mt-7 flex items-center justify-between">
+              <h3 className="text-[14px] font-semibold text-slate-900">常用操作</h3>
+              <button className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-600">
+                更多 <ChevronRight width={14} />
+              </button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3.5 sm:grid-cols-3 xl:grid-cols-5">
+              <ActionCard icon={<DocIcon width={18} />} title="整理会议纪要" desc="提炼要点并生成报告" onClick={onStartTask} />
+              <ActionCard icon={<GridIcon width={18} />} title="数据分析" desc="分析数据并生成图表" onClick={onStartTask} />
+              <ActionCard icon={<SearchIcon width={18} />} title="信息调研" desc="搜索并总结关键信息" onClick={onStartTask} />
+              <ActionCard icon={<PencilIcon width={18} />} title="内容撰写" desc="撰写文档与方案" onClick={onStartTask} />
+              <ActionCard icon={<CheckIcon width={18} />} title="待办管理" desc="整理并跟进待办事项" onClick={onStartTask} />
+            </div>
+
+            {/* 当前任务 + 最近使用 */}
+            <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
+              <CurrentTaskPanel />
+              <RecentUsePanel onOpenSessions={onOpenSessions} />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* 底部语音提示 */}
-      <div className="relative flex shrink-0 items-center justify-center border-t border-slate-200/70 bg-white/70 py-3.5 text-[12px] text-slate-500 backdrop-blur">
-        按住
-        <kbd className="mx-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-          Space
-        </kbd>
-        开始语音输入
-        <button className="absolute right-6 grid h-8 w-8 place-items-center rounded-full text-slate-300 hover:text-slate-500">
-          <HelpIcon width={18} />
-        </button>
+        {/* 底部语音提示 */}
+        <div className="relative flex shrink-0 items-center justify-center border-t border-slate-200/70 bg-white/70 py-3.5 text-[12px] text-slate-500 backdrop-blur">
+          按住
+          <kbd className="mx-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            Space
+          </kbd>
+          开始语音输入
+          <button className="absolute right-6 grid h-8 w-8 place-items-center rounded-full text-slate-300 hover:text-slate-500">
+            <HelpIcon width={18} />
+          </button>
+        </div>
       </div>
-    </div>
+    </DensityProvider>
   );
 }
 
@@ -170,13 +177,11 @@ function Chip({ icon, label }: { icon: ReactNode; label: string }) {
 
 function StatusRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-[12.5px]">
-      <span className="flex items-center gap-2 text-slate-500">
-        <span className="text-slate-400">{icon}</span>
-        {label}
-      </span>
-      <span className="font-medium text-slate-800">{value}</span>
-    </div>
+    <KeyValueRow
+      icon={<span className="text-slate-400">{icon}</span>}
+      label={label}
+      value={<span className="font-medium text-slate-800">{value}</span>}
+    />
   );
 }
 
@@ -192,16 +197,15 @@ function ActionCard({
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-slate-300 hover:shadow-[0_2px_12px_rgba(15,23,42,0.05)]"
-    >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600">{icon}</span>
-      <span className="min-w-0">
-        <b className="block text-[12.5px] font-semibold text-slate-900">{title}</b>
-        <span className="mt-0.5 block text-[11px] text-slate-500">{desc}</span>
-      </span>
-    </button>
+    <Card padding="sm" variant="default" hoverable onClick={onClick} className="text-left">
+      <ListRow
+        flush
+        leading={<span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-600">{icon}</span>}
+        title={title}
+        description={desc}
+        trailing={<ChevronRight width={16} className="text-slate-400" />}
+      />
+    </Card>
   );
 }
 
@@ -219,7 +223,7 @@ function CurrentTaskPanel() {
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <p className="text-[12px] text-slate-400">当前任务</p>
       <h3 className="mt-1 text-[15px] font-semibold text-slate-900">整理上周会议纪要并生成报告</h3>
 
@@ -261,27 +265,33 @@ function CurrentTaskPanel() {
 
       <div className="mt-5 rounded-xl border border-slate-200 p-4">
         <p className="text-[12px] font-medium text-slate-600">任务计划（自动生成）</p>
-        <div className="mt-3 space-y-2.5">
+        <div className="mt-3">
           {plan.map((p) => (
-            <div key={p.label} className="flex items-center gap-2.5 text-[12px]">
-              <span
-                className={cn(
-                  "grid h-4 w-4 shrink-0 place-items-center rounded-full",
-                  p.state === "done"
-                    ? "bg-brand-500 text-white"
-                    : p.state === "current"
-                      ? "border-2 border-brand-500"
-                      : "border border-slate-300"
-                )}
-              >
-                {p.state === "done" && <CheckIcon width={10} />}
-                {p.state === "current" && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
-              </span>
-              <span className={cn("flex-1", p.state === "todo" ? "text-slate-400" : "text-slate-700")}>{p.label}</span>
-              <span className={cn("text-[11px]", p.state === "current" ? "text-brand-700" : "text-slate-400")}>
-                {p.time}
-              </span>
-            </div>
+            <ListRow
+              key={p.label}
+              flush
+              leading={
+                <span
+                  className={cn(
+                    "grid h-4 w-4 shrink-0 place-items-center rounded-full",
+                    p.state === "done"
+                      ? "bg-brand-500 text-white"
+                      : p.state === "current"
+                        ? "border-2 border-brand-500"
+                        : "border border-slate-300"
+                  )}
+                >
+                  {p.state === "done" && <CheckIcon width={10} />}
+                  {p.state === "current" && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
+                </span>
+              }
+              title={p.label}
+              trailing={
+                <span className={cn("text-[11px]", p.state === "current" ? "text-brand-700" : "text-slate-400")}>
+                  {p.time}
+                </span>
+              }
+            />
           ))}
         </div>
         <button className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-[12px] font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50">
@@ -302,7 +312,7 @@ function RecentUsePanel({ onOpenSessions }: { onOpenSessions: () => void }) {
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-[15px] font-semibold text-slate-900">最近使用</h3>
         <button onClick={onOpenSessions} className="text-[12px] text-slate-400 hover:text-slate-600">
@@ -311,29 +321,29 @@ function RecentUsePanel({ onOpenSessions }: { onOpenSessions: () => void }) {
       </div>
       <div className="mt-4 space-y-1">
         {items.map((it) => (
-          <button
+          <ListRow
             key={it.title}
             onClick={onOpenSessions}
-            className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-slate-50"
-          >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-500">
-              {it.icon}
-            </span>
-            <span className="min-w-0 flex-1">
-              <b className="block truncate text-[12.5px] font-medium text-slate-800">{it.title}</b>
-              <span className="mt-0.5 block text-[11px] text-slate-400">{it.time}</span>
-            </span>
-            <span
-              className={cn(
-                "shrink-0 rounded-md border px-2 py-0.5 text-[10.5px] font-medium",
-                it.status === "进行中"
-                  ? "border-brand-200 bg-brand-50 text-brand-700"
-                  : "border-slate-200 bg-slate-50 text-slate-500"
-              )}
-            >
-              {it.status}
-            </span>
-          </button>
+            leading={
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-500">
+                {it.icon}
+              </span>
+            }
+            title={it.title}
+            description={it.time}
+            trailing={
+              <span
+                className={cn(
+                  "shrink-0 rounded-md border px-2 py-0.5 text-[10.5px] font-medium",
+                  it.status === "进行中"
+                    ? "border-brand-200 bg-brand-50 text-brand-700"
+                    : "border-slate-200 bg-slate-50 text-slate-500"
+                )}
+              >
+                {it.status}
+              </span>
+            }
+          />
         ))}
       </div>
     </section>

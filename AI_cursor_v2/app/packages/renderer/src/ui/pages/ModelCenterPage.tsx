@@ -23,7 +23,16 @@ import {
   SparkIcon,
   SpeakerIcon
 } from "../icons.js";
-import { Button, cn, StatusDot, Progress } from "../../design-system/index.js";
+import {
+  Button,
+  cn,
+  StatusDot,
+  Progress,
+  ListRow,
+  KeyValueRow,
+  DensityProvider,
+  Card,
+} from "../../design-system/index.js";
 import type { ModelBackendKind, ModelBackendState } from "@ai-cursor-v2/shared";
 import { intentTemplates, modelCatalog } from "./model-catalog.js";
 import {
@@ -118,6 +127,21 @@ function deviceSummary(device: DeviceProfile): string {
   return `${device.gpuName ?? "独立显卡"} · ${vramGB}GB 显存 · ${device.ramGB}GB 内存`;
 }
 
+function perfSummary(template: IntentTemplate): string {
+  const { quality, speed, chinese } = template.weights;
+  if (template.requireLocal) return "本地优先";
+  if (speed > quality && speed > chinese) return "速度优先";
+  if (quality > speed && quality > chinese) return "质量优先";
+  if (chinese > quality && chinese > speed) return "中文优先";
+  return "均衡";
+}
+
+function sceneSummary(template: IntentTemplate): string {
+  const raw = template.scene.split(/[,，、]/)[0].trim();
+  if (raw.length > 8) return raw.slice(0, 8) + "…";
+  return raw || "自定义";
+}
+
 export function ModelCenterPage() {
   const model = useModelCenter();
   const [tab, setTab] = useState<Tab>("config");
@@ -125,51 +149,53 @@ export function ModelCenterPage() {
   const [selectedPreset, setSelectedPreset] = useState("balanced");
   const device = useMemo(() => deviceFromProbe(model.snapshot.environment), [model.snapshot.environment]);
 
-  if (editing) {
-    return <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />;
-  }
-
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
-          <header className="flex items-start justify-between">
-            <div>
-              <h1 className="text-[24px] font-bold tracking-tight text-slate-900">模型中心</h1>
-              <p className="mt-1.5 text-[12.5px] text-slate-500">
-                选择最适合你的模型配置，助手已根据你的设备为你准备好推荐方案。
-              </p>
+    <DensityProvider density="compact">
+      {editing ? (
+        <EditConfigView templateId={selectedPreset} device={device} onBack={() => setEditing(false)} />
+      ) : (
+        <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/40">
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1320px] px-8 py-7">
+              <header className="flex items-start justify-between">
+                <div>
+                  <h1 className="text-[24px] font-bold tracking-tight text-slate-900">模型中心</h1>
+                  <p className="mt-1.5 text-[12.5px] text-slate-500">
+                    选择最适合你的模型配置，助手已根据你的设备为你准备好推荐方案。
+                  </p>
+                </div>
+                <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
+                  <PlusIcon width={15} /> 新建配置
+                </Button>
+              </header>
+
+              <div className="mt-5 flex items-center gap-6 border-b border-slate-200">
+                <TabButton active={tab === "config"} onClick={() => setTab("config")}>
+                  配置
+                </TabButton>
+                <TabButton active={tab === "library"} onClick={() => setTab("library")}>
+                  模型库
+                </TabButton>
+              </div>
+
+              <div className="pt-6">
+                {tab === "config" ? (
+                  <ConfigView
+                    model={model}
+                    selectedPreset={selectedPreset}
+                    device={device}
+                    onSelect={setSelectedPreset}
+                    onEdit={() => setEditing(true)}
+                  />
+                ) : (
+                  <LibraryView model={model} />
+                )}
+              </div>
             </div>
-            <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
-              <PlusIcon width={15} /> 新建配置
-            </Button>
-          </header>
-
-          <div className="mt-5 flex items-center gap-6 border-b border-slate-200">
-            <TabButton active={tab === "config"} onClick={() => setTab("config")}>
-              配置
-            </TabButton>
-            <TabButton active={tab === "library"} onClick={() => setTab("library")}>
-              模型库
-            </TabButton>
-          </div>
-
-          <div className="pt-6">
-            {tab === "config" ? (
-              <ConfigView
-                model={model}
-                selectedPreset={selectedPreset}
-                device={device}
-                onSelect={setSelectedPreset}
-                onEdit={() => setEditing(true)}
-              />
-            ) : (
-              <LibraryView model={model} />
-            )}
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </DensityProvider>
   );
 }
 
@@ -214,106 +240,115 @@ function ConfigView({
   const speaking = resolved.slots.speaking;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <RunningBackendSection model={model} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,480px)_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,480px)_1fr]">
         {/* 选择配置 */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
-        <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
+          <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
 
-        <div className="mt-4 space-y-2.5">
-          {configRows.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => onSelect(p.id)}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all",
-                selectedPreset === p.id
-                  ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200"
-                  : "border-slate-200 bg-white hover:border-slate-300"
-              )}
-            >
-              <Radio checked={selectedPreset === p.id} />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <b className="text-[13.5px] font-semibold text-slate-900">{p.name}</b>
-                  {p.current && (
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      当前使用
-                    </span>
-                  )}
-                  {p.custom && (
-                    <span className="ml-auto text-slate-300">
+          <div className="mt-4 space-y-2">
+            {configRows.map((p) => (
+              <ListRow
+                key={p.id}
+                leading={<Radio checked={selectedPreset === p.id} />}
+                title={
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{p.name}</span>
+                    {p.current && (
+                      <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        当前使用
+                      </span>
+                    )}
+                  </span>
+                }
+                description={p.desc}
+                trailing={
+                  p.custom ? (
+                    <span className="text-slate-300">
                       <DotsIcon width={16} />
                     </span>
-                  )}
-                </span>
-                <span className="mt-1 block text-[11.5px] leading-relaxed text-slate-500">{p.desc}</span>
-              </span>
-            </button>
-          ))}
+                  ) : (
+                    <ChevronRight width={16} className="text-slate-400" />
+                  )
+                }
+                onClick={() => onSelect(p.id)}
+                selected={selectedPreset === p.id}
+              />
+            ))}
 
-          <button
-            onClick={onEdit}
-            className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
-          >
-            <span className="min-w-0 flex-1">
-              <b className="block text-[13px] font-semibold text-slate-800">管理配置</b>
-              <span className="mt-0.5 block text-[11px] text-slate-500">重命名、编辑或恢复配置</span>
+            <ListRow
+              title="管理配置"
+              description="重命名、编辑或恢复配置"
+              trailing={<ChevronRight width={16} className="text-slate-400" />}
+              onClick={onEdit}
+            />
+          </div>
+        </section>
+
+        {/* 当前配置概览 */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
+              <p className="mt-1 text-[12px] text-slate-500">已根据你的设备为该方案解析出实际模型</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-600">
+              <BoltIcon width={13} /> {deviceSummary(device)}
             </span>
-            <ChevronRight width={16} className="text-slate-400" />
-          </button>
-        </div>
-      </section>
-
-      {/* 当前配置概览 */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-[15px] font-semibold text-slate-900">当前配置概览</h2>
-            <p className="mt-1 text-[12px] text-slate-500">已根据你的设备为该方案解析出实际模型</p>
           </div>
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-600">
-            <BoltIcon width={13} /> {deviceSummary(device)}
-          </span>
-        </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
-          <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
-          <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
-        </div>
-
-        <div className="my-5 h-px bg-slate-100" />
-
-        <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
-        <div className="mt-3 space-y-1">
-          <AboutRow icon={<BoltIcon width={16} />} label="性能" desc={template.perf} />
-          <AboutRow icon={<LockIcon width={16} />} label="隐私" desc={template.privacy} />
-          <AboutRow icon={<GlobeIcon width={16} />} label="适用场景" desc={template.scene} />
-        </div>
-
-        <div className="mt-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-[13.5px] font-semibold text-slate-900">切换配置后</h3>
-            <p className="mt-1 max-w-md text-[12px] leading-relaxed text-slate-500">
-              {resolved.notes[0] ?? "系统会自动检查并准备所需模型，无需手动下载或设置。"}
-            </p>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
+            <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
+            <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
           </div>
-          <span
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium",
-              resolved.notes.length > 0 ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"
-            )}
-          >
-            <CheckIcon width={14} /> {resolved.notes.length > 0 ? "可运行（有提示）" : "准备就绪"}
-          </span>
-        </div>
 
-        <ApplyConfigBar model={model} onEdit={onEdit} />
-      </section>
-    </div>
+          <div className="my-4 h-px bg-slate-100" />
+
+          <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
+          <div className="mt-3">
+            <KeyValueRow
+              icon={<BoltIcon width={16} />}
+              label="性能"
+              value={perfSummary(template)}
+              description={template.perf}
+            />
+            <KeyValueRow
+              icon={<LockIcon width={16} />}
+              label="隐私"
+              value={template.requireLocal ? "完全本地" : "混合存储"}
+              description={template.privacy}
+            />
+            <KeyValueRow
+              icon={<GlobeIcon width={16} />}
+              label="适用场景"
+              value={sceneSummary(template)}
+              description={template.scene}
+            />
+          </div>
+
+          <div className="mt-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-[13.5px] font-semibold text-slate-900">切换配置后</h3>
+              <p className="mt-1 max-w-md text-[12px] leading-relaxed text-slate-500">
+                {resolved.notes[0] ?? "系统会自动检查并准备所需模型，无需手动下载或设置。"}
+              </p>
+            </div>
+            <span
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium",
+                resolved.notes.length > 0 ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"
+              )}
+            >
+              <CheckIcon width={14} /> {resolved.notes.length > 0 ? "可运行（有提示）" : "准备就绪"}
+            </span>
+          </div>
+
+          <ApplyConfigBar model={model} onEdit={onEdit} />
+        </section>
+      </div>
     </div>
   );
 }
@@ -331,17 +366,24 @@ function CapabilitySummary({
 }) {
   const tone = slot.needsCloud ? "warn" : toneOf(slot.runnability);
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center gap-2 text-slate-600">
-        <span className="text-slate-500">{icon}</span>
-        <span className="text-[13px] font-semibold text-slate-900">{title}</span>
-      </div>
-      <p className="mt-3 text-[11px] text-slate-400">{kind}</p>
-      <p className="mt-1 text-[13px] font-medium text-slate-800">{slot.model?.name ?? "暂无可用模型"}</p>
-      <p className={cn("mt-3 flex items-center gap-1.5 text-[11.5px] font-medium", TONE_TEXT[tone])}>
-        <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
-      </p>
-    </div>
+    <Card padding="sm" variant="default" className="border-slate-200">
+      <ListRow
+        flush
+        leading={<span className="text-slate-500">{icon}</span>}
+        title={title}
+        description={kind}
+        trailing={
+          <>
+            <span className="font-medium text-slate-800 truncate max-w-[120px]">
+              {slot.model?.name ?? "暂无可用模型"}
+            </span>
+            <span className={cn("flex items-center gap-1 text-[11px] font-medium", TONE_TEXT[tone])}>
+              <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
+            </span>
+          </>
+        }
+      />
+    </Card>
   );
 }
 
@@ -357,14 +399,7 @@ function AboutRow({
   value?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg px-1 py-2.5">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-500">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-semibold text-slate-900">{label}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">{desc}</p>
-      </div>
-      {value && <span className="text-[12.5px] font-medium text-slate-700">{value}</span>}
-    </div>
+    <KeyValueRow icon={icon} label={label} value={value} description={desc} />
   );
 }
 
