@@ -179,25 +179,17 @@ export function FeaturePaint({
 export function FeatureSection({
   id,
   title,
-  autoReady,
   className,
   children
 }: {
   id: string;
   title?: string;
-  autoReady?: boolean;
   className?: string;
   children: ReactNode;
 }): JSX.Element {
   const status = useFeatureStatus(id);
   const { count, lastUsedAt } = useFeatureInteractions(id);
   const { mark, recordInteraction } = useFeatureContext();
-
-  useEffect(() => {
-    if (autoReady && status === "todo") {
-      mark(id, "wip");
-    }
-  }, [autoReady, status, mark, id]);
 
   const handleVerify = useCallback(
     (event: React.MouseEvent) => {
@@ -208,8 +200,11 @@ export function FeatureSection({
   );
 
   const handleClickCapture = useCallback(() => {
+    if (status === "todo") {
+      mark(id, "wip");
+    }
     recordInteraction(id);
-  }, [recordInteraction, id]);
+  }, [status, mark, recordInteraction, id]);
 
   const formattedLastUsed = lastUsedAt
     ? new Date(lastUsedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
@@ -217,23 +212,19 @@ export function FeatureSection({
 
   return (
     <div className={cn("relative", className)} onClickCapture={handleClickCapture}>
-      {status !== "done" && (
-        <div className="absolute right-2 top-2 z-10 flex max-w-[260px] flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] shadow-sm">
-          {status === "todo" && <span className="font-medium text-slate-400">未接入</span>}
-          {status === "wip" && (
-            <>
-              <span className="font-medium text-amber-600">WIP</span>
-              <span className="text-slate-500">交互 {count} 次</span>
-              {formattedLastUsed && <span className="text-slate-400">· {formattedLastUsed}</span>}
-              <button
-                type="button"
-                onClick={handleVerify}
-                className="rounded bg-brand-400 px-2 py-0.5 font-medium text-ink-900 hover:bg-brand-300"
-              >
-                确认完成
-              </button>
-            </>
-          )}
+      {status === "wip" && (
+        <div className="absolute right-2 top-2 z-10 flex max-w-[260px] flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] shadow-sm">
+          {title && <span className="font-medium text-slate-700">{title}</span>}
+          <span className="font-medium text-amber-600">WIP</span>
+          <span className="text-slate-500">交互 {count} 次</span>
+          {formattedLastUsed && <span className="text-slate-400">· {formattedLastUsed}</span>}
+          <button
+            type="button"
+            onClick={handleVerify}
+            className="rounded bg-brand-400 px-2 py-0.5 font-medium text-ink-900 hover:bg-brand-300"
+          >
+            确认完成
+          </button>
         </div>
       )}
       <FeaturePaint id={id} className="h-full">

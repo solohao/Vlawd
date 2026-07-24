@@ -11,7 +11,7 @@ const workflows = [
 
 export function WorkflowsPage() {
   return (
-    <FeatureSection id="ui.workflows" title="工作流库" autoReady={false} className="h-full">
+    <FeatureSection id="ui.workflows" title="工作流库" className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="工作流库"

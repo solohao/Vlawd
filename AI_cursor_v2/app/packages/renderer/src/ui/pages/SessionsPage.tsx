@@ -27,7 +27,7 @@ export function SessionsPage() {
   const listItems = session.chunks.slice().reverse();
 
   return (
-    <FeatureSection id="ui.sessions" title="Session 记录" autoReady={session.chunks.length > 0} className="h-full">
+    <FeatureSection id="ui.sessions" title="Session 记录" className="h-full">
     <div className="min-h-full px-8 py-7">
       <PageHeader
         title="Session 记录"
