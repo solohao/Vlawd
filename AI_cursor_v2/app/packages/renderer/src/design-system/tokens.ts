@@ -156,6 +156,28 @@ export const tokens = {
     },
   },
 
+  // 密度模式：内容密度、间距、字号
+  density: {
+    compact: {
+      padding: '0.625rem',   // 10px
+      gap: '0.5rem',         // 8px
+      fontSize: '0.75rem',   // 12px
+      lineHeight: '1.25rem',
+    },
+    default: {
+      padding: '0.875rem',   // 14px
+      gap: '0.625rem',       // 10px
+      fontSize: '0.8125rem', // 13px
+      lineHeight: '1.375rem',
+    },
+    comfortable: {
+      padding: '1.125rem',   // 18px
+      gap: '0.875rem',       // 14px
+      fontSize: '0.9375rem', // 15px
+      lineHeight: '1.5rem',
+    },
+  },
+
   // Z-index 层级
   zIndex: {
     dropdown: 1000,
@@ -170,3 +192,4 @@ export const tokens = {
 // 导出类型
 export type Tokens = typeof tokens;
 export type ColorScale = keyof typeof tokens.colors.brand;
+export type Density = keyof typeof tokens.density;

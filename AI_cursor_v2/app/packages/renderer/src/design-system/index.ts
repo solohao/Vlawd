@@ -7,7 +7,11 @@
 
 // Design Tokens
 export { tokens } from "./tokens.js";
-export type { Tokens, ColorScale } from "./tokens.js";
+export type { Tokens, ColorScale, Density } from "./tokens.js";
+
+// Density
+export { DensityProvider, useDensity } from "./providers/DensityProvider.js";
+export type { DensityProviderProps } from "./providers/DensityProvider.js";
 
 // Utilities
 export { cn, cva } from "./utils.js";
@@ -42,3 +46,10 @@ export type {
   SkeletonProps,
   DividerProps,
 } from "./components/Indicators.js";
+
+// Layout primitives
+export { ListRow } from "./components/ListRow.js";
+export type { ListRowProps } from "./components/ListRow.js";
+
+export { KeyValueRow } from "./components/KeyValueRow.js";
+export type { KeyValueRowProps } from "./components/KeyValueRow.js";
