@@ -28,8 +28,13 @@ declare global {
 }
 
 function readSavedMode(): PaintMode {
-  // V2 界面验收期间暂时强制显示完整配色。保留 window.__paint 供开发期手动对比。
-  return "off";
+  // 默认回到"未处理态"（整屏浅灰）：开发进度以填色恢复，闭环验证通过的功能单元才上色。
+  // 读取上次在 DevTools 里手动切换的选择，未选择过则默认 on。
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "off" ? "off" : "on";
+  } catch {
+    return "on";
+  }
 }
 
 function persist(mode: PaintMode): void {
@@ -45,8 +50,8 @@ function applyPaintMode(mode: PaintMode): void {
 }
 
 /**
- * 初始化填色模式：V2 界面验收期间默认 off，设置根属性，并在
- * `window.__paint` 暴露开发期切换入口，方便在 DevTools 里对比。
+ * 初始化填色模式：默认回到"未处理态"（整屏浅灰），设置根属性，并在
+ * `window.__paint` 暴露开发期切换入口，方便在 DevTools 里对比完成态配色。
  */
 export function initPaintMode(): void {
   let mode = readSavedMode();
