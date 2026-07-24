@@ -29,6 +29,12 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
   const convo = useConversation();
 
   const startVoice = () => {
+    const realInference = convo.snapshot.providerConnected && convo.snapshot.usingRealInference;
+    // Cycle 1 要求真实 Provider：未就绪时引导到模型中心。
+    if (convo.available && !realInference) {
+      onOpenModels();
+      return;
+    }
     void convo.toggleMic();
     onStartTask();
   };
