@@ -32,6 +32,13 @@ import {
   KeyValueRow,
   DensityProvider,
   Card,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableHeader,
+  TableCell,
+  List,
 } from "../../design-system/index.js";
 import type { ModelBackendKind, ModelBackendState } from "@ai-cursor-v2/shared";
 import { intentTemplates, modelCatalog } from "./model-catalog.js";
@@ -248,42 +255,57 @@ function ConfigView({
           <h2 className="text-[15px] font-semibold text-slate-900">选择配置</h2>
           <p className="mt-1 text-[12px] text-slate-500">选择一种配置以应用到你的助手</p>
 
-          <div className="mt-4 space-y-2">
-            {configRows.map((p) => (
-              <ListRow
-                key={p.id}
-                leading={<Radio checked={selectedPreset === p.id} />}
-                title={
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate">{p.name}</span>
-                    {p.current && (
-                      <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                        当前使用
+          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+            <Table hoverable className="table-fixed">
+              <TableHead>
+                <TableRow>
+                  <TableHeader className="w-10" />
+                  <TableHeader>配置名称</TableHeader>
+                  <TableHeader>说明</TableHeader>
+                  <TableHeader className="w-16 text-right" />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {configRows.map((p) => (
+                  <TableRow
+                    key={p.id}
+                    selected={selectedPreset === p.id}
+                    onClick={() => onSelect(p.id)}
+                    className="cursor-pointer"
+                  >
+                    <TableCell className="w-10">
+                      <Radio checked={selectedPreset === p.id} />
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate font-medium text-slate-900">{p.name}</span>
+                        {p.current && (
+                          <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                            当前使用
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                }
-                description={p.desc}
-                trailing={
-                  p.custom ? (
-                    <span className="text-slate-300">
-                      <DotsIcon width={16} />
-                    </span>
-                  ) : (
+                    </TableCell>
+                    <TableCell className="truncate text-slate-500">{p.desc}</TableCell>
+                    <TableCell align="right" className="w-16">
+                      {p.custom ? (
+                        <DotsIcon width={16} className="text-slate-300" />
+                      ) : (
+                        <ChevronRight width={16} className="text-slate-400" />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow onClick={onEdit} className="cursor-pointer">
+                  <TableCell className="w-10" />
+                  <TableCell className="font-medium text-slate-900">管理配置</TableCell>
+                  <TableCell className="text-slate-500">重命名、编辑或恢复配置</TableCell>
+                  <TableCell align="right" className="w-16">
                     <ChevronRight width={16} className="text-slate-400" />
-                  )
-                }
-                onClick={() => onSelect(p.id)}
-                selected={selectedPreset === p.id}
-              />
-            ))}
-
-            <ListRow
-              title="管理配置"
-              description="重命名、编辑或恢复配置"
-              trailing={<ChevronRight width={16} className="text-slate-400" />}
-              onClick={onEdit}
-            />
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         </section>
 
@@ -299,34 +321,71 @@ function ConfigView({
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <CapabilitySummary icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
-            <CapabilitySummary icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
-            <CapabilitySummary icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
+          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+            <Table className="table-fixed">
+              <TableHead>
+                <TableRow>
+                  <TableHeader className="w-12" />
+                  <TableHeader className="w-44">能力</TableHeader>
+                  <TableHeader>当前模型</TableHeader>
+                  <TableHeader className="w-32 text-right">状态 / 推荐</TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <CapabilityTableRow icon={<EarIcon width={18} />} title="听见你" kind="语音识别模型" slot={hearing} />
+                <CapabilityTableRow icon={<BrainIcon width={18} />} title="理解与思考" kind="语言模型 · 执行大脑" slot={brain} />
+                <CapabilityTableRow icon={<SpeakerIcon width={18} />} title="回应你" kind="语音合成模型" slot={speaking} />
+              </TableBody>
+            </Table>
           </div>
 
           <div className="my-4 h-px bg-slate-100" />
 
           <h3 className="text-[13.5px] font-semibold text-slate-900">关于当前配置</h3>
-          <div className="mt-3">
-            <KeyValueRow
-              icon={<BoltIcon width={16} />}
-              label="性能"
-              value={perfSummary(template)}
-              description={template.perf}
-            />
-            <KeyValueRow
-              icon={<LockIcon width={16} />}
-              label="隐私"
-              value={template.requireLocal ? "完全本地" : "混合存储"}
-              description={template.privacy}
-            />
-            <KeyValueRow
-              icon={<GlobeIcon width={16} />}
-              label="适用场景"
-              value={sceneSummary(template)}
-              description={template.scene}
-            />
+          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+            <Table className="table-fixed">
+              <TableHead>
+                <TableRow>
+                  <TableHeader className="w-28">项目</TableHeader>
+                  <TableHeader>说明</TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TableCell>
+                    <span className="flex items-center gap-2 text-slate-700">
+                      <BoltIcon width={16} className="text-slate-400" /> 性能
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium text-slate-800">{perfSummary(template)}</span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">{template.perf}</span>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>
+                    <span className="flex items-center gap-2 text-slate-700">
+                      <LockIcon width={16} className="text-slate-400" /> 隐私
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium text-slate-800">{template.requireLocal ? "完全本地" : "混合存储"}</span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">{template.privacy}</span>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>
+                    <span className="flex items-center gap-2 text-slate-700">
+                      <GlobeIcon width={16} className="text-slate-400" /> 适用场景
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium text-slate-800">{sceneSummary(template)}</span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">{template.scene}</span>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
 
           <div className="mt-5 flex items-start justify-between gap-4">
@@ -353,7 +412,7 @@ function ConfigView({
   );
 }
 
-function CapabilitySummary({
+function CapabilityTableRow({
   icon,
   title,
   kind,
@@ -366,40 +425,36 @@ function CapabilitySummary({
 }) {
   const tone = slot.needsCloud ? "warn" : toneOf(slot.runnability);
   return (
-    <Card padding="sm" variant="default" className="border-slate-200">
-      <ListRow
-        flush
-        leading={<span className="text-slate-500">{icon}</span>}
-        title={title}
-        description={kind}
-        trailing={
-          <>
-            <span className="font-medium text-slate-800 truncate max-w-[120px]">
-              {slot.model?.name ?? "暂无可用模型"}
-            </span>
-            <span className={cn("flex items-center gap-1 text-[11px] font-medium", TONE_TEXT[tone])}>
-              <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
-            </span>
-          </>
-        }
-      />
-    </Card>
-  );
-}
-
-function AboutRow({
-  icon,
-  label,
-  desc,
-  value
-}: {
-  icon: ReactNode;
-  label: string;
-  desc: string;
-  value?: string;
-}) {
-  return (
-    <KeyValueRow icon={icon} label={label} value={value} description={desc} />
+    <TableRow>
+      <TableCell className="w-12">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+          {icon}
+        </span>
+      </TableCell>
+      <TableCell className="w-44">
+        <div className="font-medium text-slate-900">{title}</div>
+        <div className="text-[11px] text-slate-500">{kind}</div>
+      </TableCell>
+      <TableCell>
+        <span className="block truncate font-medium text-slate-800">
+          {slot.model?.name ?? "暂无可用模型"}
+        </span>
+      </TableCell>
+      <TableCell align="right" className="w-32">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-medium",
+            tone === "ok"
+              ? "border-brand-200 bg-brand-50 text-brand-700"
+              : tone === "warn"
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-rose-200 bg-rose-50 text-rose-700"
+          )}
+        >
+          <span className={cn("h-2 w-2 rounded-full", TONE_DOT[tone])} /> {slot.annotation}
+        </span>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -918,17 +973,29 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
 
               {!isCollapsed && (
                 <div className="px-5 pb-4">
-                  <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_1.3fr_1.4fr_auto] items-center gap-4 border-b border-slate-100 pb-2 text-[11px] font-medium text-slate-400">
-                    <span>模型名称</span>
-                    <span>大小</span>
-                    <span>版本</span>
-                    <span className="flex items-center gap-1">状态 <InfoIcon width={13} className="text-slate-300" /></span>
-                    <span className="flex items-center gap-1">被使用于 <InfoIcon width={13} className="text-slate-300" /></span>
-                    <span className="text-right">操作</span>
+                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                    <Table hoverable className="table-fixed">
+                      <TableHead>
+                        <TableRow>
+                          <TableHeader className="w-2/5">模型名称</TableHeader>
+                          <TableHeader className="w-24">大小</TableHeader>
+                          <TableHeader className="w-24">版本</TableHeader>
+                          <TableHeader className="w-32">
+                            <span className="flex items-center gap-1">状态 <InfoIcon width={13} className="text-slate-300" /></span>
+                          </TableHeader>
+                          <TableHeader className="w-1/4">
+                            <span className="flex items-center gap-1">被使用于 <InfoIcon width={13} className="text-slate-300" /></span>
+                          </TableHeader>
+                          <TableHeader className="w-24 text-right">操作</TableHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {g.models.map((m) => (
+                          <LibRow key={m.name} m={m} model={model} />
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
-                  {g.models.map((m) => (
-                    <LibRow key={m.name} m={m} model={model} />
-                  ))}
                 </div>
               )}
             </div>
@@ -945,19 +1012,25 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
 
 function LibRow({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
   return (
-    <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_1.3fr_1.4fr_auto] items-center gap-4 border-b border-slate-50 py-3.5 last:border-b-0">
-      <span className="text-[12.5px] font-medium text-slate-800">{m.name}</span>
-      <span className="text-[12px] text-slate-500">{m.size}</span>
-      <span className="text-[12px] text-slate-500">{m.version}</span>
-      <StatusCell status={m.status} />
-      <span className="truncate text-[12px] text-slate-500">{m.usedBy}</span>
-      <div className="flex items-center justify-end gap-2">
-        <RowAction m={m} model={model} />
-        <button className="text-slate-300 hover:text-slate-500">
-          <DotsIcon width={16} />
-        </button>
-      </div>
-    </div>
+    <TableRow>
+      <TableCell className="w-2/5">
+        <span className="block truncate text-[12.5px] font-medium text-slate-800">{m.name}</span>
+      </TableCell>
+      <TableCell className="w-24 text-[12px] text-slate-500">{m.size}</TableCell>
+      <TableCell className="w-24 text-[12px] text-slate-500">{m.version}</TableCell>
+      <TableCell className="w-32"><StatusCell status={m.status} /></TableCell>
+      <TableCell className="w-1/4">
+        <span className="block truncate text-[12px] text-slate-500">{m.usedBy}</span>
+      </TableCell>
+      <TableCell align="right" className="w-24">
+        <div className="flex items-center justify-end gap-2">
+          <RowAction m={m} model={model} />
+          <button className="text-slate-300 hover:text-slate-500">
+            <DotsIcon width={16} />
+          </button>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -1076,10 +1149,22 @@ function RunningBackendSection({ model }: { model: ReturnType<typeof useModelCen
           <RefreshIcon width={14} /> 重新检测
         </Button>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <BackendCard kind="ollama" title="Ollama" desc="本地下载器 + 自选模型目录" icon={<CubeIcon width={20} />} model={model} />
-        <BackendCard kind="lmstudio" title="LM Studio" desc="连接 LM Studio 本地服务器（:1234）" icon={<MonitorIcon width={20} />} model={model} />
-        <BackendCard kind="custom" title="自定义端点" desc="任意 OpenAI 兼容端点（vLLM / llama.cpp）" icon={<GlobeIcon width={20} />} model={model} />
+      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+        <Table hoverable className="table-fixed">
+          <TableHead>
+            <TableRow>
+              <TableHeader className="w-12" />
+              <TableHeader className="w-48">推理引擎</TableHeader>
+              <TableHeader>说明</TableHeader>
+              <TableHeader className="w-36 text-right">状态</TableHeader>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            <BackendTableRow kind="ollama" title="Ollama" desc="本地下载器 + 自选模型目录" icon={<CubeIcon width={20} />} model={model} />
+            <BackendTableRow kind="lmstudio" title="LM Studio" desc="连接 LM Studio 本地服务器（:1234）" icon={<MonitorIcon width={20} />} model={model} />
+            <BackendTableRow kind="custom" title="自定义端点" desc="任意 OpenAI 兼容端点（vLLM / llama.cpp）" icon={<GlobeIcon width={20} />} model={model} />
+          </TableBody>
+        </Table>
       </div>
       <div className="mt-4">
         <BackendDetailPanel model={model} />
@@ -1088,7 +1173,7 @@ function RunningBackendSection({ model }: { model: ReturnType<typeof useModelCen
   );
 }
 
-function BackendCard({
+function BackendTableRow({
   kind,
   title,
   desc,
@@ -1107,25 +1192,34 @@ function BackendCard({
     state?.status === "running" ? "success" :
     state?.status === "not_installed" ? "error" :
     state?.status === "installed_not_running" ? "warning" : "neutral";
+  const disabled = model.busy;
 
   return (
-    <button
-      onClick={() => void model.setBackend(kind)}
-      disabled={model.busy}
-      className={cn(
-        "flex flex-col items-start gap-2 rounded-xl border px-4 py-4 text-left transition-all disabled:opacity-60",
-        active ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200" : "border-slate-200 bg-white hover:border-slate-300"
-      )}
+    <TableRow
+      selected={active}
+      onClick={disabled ? undefined : () => void model.setBackend(kind)}
+      className={cn(disabled ? "opacity-60" : "cursor-pointer")}
     >
-      <div className="flex w-full items-center justify-between">
-        <span className="flex items-center gap-2 text-[13.5px] font-semibold text-slate-900">
-          {icon} {title}
+      <TableCell className="w-12">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-600">
+          {icon}
         </span>
-        <StatusDot active={active || state?.status === "running"} color={color} size="sm" />
-      </div>
-      <span className="text-[11.5px] leading-relaxed text-slate-500">{desc}</span>
-      <span className="mt-1 text-[11px] text-slate-400">{state?.message ?? "检测中"}</span>
-    </button>
+      </TableCell>
+      <TableCell className="w-48">
+        <div className="flex items-center gap-2 font-medium text-slate-900">
+          {icon} {title}
+        </div>
+      </TableCell>
+      <TableCell className="text-slate-500">{desc}</TableCell>
+      <TableCell align="right" className="w-36">
+        <div className="flex flex-col items-end gap-1">
+          <span className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+            <StatusDot active={active || state?.status === "running"} color={color} size="sm" />
+            {state?.message ?? "检测中"}
+          </span>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
