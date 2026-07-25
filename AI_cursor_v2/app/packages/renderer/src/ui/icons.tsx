@@ -341,6 +341,13 @@ export const InfoIcon = (p: IconProps) => (
   </svg>
 );
 
+export const AlertCircleIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v4M12 16h.01" />
+  </svg>
+);
+
 export const ArrowLeft = (p: IconProps) => (
   <svg {...base({ width: 18, height: 18, ...p })}>
     <path d="M19 12H5M11 18l-6-6 6-6" />
