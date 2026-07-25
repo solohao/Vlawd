@@ -28,6 +28,8 @@ export type ModelCenterListener = (snapshot: ModelCenterSnapshot) => void;
 export interface ModelCenterServiceOptions {
   runtime: DuplexConversationRuntime;
   backend?: OllamaBackend;
+  /** App 托管 Ollama 核心二进制的目录；默认 userData/ollama-bin。 */
+  managedBinaryDir?: string;
 }
 
 const BACKEND_ORDER: ModelBackendKind[] = ["ollama", "lmstudio", "custom"];
@@ -57,9 +59,10 @@ export class ModelCenterService {
   private ollamaManagedByApp = false;
   private activePull: ModelPullProgress | null = null;
   private pullController: AbortController | null = null;
+  private pauseRequested = false;
   private activeBrainModel = "";
   private ollamaInstall: OllamaInstallState = {
-    supported: process.platform === "win32",
+    supported: true,
     installed: false,
     installerFound: false,
     phase: "idle",
@@ -68,7 +71,12 @@ export class ModelCenterService {
 
   constructor(options: ModelCenterServiceOptions) {
     this.runtime = options.runtime;
-    this.ollama = options.backend ?? new OllamaBackend();
+    const managedBinaryDir =
+      options.managedBinaryDir ??
+      (typeof app !== "undefined" && app?.getPath
+        ? join(app.getPath("userData"), "ollama-bin")
+        : join(process.cwd(), "ollama-bin"));
+    this.ollama = options.backend ?? new OllamaBackend({ managedBinaryDir });
     this.lmstudio = new LMStudioBackend();
     this.custom = new CustomEndpointBackend(this.customEndpoint);
     this.backends = { ollama: this.ollama, lmstudio: this.lmstudio, custom: this.custom };
@@ -207,34 +215,25 @@ export class ModelCenterService {
   }
 
   /**
-   * 检测代管安装 Ollama 的当前状态：是否已安装、本机是否已有安装器。
-   * 单入口自动分支的第一步，UI 依据结果决定展示"直接可用 / 选盘安装 / 指定安装器"。
+   * 检测 Ollama 核心二进制的当前状态。
+   * UI 依据结果决定展示"已就绪 / 下载核心服务 / 启动"。
    */
   async detectOllamaInstaller(): Promise<ModelCenterSnapshot> {
-    this.setInstallState({ phase: "detecting", message: "正在检测 Ollama 与本机安装器…" });
-    const supported = process.platform === "win32";
+    this.setInstallState({ phase: "detecting", message: "正在检测 Ollama 核心服务…" });
     const installed = await this.ollama.binaryInstalled();
-    const extra = this.storage.rootDir.trim() ? [this.storage.rootDir] : [];
-    const found = supported && !installed ? this.ollama.findInstaller(extra) : null;
-    const installerPath = found ?? this.ollamaInstall.installerPath;
     this.setInstallState({
-      supported,
+      supported: true,
       installed,
-      installerFound: !!installerPath,
-      installerPath,
+      installerFound: false,
       phase: installed ? "installed" : "idle",
       message: installed
-        ? "已检测到 Ollama，可直接使用。"
-        : !supported
-          ? "当前系统不支持代管安装，请前往官网手动安装。"
-          : installerPath
-            ? `已找到安装器：${installerPath}`
-            : "未找到已下载的安装器，可手动指定或前往官网下载。"
+        ? "已检测到 Ollama 核心服务。"
+        : "未检测到 Ollama 核心服务，可点击下载。"
     });
     return this.refreshBackend();
   }
 
-  /** 记录用户手动指定的安装器路径。 */
+  /** 记录用户手动指定的安装器路径（旧流程兼容，已不再使用）。 */
   setInstallerPath(installerPath: string): ModelCenterSnapshot {
     this.setInstallState({
       installerPath,
@@ -246,49 +245,32 @@ export class ModelCenterService {
   }
 
   /**
-   * 一键安装：用本机已有（或用户指定）的安装器，把 Ollama 静默安装到 `installDir`。
-   * 装完自动检测后端，并在配置了模型目录时尝试用 `OLLAMA_MODELS` 启动。
+   * 一键准备 Ollama：从官方发布页下载对应平台的核心二进制并解压到 App 目录，
+   * 然后使用当前模型存储目录启动 `ollama serve`。
    */
-  async installOllama(installDir?: string): Promise<ModelCenterSnapshot> {
-    if (process.platform !== "win32") {
-      this.setInstallState({ phase: "error", message: "代管安装当前仅支持 Windows。" });
-      return this.getSnapshot();
-    }
+  async installOllama(_installDir?: string): Promise<ModelCenterSnapshot> {
     if (await this.ollama.binaryInstalled()) {
-      this.setInstallState({ installed: true, phase: "installed", message: "Ollama 已安装，无需重复安装。" });
+      this.setInstallState({ installed: true, phase: "installed", message: "Ollama 核心服务已就绪。" });
+      const started = await this.ollama.ensureServing(this.modelsDir());
+      if (started) {
+        this.ollamaManagedByApp = true;
+      }
       return this.refreshBackend();
     }
-    const extra = this.storage.rootDir.trim() ? [this.storage.rootDir] : [];
-    const installerPath = this.ollamaInstall.installerPath ?? this.ollama.findInstaller(extra);
-    if (!installerPath) {
-      this.setInstallState({
-        installerFound: false,
-        phase: "error",
-        message: "未找到 Ollama 安装器，请先指定安装器文件或前往官网下载。"
-      });
-      return this.getSnapshot();
-    }
+
     this.setInstallState({
-      installerPath,
-      installerFound: true,
-      installDir,
       phase: "installing",
-      message: installDir ? `正在静默安装到 ${installDir}…` : "正在静默安装（默认目录）…"
+      message: "正在下载 Ollama 核心服务（约 1.4GB），请保持网络连接…"
     });
     try {
-      await this.ollama.installSilently(installerPath, installDir);
+      await this.ollama.downloadCoreBinary();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.setInstallState({ phase: "error", message: `安装失败：${message}` });
+      this.setInstallState({ phase: "error", message: `下载失败：${message}` });
       return this.getSnapshot();
     }
-    this.setInstallState({
-      installed: true,
-      installDir,
-      phase: "installed",
-      message: installDir ? `已安装到 ${installDir}。` : "安装完成。"
-    });
-    // 装完尝试用当前模型目录启动，使 OLLAMA_MODELS 生效。
+
+    this.setInstallState({ installed: true, phase: "installed", message: "Ollama 核心服务已就绪。" });
     const started = await this.ollama.ensureServing(this.modelsDir());
     if (started) {
       this.ollamaManagedByApp = true;
@@ -302,6 +284,33 @@ export class ModelCenterService {
   }
 
   async pull(model: string): Promise<ModelCenterSnapshot> {
+    return this.startPull(model, false);
+  }
+
+  async resumePull(model: string): Promise<ModelCenterSnapshot> {
+    if (this.activePull?.model !== model || this.activePull.phase !== "paused") {
+      throw new Error("没有可继续的下载任务。");
+    }
+    return this.startPull(model, true);
+  }
+
+  pausePull(model: string): ModelCenterSnapshot {
+    if (!this.activePull || this.activePull.model !== model || !this.pullController) {
+      throw new Error("当前没有进行中的下载任务。");
+    }
+    this.pauseRequested = true;
+    this.activePull = {
+      ...this.activePull,
+      phase: "paused",
+      status: "已暂停",
+      message: "下载已暂停（可继续）",
+      updatedAt: new Date().toISOString()
+    };
+    this.pullController.abort();
+    return this.publish();
+  }
+
+  private async startPull(model: string, isResume: boolean): Promise<ModelCenterSnapshot> {
     if (this.activeBackend !== "ollama") {
       throw new Error(
         this.activeBackend === "lmstudio"
@@ -312,24 +321,40 @@ export class ModelCenterService {
     if (this.pullController) {
       throw new Error("已有下载任务进行中，请先等待或取消。");
     }
+    if (isResume) {
+      if (this.activePull?.model !== model || this.activePull.phase !== "paused") {
+        throw new Error("没有可继续的下载任务。");
+      }
+    }
+
+    this.pauseRequested = false;
+    this.activePull = isResume
+      ? {
+          ...this.activePull!,
+          phase: "resolving",
+          status: "继续下载中",
+          message: undefined,
+          updatedAt: new Date().toISOString()
+        }
+      : {
+          model,
+          phase: "resolving",
+          status: "准备下载",
+          completedBytes: 0,
+          totalBytes: 0,
+          percent: 0,
+          updatedAt: new Date().toISOString()
+        };
+    this.publish();
+
     // 确保后端可用；未运行则 detectBackend 会尝试用当前目录启动。
     await this.detectBackend("ollama");
     if (!this.isRunning("ollama")) {
-      throw new Error("Ollama 未运行，无法下载。请先安装并启动 Ollama。");
+      throw new Error("Ollama 未运行，无法下载。请先安装并启动 Ollama 核心服务。");
     }
 
     const controller = new AbortController();
     this.pullController = controller;
-    this.activePull = {
-      model,
-      phase: "resolving",
-      status: "准备下载",
-      completedBytes: 0,
-      totalBytes: 0,
-      percent: 0,
-      updatedAt: new Date().toISOString()
-    };
-    this.publish();
 
     const isManifestMissingError = (message: string) =>
       /manifest/i.test(message) && /(?:does not exist|file does not exist|no such file|not found)/i.test(message);
@@ -348,7 +373,13 @@ export class ModelCenterService {
       } catch (error) {
         if (ctl.signal.aborted) {
           this.activePull = this.activePull
-            ? { ...this.activePull, phase: "cancelled", status: "已取消", message: "下载已取消", updatedAt: new Date().toISOString() }
+            ? {
+                ...this.activePull,
+                phase: this.pauseRequested ? "paused" : "cancelled",
+                status: this.pauseRequested ? "已暂停" : "已取消",
+                message: this.pauseRequested ? "下载已暂停（可继续）" : "下载已取消",
+                updatedAt: new Date().toISOString()
+              }
             : null;
           return;
         }
@@ -397,10 +428,15 @@ export class ModelCenterService {
     } finally {
       this.pullController = null;
     }
-    return this.refreshBackend();
+
+    if (this.activePull?.phase === "success") {
+      return this.refreshBackend();
+    }
+    return this.publish();
   }
 
   cancelPull(): ModelCenterSnapshot {
+    this.pauseRequested = false;
     this.pullController?.abort();
     if (this.activePull) {
       this.activePull = {
@@ -421,6 +457,9 @@ export class ModelCenterService {
     await this.ollama.remove(model);
     if (this.activeBrainModel === model) {
       this.activeBrainModel = "";
+    }
+    if (this.activePull?.model === model) {
+      this.activePull = null;
     }
     return this.refreshBackend();
   }

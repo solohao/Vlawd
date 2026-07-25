@@ -50,6 +50,8 @@ export interface AiCursorDesktopApi {
   modelRefreshBackend(): Promise<ModelCenterSnapshot>;
   modelChooseStorageRoot(): Promise<ModelCenterSnapshot>;
   modelPull(model: string): Promise<ModelCenterSnapshot>;
+  modelPausePull(model: string): Promise<ModelCenterSnapshot>;
+  modelResumePull(model: string): Promise<ModelCenterSnapshot>;
   modelCancelPull(): Promise<ModelCenterSnapshot>;
   modelRemove(model: string): Promise<ModelCenterSnapshot>;
   modelUseAsBrain(model: string): Promise<ModelCenterSnapshot>;

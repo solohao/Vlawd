@@ -54,7 +54,8 @@ function broadcastConversationEvent(event: DuplexRuntimeEvent): void {
 duplexRuntime.on(broadcastConversationEvent);
 
 // ── 模型中心：包装版 Ollama 后端 + 环境探测 + 存储配置 ─────────────────
-const modelCenter = new ModelCenterService({ runtime: duplexRuntime });
+const managedBinaryDir = join(userDataDir, "ollama-bin");
+const modelCenter = new ModelCenterService({ runtime: duplexRuntime, managedBinaryDir });
 function broadcastModelCenter(snapshot: ModelCenterSnapshot): void {
   for (const window of [mainWindow, overlayWindow]) {
     if (window && !window.isDestroyed()) {
@@ -312,6 +313,8 @@ ipcMain.handle("model:chooseStorageRoot", async () => {
   return modelCenter.setStorageRoot(result.filePaths[0]);
 });
 ipcMain.handle("model:pull", (_event, model: string) => modelCenter.pull(model));
+ipcMain.handle("model:pausePull", (_event, model: string) => modelCenter.pausePull(model));
+ipcMain.handle("model:resumePull", (_event, model: string) => modelCenter.resumePull(model));
 ipcMain.handle("model:cancelPull", () => modelCenter.cancelPull());
 ipcMain.handle("model:remove", (_event, model: string) => modelCenter.removeModel(model));
 ipcMain.handle("model:useAsBrain", (_event, model: string) => modelCenter.useModelAsBrain(model));
@@ -341,14 +344,7 @@ ipcMain.handle("model:locateInstaller", async () => {
   return modelCenter.setInstallerPath(result.filePaths[0]);
 });
 
-ipcMain.handle("model:installOllama", async () => {
-  const result = await dialog.showOpenDialog({
-    title: "选择 Ollama 安装位置（留空则用默认目录）",
-    properties: ["openDirectory", "createDirectory"]
-  });
-  const installDir = result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths[0];
-  return modelCenter.installOllama(installDir);
-});
+ipcMain.handle("model:installOllama", () => modelCenter.installOllama());
 
 ipcMain.handle("window:openMain", () => {
   showMainWindow();

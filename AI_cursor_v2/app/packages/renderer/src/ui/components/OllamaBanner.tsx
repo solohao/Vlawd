@@ -14,13 +14,13 @@ export function OllamaInstallBanner({ onInstall }: OllamaInstallBannerProps) {
           <CubeIcon width={20} className="text-brand-700" />
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="text-[13px] font-semibold text-slate-900">需要安装Ollama</h4>
+          <h4 className="text-[13px] font-semibold text-slate-900">需要下载 Ollama 核心服务</h4>
           <p className="mt-1 text-[12px] text-slate-600 leading-relaxed">
-            Ollama是一个本地AI模型运行工具，可以让你下载和运行开源大语言模型（如Qwen、Llama）。
+            Ollama 是本地大语言模型运行引擎。Vlawd 会自动下载它的核心二进制（不含完整安装包），并把它放到 App 目录中管理。
           </p>
           <div className="mt-3 flex items-center gap-2">
             <Button variant="primary" size="sm" onClick={onInstall}>
-              📥 下载并安装Ollama
+              📥 下载 Ollama 核心服务
             </Button>
           </div>
           <p className="mt-2 text-[11px] text-slate-500">

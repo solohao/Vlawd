@@ -41,16 +41,21 @@ export function ModelCenterPage() {
   const availableLLMs: ModelItem[] = useMemo(() => {
     return snapshot.catalog
       .filter(m => m.role === "duplex_execution_brain")
-      .map(m => ({
-        id: m.id,
-        name: m.displayName,
-        size: `${m.approxSizeGB}GB`,
-        description: m.description,
-        installed: m.installed,
-        downloading: snapshot.activePull?.model === m.id &&
-                     (snapshot.activePull.phase === "downloading" || snapshot.activePull.phase === "resolving"),
-        progress: snapshot.activePull?.model === m.id ? snapshot.activePull.percent : undefined
-      }));
+      .map(m => {
+        const isPulling = snapshot.activePull?.model === m.id;
+        const phase = isPulling ? snapshot.activePull!.phase : undefined;
+        return {
+          id: m.id,
+          name: m.displayName,
+          size: `${m.approxSizeGB}GB`,
+          description: m.description,
+          installed: m.installed,
+          phase,
+          paused: phase === "paused",
+          downloading: isPulling && (phase === "downloading" || phase === "resolving" || phase === "verifying"),
+          progress: isPulling ? snapshot.activePull!.percent : undefined
+        };
+      });
   }, [snapshot.catalog, snapshot.activePull]);
 
   const availableSTTs: ModelItem[] = [];
@@ -103,6 +108,14 @@ export function ModelCenterPage() {
 
   const handleDeleteLLM = (id: string) => {
     void model.removeModel(id);
+  };
+
+  const handlePauseLLM = (id: string) => {
+    void model.pausePull(id);
+  };
+
+  const handleResumeLLM = (id: string) => {
+    void model.resumePull(id);
   };
 
   const handleRefresh = () => {
@@ -218,6 +231,8 @@ export function ModelCenterPage() {
                     }))}
                     onDownloadLLM={handleDownloadLLM}
                     onDeleteLLM={handleDeleteLLM}
+                    onPauseLLM={handlePauseLLM}
+                    onResumeLLM={handleResumeLLM}
                     availableSTTs={availableSTTs}
                     installedSTTs={[]}
                     onDownloadSTT={(id) => console.log('Download STT:', id)}

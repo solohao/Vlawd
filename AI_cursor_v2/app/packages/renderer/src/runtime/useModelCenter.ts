@@ -53,6 +53,8 @@ export interface ModelCenterController {
   refreshBackend(): Promise<void>;
   chooseStorageRoot(): Promise<void>;
   pull(model: string): Promise<void>;
+  pausePull(model: string): Promise<void>;
+  resumePull(model: string): Promise<void>;
   cancelPull(): Promise<void>;
   removeModel(model: string): Promise<void>;
   useAsBrain(model: string): Promise<void>;
@@ -111,6 +113,8 @@ export function useModelCenter(): ModelCenterController {
   const refreshBackend = useCallback(() => run(() => desktopApi().modelRefreshBackend()), [run]);
   const chooseStorageRoot = useCallback(() => run(() => desktopApi().modelChooseStorageRoot()), [run]);
   const pull = useCallback((model: string) => run(() => desktopApi().modelPull(model)), [run]);
+  const pausePull = useCallback((model: string) => run(() => desktopApi().modelPausePull(model)), [run]);
+  const resumePull = useCallback((model: string) => run(() => desktopApi().modelResumePull(model)), [run]);
   const removeModel = useCallback((model: string) => run(() => desktopApi().modelRemove(model)), [run]);
   const useAsBrain = useCallback((model: string) => run(() => desktopApi().modelUseAsBrain(model)), [run]);
   const setBackend = useCallback((kind: ModelBackendKind) => run(() => desktopApi().modelSetBackend(kind)), [run]);
@@ -149,6 +153,8 @@ export function useModelCenter(): ModelCenterController {
       refreshBackend,
       chooseStorageRoot,
       pull,
+      pausePull,
+      resumePull,
       cancelPull,
       removeModel,
       useAsBrain,
@@ -168,6 +174,8 @@ export function useModelCenter(): ModelCenterController {
       refreshBackend,
       chooseStorageRoot,
       pull,
+      pausePull,
+      resumePull,
       cancelPull,
       removeModel,
       useAsBrain,
