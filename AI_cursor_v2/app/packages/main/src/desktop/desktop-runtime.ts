@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   appendChunk,
   createSession,
+  type DesktopBrowserRuntimeState,
   type DesktopModelDownloadState,
   type DesktopModelHealthCheck,
   type DesktopUiSnapshot,
@@ -15,6 +16,7 @@ import {
   defaultModelStorageConfig,
   validateModelStorageConfig
 } from "../model/dual-role-config.js";
+import type { BrowserService } from "../browser/browser-service.js";
 
 const emptyGraph: SessionGraphSnapshot = {
   session_id: "",
@@ -35,6 +37,10 @@ const emptyRoute = {
   safetyPreemptionEnabled: true as const
 };
 
+export interface DesktopRuntimeOptions {
+  browserService?: BrowserService;
+}
+
 export class DesktopRuntime {
   private runtimeState: ModelRuntimeState = "listening";
   private modelStorageRoot = "";
@@ -42,6 +48,11 @@ export class DesktopRuntime {
   private session: SessionRun = createSession("desktop_session");
   private downloads: DesktopModelDownloadState[] = [];
   private healthChecks: DesktopModelHealthCheck[] = [];
+  private browserService?: BrowserService;
+
+  constructor(options: DesktopRuntimeOptions = {}) {
+    this.browserService = options.browserService;
+  }
 
   getSnapshot(): DesktopUiSnapshot {
     const modelStorage = this.modelStorageRoot
@@ -63,17 +74,7 @@ export class DesktopRuntime {
         connected: this.connectedAudio,
         message: this.connectedAudio ? "对话入口已连接（等待真实音频流）" : "等待连接真实音频设备"
       },
-      browser: {
-        url: "",
-        title: "",
-        nextAction: {
-          actionType: "",
-          targetLabel: "",
-          value: "",
-          reason: "",
-          riskLevel: "safe"
-        }
-      },
+      browser: this.getBrowserSnapshot(),
       session: this.session,
       graph: emptyGraph
     };
@@ -157,6 +158,20 @@ export class DesktopRuntime {
     this.runtimeState = "acting";
     this.appendState("用户执行运行时动作");
     return this.getSnapshot();
+  }
+
+  private getBrowserSnapshot(): DesktopBrowserRuntimeState {
+    return this.browserService?.getState() ?? {
+      url: "",
+      title: "",
+      nextAction: {
+        actionType: "",
+        targetLabel: "",
+        value: "",
+        reason: "",
+        riskLevel: "safe"
+      }
+    };
   }
 
   private appendState(summary: string): void {

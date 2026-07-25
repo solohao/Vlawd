@@ -55,6 +55,8 @@ export interface DesktopRuntimeActionState {
 export interface DesktopBrowserRuntimeState {
   url: string;
   title: string;
+  loading?: boolean;
+  error?: string;
   nextAction: DesktopRuntimeActionState;
   lastResult?: ActionResult;
 }
