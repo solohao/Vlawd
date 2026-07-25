@@ -12,7 +12,7 @@ import type {
   ModelRole,
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
-import { DesktopRuntime } from "../desktop/desktop-runtime.js";
+import { DesktopRuntime, isResearchIntent } from "../desktop/desktop-runtime.js";
 import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { createProvider } from "../model/provider-registry.js";
 import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
@@ -269,6 +269,7 @@ function broadcastDesktopSnapshot(snapshot: DesktopUiSnapshot): void {
 }
 
 browserService.onUpdate(() => broadcastDesktopSnapshot(runtime.getSnapshot()));
+runtime.onUpdate((snapshot) => broadcastDesktopSnapshot(snapshot));
 
 async function handleDesktop<T>(action: () => T | Promise<T>): Promise<T> {
   const result = await action();
@@ -334,8 +335,18 @@ ipcMain.handle("browser:read", async () => {
 // ── Cycle 1 会话通道 ────────────────────────────────────────────────
 ipcMain.handle("conversation:snapshot", () => duplexRuntime.getSnapshot());
 ipcMain.handle("conversation:connect", () => duplexRuntime.connect());
-ipcMain.handle("conversation:utterance", (_event, text: string) => duplexRuntime.submitUtterance(text));
-ipcMain.handle("conversation:bargeIn", (_event, heardText?: string) => duplexRuntime.bargeIn(heardText));
+ipcMain.handle("conversation:utterance", async (_event, text: string) => {
+  // 先完成对话回合，若属于研究意图再取消当前研究并重新规划。
+  await duplexRuntime.submitUtterance(text);
+  if (isResearchIntent(text)) {
+    await runtime.bargeIn(text);
+  }
+});
+ipcMain.handle("conversation:bargeIn", async (_event, heardText?: string) => {
+  // 插话时同时中断桌面研究任务的当前动作，并允许根据新指令重新规划。
+  await runtime.bargeIn(heardText);
+  return duplexRuntime.bargeIn(heardText);
+});
 ipcMain.handle("conversation:preempt", (_event, intent: SafetyPreemptionIntent) => duplexRuntime.preempt(intent));
 ipcMain.handle("conversation:resume", () => duplexRuntime.resume());
 ipcMain.handle("conversation:setProvider", (_event, kind: DuplexProviderKind) =>

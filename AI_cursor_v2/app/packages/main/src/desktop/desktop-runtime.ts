@@ -59,6 +59,7 @@ export class DesktopRuntime {
   private currentProposal?: ActionProposal;
   private lastResult?: ActionResult;
   private executionController?: AbortController;
+  private listeners = new Set<(snapshot: DesktopUiSnapshot) => void>();
 
   constructor(options: DesktopRuntimeOptions = {}) {
     this.browserService = options.browserService;
@@ -67,6 +68,18 @@ export class DesktopRuntime {
 
   setPlannerLlm(getLlm: () => LlmAdapter | undefined): void {
     this.getPlannerLlm = getLlm;
+  }
+
+  onUpdate(listener: (snapshot: DesktopUiSnapshot) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(): void {
+    const snapshot = this.getSnapshot();
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
   }
 
   getSnapshot(): DesktopUiSnapshot {
@@ -161,6 +174,7 @@ export class DesktopRuntime {
     this.executionController?.abort();
     this.browserService?.pause();
     this.appendState("用户暂停 AI 执行");
+    this.emit();
     return this.getSnapshot();
   }
 
@@ -169,7 +183,24 @@ export class DesktopRuntime {
     this.session = { ...this.session, status: "interrupted", updated_at: new Date().toISOString() };
     this.executionController?.abort();
     this.browserService?.close();
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
     this.appendState("用户取消当前步骤");
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  async bargeIn(heardText?: string): Promise<DesktopUiSnapshot> {
+    this.executionController?.abort();
+    this.browserService?.close();
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
+    this.runtimeState = "interrupted";
+    this.appendState(`语音插话：${heardText ?? ""}`);
+    this.emit();
+    if (heardText && isResearchIntent(heardText)) {
+      return this.startResearch(heardText);
+    }
     return this.getSnapshot();
   }
 
@@ -193,6 +224,7 @@ export class DesktopRuntime {
     this.appendState(
       `生成提案 ${proposal.proposal_id}，安全等级 ${proposal.safety}，预期结果：${proposal.expected_result}`
     );
+    this.emit();
     return this.getSnapshot();
   }
 
@@ -217,6 +249,7 @@ export class DesktopRuntime {
     this.appendState(
       `执行结果：${this.lastResult?.ok ? "成功" : "失败"} - ${this.lastResult?.message ?? ""}`
     );
+    this.emit();
     return this.getSnapshot();
   }
 
@@ -264,4 +297,10 @@ export class DesktopRuntime {
       payload: { runtimeState: this.runtimeState }
     });
   }
+}
+
+const RESEARCH_INTENT_RE = /查|搜索|搜|研究|调研|打开|找|维基|百科|google|duckduckgo|bing|百度/i;
+
+export function isResearchIntent(text: string): boolean {
+  return RESEARCH_INTENT_RE.test(text);
 }

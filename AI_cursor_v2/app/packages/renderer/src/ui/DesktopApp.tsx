@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FeatureStatusProvider } from "../app/feature-status.js";
 import { AnomalyMonitor } from "../app/AnomalyMonitor.js";
-import { DesktopRuntimeProvider } from "../runtime/useDesktopRuntime.js";
+import { useDesktopRuntime } from "../runtime/useDesktopRuntime.js";
 import { Sidebar } from "./Sidebar.js";
 import { LiveConversationPage } from "./pages/LiveConversationPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
@@ -35,13 +35,20 @@ const pageThemes: Record<DesktopPage, "dark" | "light"> = {
 
 export function DesktopApp() {
   const [page, setPage] = useState<DesktopPage>("dashboard");
+  const desktop = useDesktopRuntime();
+
+  // 当研究任务生成了动作提案时，自动跳转到任务空间
+  useEffect(() => {
+    if (page !== "task" && desktop.snapshot.browser.nextAction?.actionType) {
+      setPage("task");
+    }
+  }, [desktop.snapshot.browser.nextAction, page]);
 
   const theme = pageThemes[page];
 
   return (
     <FeatureStatusProvider>
-      <DesktopRuntimeProvider>
-        <div
+      <div
           className={`flex h-screen w-screen overflow-hidden transition-colors ${
             theme === "dark" ? "bg-ink-900" : "bg-[#fafbf9]"
           }`}
@@ -70,7 +77,6 @@ export function DesktopApp() {
           {/* 异常检测监控面板 */}
           <AnomalyMonitor />
         </div>
-      </DesktopRuntimeProvider>
     </FeatureStatusProvider>
   );
 }

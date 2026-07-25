@@ -197,6 +197,11 @@ export function TaskWorkspacePage() {
                     {browser.nextAction.actionType} · {browser.nextAction.targetLabel}
                   </span>
                 </div>
+                {browser.nextAction.value && (
+                  <p data-testid="next-action-value" className="mt-1 text-[10px] text-slate-500">
+                    参数：{browser.nextAction.value}
+                  </p>
+                )}
                 <p className="mt-1 text-[10px] text-slate-400">{browser.nextAction.reason}</p>
                 <p className="mt-1 text-[10px] text-slate-400">风险等级：{browser.nextAction.riskLevel}</p>
               </div>

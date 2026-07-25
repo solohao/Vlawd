@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { DesktopApp } from "../ui/DesktopApp.js";
+import { DesktopRuntimeProvider } from "../runtime/useDesktopRuntime.js";
 import { OverlayApp } from "../ui/runtime/OverlayApp.js";
 import { initPaintMode } from "./paint-mode.js";
 import "./index.css";
@@ -32,6 +33,10 @@ const runtimeState = await resolveRuntimeState();
 
 createRoot(container).render(
   <StrictMode>
-    {view === "runtime" ? <OverlayApp runtimeState={runtimeState} /> : <DesktopApp />}
+    {view === "runtime" ? <OverlayApp runtimeState={runtimeState} /> : (
+      <DesktopRuntimeProvider>
+        <DesktopApp />
+      </DesktopRuntimeProvider>
+    )}
   </StrictMode>
 );
