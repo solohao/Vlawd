@@ -422,6 +422,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === "media" || permission === "mediaKeySystem");
   });
+  session.defaultSession.setPermissionCheckHandler(() => true);
 
   createTray();
   // 主窗口是启动时可见的形态；悬浮窗预创建但保持隐藏，最小化时才切过去。

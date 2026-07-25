@@ -38,7 +38,7 @@ export const defaultPipelineProviderConfig: ProviderConfig = {
   endpoint: "http://127.0.0.1:11434/v1",
   pipeline: {
     llmBaseUrl: "http://127.0.0.1:11434/v1",
-    llmModel: "qwen2.5:7b-instruct"
+    llmModel: "qwen2.5:3b-instruct"
   }
 };
 
