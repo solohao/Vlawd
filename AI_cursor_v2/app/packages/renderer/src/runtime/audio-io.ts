@@ -6,6 +6,7 @@
  * 并驱动 Runtime 状态。所有能力都做特性检测，缺失时安全降级为纯文字体验。
  */
 import { MicVAD } from "@ricky0123/vad-web";
+import { desktopApi } from "../app/desktop-api.js";
 import type {
   WhisperTranscribeRequest,
   WhisperWorkerRequest,
@@ -22,7 +23,7 @@ export interface TtsPlayerOptions {
   onSpeakingEnd?: () => void;
 }
 
-/** 把流式文本增量按句朗读；取消时立刻静音（barge-in / 本地抢占的音频停止）。 */
+/** 把流式文本增量按句朗读；优先使用本地 TTS，否则回退到系统 SpeechSynthesis。 */
 export class TtsPlayer {
   private buffer = "";
   /** 已朗读完（onend 触发）的句子拼接，用作 barge-in 时上报的“用户实际听到的文本”。 */
@@ -34,6 +35,8 @@ export class TtsPlayer {
   private readonly options: Required<Omit<TtsPlayerOptions, "sinkId" | "onSpeakingStart" | "onSpeakingEnd">>;
   private readonly onSpeakingStart?: () => void;
   private readonly onSpeakingEnd?: () => void;
+  private audioContext: AudioContext | null = null;
+  private currentSource: AudioBufferSourceNode | null = null;
 
   constructor(options: TtsPlayerOptions = {}) {
     this.options = {
@@ -47,7 +50,7 @@ export class TtsPlayer {
   }
 
   static isSupported(): boolean {
-    return typeof window !== "undefined" && "speechSynthesis" in window;
+    return typeof window !== "undefined" && ("speechSynthesis" in window || "AudioContext" in window);
   }
 
   setSinkId(sinkId: string): void {
@@ -96,7 +99,9 @@ export class TtsPlayer {
     this.pending = 0;
     const wasSpeaking = this.speaking;
     this.speaking = false;
-    if (TtsPlayer.isSupported()) {
+    this.currentSource?.stop();
+    this.currentSource = null;
+    if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
     if (wasSpeaking) {
@@ -114,6 +119,58 @@ export class TtsPlayer {
   }
 
   private enqueue(text: string): void {
+    this.pending += 1;
+    // 优先本地 TTS；失败则回退系统语音。
+    void this.tryLocal(text).catch(() => this.speakSpeechSynthesis(text));
+  }
+
+  private async tryLocal(text: string): Promise<void> {
+    const result = await desktopApi().speechSynthesize(text);
+    await this.playAudio(result.samples, result.sampleRate, text);
+  }
+
+  private playAudio(samples: Float32Array, sampleRate: number, text: string): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.audioContext) {
+        this.audioContext = new AudioContext();
+      }
+      const ctx = this.audioContext;
+      const buffer = ctx.createBuffer(1, samples.length, sampleRate);
+      const sourceSamples = new Float32Array(samples);
+      buffer.copyToChannel(sourceSamples, 0);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.onended = () => {
+        if (this.currentSource === source) {
+          this.currentSource = null;
+        }
+        this.spokenText += text;
+        this.pending -= 1;
+        if (this.pending <= 0) {
+          this.pending = 0;
+          this.speaking = false;
+          this.onSpeakingEnd?.();
+        }
+        resolve();
+      };
+      this.currentSource = source;
+      if (ctx.state === "suspended") {
+        void ctx.resume();
+      }
+      if (!this.speaking) {
+        this.speaking = true;
+        this.onSpeakingStart?.();
+      }
+      source.start(0);
+    });
+  }
+
+  private speakSpeechSynthesis(text: string): void {
+    if (!("speechSynthesis" in window)) {
+      this.pending = Math.max(0, this.pending - 1);
+      return;
+    }
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = this.options.lang;
     utterance.rate = this.options.rate;
@@ -124,14 +181,12 @@ export class TtsPlayer {
     if (this.voice) {
       utterance.voice = this.voice;
     }
-    this.pending += 1;
     utterance.onstart = () => {
       if (!this.speaking) {
         this.speaking = true;
         this.onSpeakingStart?.();
       }
     };
-    // 句子真正朗读完毕才计入“已听到”，barge-in 上报时只含用户确实听到的部分。
     utterance.onend = () => {
       this.spokenText += text;
       this.pending -= 1;

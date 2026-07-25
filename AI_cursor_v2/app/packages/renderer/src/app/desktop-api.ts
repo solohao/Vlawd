@@ -63,6 +63,39 @@ export interface AiCursorDesktopApi {
   modelLocateOllamaInstaller(): Promise<ModelCenterSnapshot>;
   modelInstallOllama(): Promise<ModelCenterSnapshot>;
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
+
+  // ── 本地语音模型（STT/TTS）──────────────────────────────────────────
+  speechGetCatalog(): Promise<SpeechCatalogItem[]>;
+  speechGetStatus(): Promise<SpeechModelStatus[]>;
+  speechGetActive(): Promise<SpeechActiveConfig>;
+  speechSetActive(role: "stt" | "tts", modelId: string | undefined): Promise<SpeechModelStatus[]>;
+  speechDownload(modelId: string): Promise<SpeechModelStatus[]>;
+  speechCancelDownload(modelId: string): Promise<SpeechModelStatus[]>;
+  speechRemove(modelId: string): Promise<SpeechModelStatus[]>;
+  speechTranscribe(samples: Float32Array, sampleRate: number): Promise<string>;
+  speechSynthesize(text: string): Promise<{ samples: Float32Array; sampleRate: number }>;
+}
+
+export interface SpeechCatalogItem {
+  id: string;
+  name: string;
+  role: "stt" | "tts";
+  archiveUrl: string;
+  archiveSizeBytes: number;
+  extractedDirName: string;
+  approxSizeGB: number;
+}
+
+export interface SpeechModelStatus extends SpeechCatalogItem {
+  installed: boolean;
+  downloading: boolean;
+  progress?: number;
+  error?: string;
+}
+
+export interface SpeechActiveConfig {
+  stt?: string;
+  tts?: string;
 }
 
 declare global {

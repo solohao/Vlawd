@@ -12,6 +12,8 @@ export interface ModelSettings {
   activeBackend?: ModelBackendKind;
   activeBrainModel?: string;
   customEndpoint?: CustomEndpointConfig;
+  sttModelId?: string;
+  ttsModelId?: string;
 }
 
 export interface AppSettings {
