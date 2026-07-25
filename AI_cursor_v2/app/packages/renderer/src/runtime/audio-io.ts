@@ -129,18 +129,24 @@ export class TtsPlayer {
     await this.playAudio(result.samples, result.sampleRate, text);
   }
 
-  private playAudio(samples: Float32Array, sampleRate: number, text: string): Promise<void> {
-    return new Promise((resolve) => {
-      if (!this.audioContext) {
-        this.audioContext = new AudioContext();
+  private async playAudio(samples: Float32Array, sampleRate: number, text: string): Promise<void> {
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext();
+    }
+    const ctx = this.audioContext;
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn("[TtsPlayer] AudioContext resume failed:", err);
       }
-      const ctx = this.audioContext;
-      const buffer = ctx.createBuffer(1, samples.length, sampleRate);
-      const sourceSamples = new Float32Array(samples);
-      buffer.copyToChannel(sourceSamples, 0);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
+    }
+    const buffer = ctx.createBuffer(1, samples.length, sampleRate);
+    buffer.copyToChannel(new Float32Array(Array.from(samples)), 0);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    await new Promise<void>((resolve) => {
       source.onended = () => {
         if (this.currentSource === source) {
           this.currentSource = null;
@@ -155,9 +161,6 @@ export class TtsPlayer {
         resolve();
       };
       this.currentSource = source;
-      if (ctx.state === "suspended") {
-        void ctx.resume();
-      }
       if (!this.speaking) {
         this.speaking = true;
         this.onSpeakingStart?.();

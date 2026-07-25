@@ -86,6 +86,13 @@ export function LiveConversationPage({
   const [selectedOutput, setSelectedOutput] = useState<string | undefined>(undefined);
   const [entered, setEntered] = useState(false);
 
+  // 从首页按 Space 触发 mic 后进入对话页，应自动显示对话界面
+  useEffect(() => {
+    if (convo.micActive && !entered) {
+      setEntered(true);
+    }
+  }, [convo.micActive, entered]);
+
   const connected = entered && convo.available && !!snapshot.sessionId;
   const active = connected && (snapshot.runtimeState === "speaking" || snapshot.runtimeState === "listening" || snapshot.runtimeState === "thinking");
 
