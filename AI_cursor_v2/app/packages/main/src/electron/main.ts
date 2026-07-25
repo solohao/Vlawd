@@ -20,13 +20,15 @@ import { ModelCenterService } from "../model/model-center-service.js";
 import { SpeechModelService } from "../model/speech-model-service.js";
 import { JsonlSessionStorage } from "../session/jsonl-storage.js";
 import { initAutoUpdater, checkForUpdatesManually } from "./auto-updater.js";
+import { BrowserService } from "../browser/browser-service.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 // currentDir = <app>/packages/main/dist/packages/main/src/electron → up 7 = <app>
 // 打包后 currentDir 位于 resources/app.asar 内，同样的向上层级指向 asar 根，
 // 渲染层与图标资源仍能从 asar 内读取；仅可写的用户数据目录需要改用系统标准位置。
 const appRoot = resolve(currentDir, "../../../../../../..");
-const runtime = new DesktopRuntime();
+const browserService = new BrowserService();
+const runtime = new DesktopRuntime({ browserService });
 
 if (!app.isPackaged) {
   // 开发模式：把用户数据放在仓库内，便于查看生成的 Session JSONL。
@@ -119,6 +121,9 @@ function createMainWindow(): BrowserWindow {
   });
 
   void loadView(window, "main");
+
+  // 把浏览器视图服务绑定到主窗口，由渲染层通过 bounds 消息定位
+  browserService.setMainWindow(window);
 
   // 主窗口与悬浮窗是互斥的两种形态：最小化 / 关闭主窗口都收起到浅色胶囊悬浮窗，
   // 而不是让两个窗口同时可见。真正退出走托盘。
@@ -262,6 +267,8 @@ function broadcastDesktopSnapshot(snapshot: DesktopUiSnapshot): void {
   }
 }
 
+browserService.onUpdate(() => broadcastDesktopSnapshot(runtime.getSnapshot()));
+
 async function handleDesktop<T>(action: () => T | Promise<T>): Promise<T> {
   const result = await action();
   if (result && typeof result === "object" && "generatedAt" in result) {
@@ -293,6 +300,32 @@ ipcMain.handle("desktop:connectAudio", () => handleDesktop(() => runtime.connect
 ipcMain.handle("desktop:pauseSession", () => handleDesktop(() => runtime.pauseSession()));
 ipcMain.handle("desktop:cancelSession", () => handleDesktop(() => runtime.cancelSession()));
 ipcMain.handle("desktop:executeRuntimeAction", () => handleDesktop(() => runtime.executeRuntimeAction()));
+
+// ── BrowserView 研究任务通道 ───────────────────────────────────────
+ipcMain.handle("browser:open", (_event, url: string) => {
+  void browserService.open(url).catch(() => undefined);
+  return runtime.getSnapshot();
+});
+ipcMain.handle("browser:search", (_event, query: string) => {
+  void browserService.search(query).catch(() => undefined);
+  return runtime.getSnapshot();
+});
+ipcMain.handle("browser:pause", () => {
+  browserService.pause();
+  return runtime.getSnapshot();
+});
+ipcMain.handle("browser:close", () => {
+  browserService.close();
+  return runtime.getSnapshot();
+});
+ipcMain.handle("browser:setBounds", (_event, bounds: { x: number; y: number; width: number; height: number }) => {
+  browserService.setBounds(bounds);
+  return runtime.getSnapshot();
+});
+ipcMain.handle("browser:read", async () => {
+  const text = await browserService.readVisibleText().catch(() => "");
+  return { text };
+});
 
 // ── Cycle 1 会话通道 ────────────────────────────────────────────────
 ipcMain.handle("conversation:snapshot", () => duplexRuntime.getSnapshot());

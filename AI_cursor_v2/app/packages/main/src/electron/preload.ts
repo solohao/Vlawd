@@ -25,6 +25,18 @@ export interface AiCursorDesktopApi {
   pauseSession(): Promise<DesktopUiSnapshot>;
   cancelSession(): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
+  /** 在 Task Workspace 的浏览器容器里打开指定 URL。 */
+  browserOpen(url: string): Promise<DesktopUiSnapshot>;
+  /** 用默认搜索引擎打开查询词。 */
+  browserSearch(query: string): Promise<DesktopUiSnapshot>;
+  /** 停止当前 BrowserView 加载。 */
+  browserPause(): Promise<DesktopUiSnapshot>;
+  /** 关闭 BrowserView。 */
+  browserClose(): Promise<DesktopUiSnapshot>;
+  /** 设置 BrowserView 在窗口中的位置与大小（来自渲染层 DOM 边界）。 */
+  browserSetBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<DesktopUiSnapshot>;
+  /** 提取当前页面可见文本。 */
+  browserRead(): Promise<{ text: string }>;
   openMainWindow(): Promise<void>;
   hideMainWindow(): Promise<void>;
   resizeOverlay(size: OverlaySize): Promise<void>;
@@ -109,6 +121,12 @@ const api: AiCursorDesktopApi = {
   pauseSession: () => ipcRenderer.invoke("desktop:pauseSession") as Promise<DesktopUiSnapshot>,
   cancelSession: () => ipcRenderer.invoke("desktop:cancelSession") as Promise<DesktopUiSnapshot>,
   executeRuntimeAction: () => ipcRenderer.invoke("desktop:executeRuntimeAction") as Promise<DesktopUiSnapshot>,
+  browserOpen: (url: string) => ipcRenderer.invoke("browser:open", url) as Promise<DesktopUiSnapshot>,
+  browserSearch: (query: string) => ipcRenderer.invoke("browser:search", query) as Promise<DesktopUiSnapshot>,
+  browserPause: () => ipcRenderer.invoke("browser:pause") as Promise<DesktopUiSnapshot>,
+  browserClose: () => ipcRenderer.invoke("browser:close") as Promise<DesktopUiSnapshot>,
+  browserSetBounds: (bounds) => ipcRenderer.invoke("browser:setBounds", bounds) as Promise<DesktopUiSnapshot>,
+  browserRead: () => ipcRenderer.invoke("browser:read") as Promise<{ text: string }>,
   openMainWindow: () => ipcRenderer.invoke("window:openMain") as Promise<void>,
   hideMainWindow: () => ipcRenderer.invoke("window:hideMain") as Promise<void>,
   resizeOverlay: (size) => ipcRenderer.invoke("overlay:resize", size) as Promise<void>,
