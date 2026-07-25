@@ -8,9 +8,18 @@
 import {
   pipeline,
   WhisperTextStreamer,
+  env,
   type AutomaticSpeechRecognitionPipeline,
   type ProgressCallback
 } from "@huggingface/transformers";
+
+// 在 Electron/Vite 环境中明确指向 onnxruntime-web 的 wasm/mjs 资源，避免后端初始化失败。
+const onnxWasm = env.backends.onnx.wasm!;
+onnxWasm.numThreads = 1;
+// dev 模式下 Vite 不会自动 serve node_modules 里的 .mjs，手动指向 copyVadAssets 拷贝到 assets/vad/ 的文件。
+if ((import.meta as any).env?.DEV) {
+  onnxWasm.wasmPaths = new URL("/vad/", self.location.href).href;
+}
 
 export interface WhisperInitRequest {
   type: "init";
@@ -34,7 +43,7 @@ export type WhisperWorkerResponse =
   | { type: "result"; id: number; text: string }
   | { type: "error"; id: number | null; message: string };
 
-const DEFAULT_MODEL = "Xenova/whisper-tiny";
+const DEFAULT_MODEL = "Xenova/whisper-base";
 
 const pipelines = new Map<string, Promise<AutomaticSpeechRecognitionPipeline>>();
 
@@ -51,20 +60,11 @@ async function loadPipeline(model: string): Promise<AutomaticSpeechRecognitionPi
     const progress = "progress" in report ? report.progress : undefined;
     post({ type: "progress", status: report.status, progress });
   };
-  const promise = (async () => {
-    try {
-      return await pipeline("automatic-speech-recognition", model, {
-        device: "webgpu",
-        progress_callback: onProgress
-      });
-    } catch {
-      // 无 WebGPU / 初始化失败时回退 WASM。
-      return pipeline("automatic-speech-recognition", model, {
-        device: "wasm",
-        progress_callback: onProgress
-      });
-    }
-  })();
+  const promise = pipeline("automatic-speech-recognition", model, {
+    device: "wasm",
+    dtype: "fp32",
+    progress_callback: onProgress
+  });
   pipelines.set(model, promise);
   return promise;
 }

@@ -199,7 +199,11 @@ export function useConversation(): ConversationController {
       whisper.current = new WhisperTranscriber({
         onProgress: (status, progress) => setWhisperLoading({ status, progress })
       });
-      whisper.current.warmup();
+      // 先等 Whisper 加载完成再开 VAD，避免模型加载占用资源导致 VAD 漏掉开头语音。
+      await whisper.current.warmup().catch((error) => {
+        setWhisperLoading(null);
+        throw new Error("Whisper 加载失败：" + (error instanceof Error ? error.message : String(error)));
+      });
     }
 
     vad.current = new MicVad({ deviceId: inputDeviceRef.current });

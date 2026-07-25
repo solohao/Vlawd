@@ -40,7 +40,7 @@ const electronBin = process.platform === "win32"
 console.log(`AI Cursor V2 renderer: ${address}`);
 console.log(`AI Cursor V2 electron main: ${electronMain}`);
 
-const electronProcess = spawn(electronBin, [electronMain], {
+const electronProcess = spawn(electronBin, [electronMain, "--remote-debugging-port=9333"], {
   cwd: appRoot,
   shell: true,
   stdio: "inherit",
