@@ -81,6 +81,8 @@ export interface AiCursorDesktopApi {
   modelLocateOllamaInstaller(): Promise<ModelCenterSnapshot>;
   /** 选择安装目录并静默安装 Ollama（一键安装）。 */
   modelInstallOllama(): Promise<ModelCenterSnapshot>;
+  modelPauseInstallOllama(): Promise<ModelCenterSnapshot>;
+  modelResumeInstallOllama(): Promise<ModelCenterSnapshot>;
   /** 订阅模型中心快照（含下载进度）；返回取消订阅函数。 */
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
 
@@ -164,6 +166,8 @@ const api: AiCursorDesktopApi = {
   modelLocateOllamaInstaller: () =>
     ipcRenderer.invoke("model:locateInstaller") as Promise<ModelCenterSnapshot>,
   modelInstallOllama: () => ipcRenderer.invoke("model:installOllama") as Promise<ModelCenterSnapshot>,
+  modelPauseInstallOllama: () => ipcRenderer.invoke("model:pauseInstallOllama") as Promise<ModelCenterSnapshot>,
+  modelResumeInstallOllama: () => ipcRenderer.invoke("model:resumeInstallOllama") as Promise<ModelCenterSnapshot>,
   onModelSnapshot: (listener) => {
     const channel = "model:snapshot";
     const handler = (_event: unknown, payload: ModelCenterSnapshot): void => listener(payload);

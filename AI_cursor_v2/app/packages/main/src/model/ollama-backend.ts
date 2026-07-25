@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type {
   ModelPullPhase,
   ModelPullProgress,
   OllamaModelInfo
 } from "@ai-cursor-v2/shared";
 import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
+import { downloadWithResume, type DownloadProgress } from "./download-resume.js";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
 const INSTALL_GUIDANCE_URL = "https://ollama.com/download";
@@ -384,34 +385,57 @@ export class OllamaBackend implements ModelBackend {
    * - Linux: `ollama-linux-<arch>.tar.zst`
    * - macOS: `ollama-darwin.tgz`
    * - Windows: `ollama-windows-<arch>.zip`
+   *
+   * 支持断点续传：
+   * - `freshStart=false` 时如果存在 `.partial` 文件会继续下载；
+   * - `freshStart=true` 时删除旧缓存并重新下载。
    */
-  async downloadCoreBinary(signal?: AbortSignal): Promise<void> {
+  async downloadCoreBinary(
+    onProgress?: (progress: DownloadProgress) => void,
+    signal?: AbortSignal,
+    freshStart = false
+  ): Promise<void> {
     const arch = process.arch === "arm64" ? "arm64" : "amd64";
     let url: string;
-    let needsPowerShell = false;
+    let archiveExt: "tar.zst" | "tgz" | "zip";
 
     if (process.platform === "win32") {
       url = `https://ollama.com/download/ollama-windows-${arch}.zip`;
-      needsPowerShell = true;
+      archiveExt = "zip";
     } else if (process.platform === "darwin") {
       url = "https://ollama.com/download/ollama-darwin.tgz";
+      archiveExt = "tgz";
     } else {
       url = `https://ollama.com/download/ollama-linux-${arch}.tar.zst`;
+      archiveExt = "tar.zst";
     }
 
-    // 清理旧二进制，确保解压后是一份干净的副本。
-    try {
-      rmSync(this.managedBinaryDir, { recursive: true, force: true });
-    } catch {
-      // ignore
+    const partialPath = join(
+      dirname(this.managedBinaryDir),
+      `ollama-core-${process.platform}-${arch}.partial`
+    );
+
+    if (freshStart) {
+      try {
+        rmSync(this.managedBinaryDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+      rmSync(partialPath, { force: true });
     }
     mkdirSync(this.managedBinaryDir, { recursive: true });
 
-    if (needsPowerShell) {
-      await this.downloadAndExtractWindowsZip(url, signal);
+    await downloadWithResume(url, partialPath, onProgress, signal);
+
+    if (archiveExt === "tar.zst") {
+      await this.extractLinuxTarZst(partialPath, this.managedBinaryDir, signal);
+    } else if (archiveExt === "tgz") {
+      await this.extractMacTgz(partialPath, this.managedBinaryDir, signal);
     } else {
-      await this.downloadAndExtractUnixTar(url, signal);
+      await this.extractWindowsZip(partialPath, this.managedBinaryDir, signal);
     }
+
+    rmSync(partialPath, { force: true });
 
     const binary = this.binaryPath();
     if (!existsSync(binary)) {
@@ -422,15 +446,26 @@ export class OllamaBackend implements ModelBackend {
     }
   }
 
-  private downloadAndExtractUnixTar(url: string, signal?: AbortSignal): Promise<void> {
-    const dest = this.managedBinaryDir;
-    const shellCommand =
-      process.platform === "darwin"
-        ? `curl -fsSL --location "${url}" | tar -xzf - -C "${dest}"`
-        : `set -euo pipefail; curl -fsSL --location "${url}" | zstd -d | tar -xf - -C "${dest}"`;
+  private extractLinuxTarZst(archivePath: string, dest: string, signal?: AbortSignal): Promise<void> {
+    const shellCommand = `set -euo pipefail; zstd -d -c "${archivePath}" | tar -xf - -C "${dest}"`;
+    return this.runShellCommand("bash", ["-c", shellCommand], "Ollama 核心服务解压失败（Linux）", signal);
+  }
 
+  private extractMacTgz(archivePath: string, dest: string, signal?: AbortSignal): Promise<void> {
+    return this.runShellCommand("tar", ["-xzf", archivePath, "-C", dest], "Ollama 核心服务解压失败（macOS）", signal);
+  }
+
+  private extractWindowsZip(archivePath: string, dest: string, signal?: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
-      const child = spawn("bash", ["-c", shellCommand], { detached: false });
+      const child = spawn(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${dest}' -Force`
+        ],
+        { detached: false }
+      );
       let stderr = "";
       child.stderr?.on("data", (chunk) => {
         stderr += chunk.toString();
@@ -440,7 +475,7 @@ export class OllamaBackend implements ModelBackend {
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`Ollama 核心服务下载失败（退出码 ${code ?? "未知"}）：${stderr.trim() || shellCommand}`));
+          reject(new Error(`Ollama 核心服务解压失败（Windows，退出码 ${code ?? "未知"}）：${stderr.trim()}`));
         }
       });
       signal?.addEventListener("abort", () => {
@@ -449,62 +484,30 @@ export class OllamaBackend implements ModelBackend {
     });
   }
 
-  private async downloadAndExtractWindowsZip(url: string, signal?: AbortSignal): Promise<void> {
-    const dest = this.managedBinaryDir;
-    const tempDir = join(tmpdir(), `vlawd-ollama-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
-    const archivePath = join(tempDir, "ollama.zip");
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn("curl.exe", ["-L", "-o", archivePath, url], { detached: false });
-        let stderr = "";
-        child.stderr?.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-        child.on("error", (error) => reject(error));
-        child.on("close", (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`下载 Ollama 核心服务失败（退出码 ${code ?? "未知"}）：${stderr.trim()}`));
-          }
-        });
-        signal?.addEventListener("abort", () => {
-          child.kill("SIGTERM");
-        });
+  private runShellCommand(
+    command: string,
+    args: string[],
+    errorPrefix: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, args, { detached: false });
+      let stderr = "";
+      child.stderr?.on("data", (chunk) => {
+        stderr += chunk.toString();
       });
-
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${dest}' -Force`
-          ],
-          { detached: false }
-        );
-        let stderr = "";
-        child.stderr?.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-        child.on("error", (error) => reject(error));
-        child.on("close", (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`解压 Ollama 核心服务失败（退出码 ${code ?? "未知"}）：${stderr.trim()}`));
-          }
-        });
+      child.on("error", (error) => reject(error));
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`${errorPrefix}（退出码 ${code ?? "未知"}）：${stderr.trim()}`));
+        }
       });
-    } finally {
-      try {
-        rmSync(tempDir, { recursive: true, force: true });
-      } catch {
-        // ignore
-      }
-    }
+      signal?.addEventListener("abort", () => {
+        child.kill("SIGTERM");
+      });
+    });
   }
 
   /**

@@ -58,10 +58,13 @@ export function ModelCenterPage() {
     id: m.id,
     name: m.name,
     size: `${m.approxSizeGB}GB`,
-    description: m.extractedDirName,
+    description: m.description || m.extractedDirName,
     installed: m.installed,
     downloading: m.downloading,
-    progress: m.progress
+    paused: m.paused,
+    progress: m.progress,
+    recommended: m.recommended,
+    quality: m.quality
   });
 
   const availableSTTs: ModelItem[] = useMemo(
@@ -248,6 +251,14 @@ export function ModelCenterPage() {
     void model.installOllama();
   };
 
+  const handlePauseInstallOllama = () => {
+    void model.pauseInstallOllama();
+  };
+
+  const handleResumeInstallOllama = () => {
+    void model.resumeInstallOllama();
+  };
+
   const handleStartOllama = () => {
     // Ollama会自动启动，刷新后端状态即可
     void model.refreshBackend();
@@ -385,6 +396,8 @@ export function ModelCenterPage() {
                     activeBackend={snapshot.activeBackend}
                     onBackendSwitch={handleBackendSwitch}
                     onInstallOllama={handleInstallOllama}
+                    onPauseInstallOllama={handlePauseInstallOllama}
+                    onResumeInstallOllama={handleResumeInstallOllama}
                     onStartOllama={handleStartOllama}
                     modelsDir={modelsDir}
                     storageFreeGB={storageFreeGB}

@@ -137,6 +137,7 @@ export type OllamaInstallPhase =
   | "idle"
   | "detecting"
   | "installing"
+  | "paused"
   | "installed"
   | "error";
 
@@ -159,6 +160,12 @@ export interface OllamaInstallState {
   installDir?: string;
   phase: OllamaInstallPhase;
   message?: string;
+  /** 核心服务下载进度（0-100）。 */
+  progress?: number;
+  /** 已下载字节数。 */
+  completedBytes?: number;
+  /** 总字节数。 */
+  totalBytes?: number;
   updatedAt: string;
 }
 
