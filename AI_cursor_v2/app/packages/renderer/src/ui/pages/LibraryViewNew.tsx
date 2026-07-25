@@ -46,12 +46,16 @@ interface LibraryViewNewProps {
   installedSTTs: ModelItem[];
   onDownloadSTT: (id: string) => void;
   onDeleteSTT: (id: string) => void;
+  onPauseSTT?: (id: string) => void;
+  onResumeSTT?: (id: string) => void;
 
   // TTS models
   availableTTSs: ModelItem[];
   installedTTSs: ModelItem[];
   onDownloadTTS: (id: string) => void;
   onDeleteTTS: (id: string) => void;
+  onPauseTTS?: (id: string) => void;
+  onResumeTTS?: (id: string) => void;
 
   // Refresh
   onRefresh: () => void;
@@ -79,10 +83,14 @@ export function LibraryViewNew({
   installedSTTs,
   onDownloadSTT,
   onDeleteSTT,
+  onPauseSTT,
+  onResumeSTT,
   availableTTSs,
   installedTTSs,
   onDownloadTTS,
   onDeleteTTS,
+  onPauseTTS,
+  onResumeTTS,
   onRefresh
 }: LibraryViewNewProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -253,12 +261,11 @@ export function LibraryViewNew({
             </div>
           </div>
 
-          {/* STT的下载方式说明 - 未来会有后端 */}
+          {/* STT的下载方式说明 */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-500">下载方式:</span>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
               <span className="text-[11px] font-medium text-slate-600">直接下载</span>
-              <span className="ml-2 text-[10px] text-slate-400">(未来支持)</span>
             </div>
           </div>
         </div>
@@ -266,13 +273,7 @@ export function LibraryViewNew({
         <div className="space-y-2">
           {availableSTTs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-              <p className="text-[12px] text-slate-600 font-medium">STT模型下载功能开发中</p>
-              <p className="text-[11px] text-slate-500 mt-1">
-                未来将支持Whisper等本地STT模型的直接下载和管理
-              </p>
-              <p className="text-[10px] text-slate-400 mt-2">
-                当前版本使用浏览器内置的Web Speech API
-              </p>
+              <p className="text-[12px] text-slate-600 font-medium">暂无可用STT模型</p>
             </div>
           ) : (
             availableSTTs.map(model => (
@@ -281,6 +282,8 @@ export function LibraryViewNew({
                 model={model}
                 onDownload={onDownloadSTT}
                 onDelete={onDeleteSTT}
+                onPause={onPauseSTT}
+                onResume={onResumeSTT}
               />
             ))
           )}
@@ -302,12 +305,11 @@ export function LibraryViewNew({
             </div>
           </div>
 
-          {/* TTS的下载方式说明 - 未来会有后端 */}
+          {/* TTS的下载方式说明 */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-500">下载方式:</span>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
               <span className="text-[11px] font-medium text-slate-600">直接下载</span>
-              <span className="ml-2 text-[10px] text-slate-400">(未来支持)</span>
             </div>
           </div>
         </div>
@@ -315,13 +317,7 @@ export function LibraryViewNew({
         <div className="space-y-2">
           {availableTTSs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-              <p className="text-[12px] text-slate-600 font-medium">TTS模型下载功能开发中</p>
-              <p className="text-[11px] text-slate-500 mt-1">
-                未来将支持ChatTTS、Piper等本地TTS模型的直接下载和管理
-              </p>
-              <p className="text-[10px] text-slate-400 mt-2">
-                当前版本使用Edge TTS云端服务
-              </p>
+              <p className="text-[12px] text-slate-600 font-medium">暂无可用TTS模型</p>
             </div>
           ) : (
             availableTTSs.map(model => (
@@ -330,6 +326,8 @@ export function LibraryViewNew({
                 model={model}
                 onDownload={onDownloadTTS}
                 onDelete={onDeleteTTS}
+                onPause={onPauseTTS}
+                onResume={onResumeTTS}
               />
             ))
           )}
@@ -409,7 +407,7 @@ function ModelItemRow({
           </div>
         )}
 
-        {model.downloading ? (
+        {model.downloading && onPause ? (
           <Button
             variant="ghost"
             size="sm"
@@ -419,7 +417,7 @@ function ModelItemRow({
             <PauseIcon width={12} />
             暂停
           </Button>
-        ) : model.paused ? (
+        ) : model.paused && onResume ? (
           <>
             <Button
               variant="secondary"

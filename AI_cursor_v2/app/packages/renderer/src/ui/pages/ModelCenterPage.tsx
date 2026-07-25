@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useModelCenter } from "../../runtime/useModelCenter.js";
+import { useSpeechModels, type SpeechModelsController } from "../../runtime/useSpeechModels.js";
 import { FeatureSection } from "../../app/feature-status.js";
 import { PlusIcon } from "../icons.js";
 import { Button, cn, DensityProvider } from "../../design-system/index.js";
@@ -7,11 +8,13 @@ import { ConfigViewNew } from "./ConfigViewNew.js";
 import { LibraryViewNew, type ModelItem } from "./LibraryViewNew.js";
 import type { LLMModel, STTModel, TTSModel, CustomEndpoint } from "./model-types.js";
 import type { ModelBackendKind } from "@ai-cursor-v2/shared";
+import type { SpeechModelStatus } from "../../app/desktop-api.js";
 
 type Tab = "config" | "library";
 
 export function ModelCenterPage() {
   const model = useModelCenter();
+  const speech = useSpeechModels();
   const [tab, setTab] = useState<Tab>("config");
   const snapshot = model.snapshot;
 
@@ -28,14 +31,47 @@ export function ModelCenterPage() {
   }, [snapshot.catalog, snapshot.activeBackend]);
 
   const installedSTTs: STTModel[] = useMemo(() => {
-    // 当前版本：STT使用固定的Whisper，未来扩展
-    return [];
-  }, []);
+    return speech.status
+      .filter((m) => m.role === "stt" && m.installed)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        size: `${m.approxSizeGB}GB`,
+        description: m.extractedDirName,
+        language: "zh-CN"
+      }));
+  }, [speech.status]);
 
   const installedTTSs: TTSModel[] = useMemo(() => {
-    // 当前版本：TTS使用固定的Edge TTS，未来扩展
-    return [];
-  }, []);
+    return speech.status
+      .filter((m) => m.role === "tts" && m.installed)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        size: `${m.approxSizeGB}GB`,
+        description: m.extractedDirName,
+        language: "zh-CN"
+      }));
+  }, [speech.status]);
+
+  const mapSpeechToModelItem = (m: SpeechModelStatus): ModelItem => ({
+    id: m.id,
+    name: m.name,
+    size: `${m.approxSizeGB}GB`,
+    description: m.extractedDirName,
+    installed: m.installed,
+    downloading: m.downloading,
+    progress: m.progress
+  });
+
+  const availableSTTs: ModelItem[] = useMemo(
+    () => speech.status.filter((m) => m.role === "stt").map(mapSpeechToModelItem),
+    [speech.status]
+  );
+  const availableTTSs: ModelItem[] = useMemo(
+    () => speech.status.filter((m) => m.role === "tts").map(mapSpeechToModelItem),
+    [speech.status]
+  );
 
   // Library view 数据
   const availableLLMs: ModelItem[] = useMemo(() => {
@@ -57,9 +93,6 @@ export function ModelCenterPage() {
         };
       });
   }, [snapshot.catalog, snapshot.activePull]);
-
-  const availableSTTs: ModelItem[] = [];
-  const availableTTSs: ModelItem[] = [];
 
   // 自定义端点：从后端 snapshot.customEndpoint 恢复（目前只保存一个）
   const [customEndpoints, setCustomEndpoints] = useState<CustomEndpoint[]>([]);
@@ -100,6 +133,25 @@ export function ModelCenterPage() {
     }
   }, [snapshot.activeBackend, snapshot.activeBrainModel, snapshot.customEndpoint?.baseUrl, snapshot.customEndpoint?.model, snapshot.customEndpoint?.name, snapshot.customEndpoint?.apiKey]);
 
+  // 同步本地语音模型（STT/TTS）的选择态
+  useEffect(() => {
+    setSelectedConfig(prev => ({
+      ...prev,
+      hearing: { modelId: speech.active.stt ?? prev.hearing.modelId },
+      speaking: { modelId: speech.active.tts ?? prev.speaking.modelId }
+    }));
+  }, [speech.active.stt, speech.active.tts]);
+
+  // 若尚未选择语音模型且已有安装的模型，默认选中第一个
+  useEffect(() => {
+    if (!speech.active.stt && installedSTTs.length > 0) {
+      void speech.setActive("stt", installedSTTs[0].id);
+    }
+    if (!speech.active.tts && installedTTSs.length > 0) {
+      void speech.setActive("tts", installedTTSs[0].id);
+    }
+  }, [installedSTTs, installedTTSs, speech.active.stt, speech.active.tts]);
+
   // Ollama状态映射
   const ollamaStatus = useMemo(() => {
     const backend = snapshot.backends.find(b => b.backend === 'ollama');
@@ -128,6 +180,12 @@ export function ModelCenterPage() {
       }
       await model.useAsBrain(config.brain.modelId);
     }
+    if (config.hearing.modelId !== selectedConfig.hearing.modelId) {
+      await speech.setActive('stt', config.hearing.modelId);
+    }
+    if (config.speaking.modelId !== selectedConfig.speaking.modelId) {
+      await speech.setActive('tts', config.speaking.modelId);
+    }
   };
 
   const handleBackendSwitch = (backend: ModelBackendKind) => {
@@ -148,6 +206,38 @@ export function ModelCenterPage() {
 
   const handleResumeLLM = (id: string) => {
     void model.resumePull(id);
+  };
+
+  const handleDownloadSTT = (id: string) => {
+    void speech.download(id);
+  };
+
+  const handleDeleteSTT = (id: string) => {
+    void speech.remove(id);
+  };
+
+  const handlePauseSTT = (id: string) => {
+    void speech.cancelDownload(id);
+  };
+
+  const handleResumeSTT = (id: string) => {
+    void speech.download(id);
+  };
+
+  const handleDownloadTTS = (id: string) => {
+    void speech.download(id);
+  };
+
+  const handleDeleteTTS = (id: string) => {
+    void speech.remove(id);
+  };
+
+  const handlePauseTTS = (id: string) => {
+    void speech.cancelDownload(id);
+  };
+
+  const handleResumeTTS = (id: string) => {
+    void speech.download(id);
   };
 
   const handleRefresh = () => {
@@ -311,13 +401,25 @@ export function ModelCenterPage() {
                     onPauseLLM={handlePauseLLM}
                     onResumeLLM={handleResumeLLM}
                     availableSTTs={availableSTTs}
-                    installedSTTs={[]}
-                    onDownloadSTT={(id) => console.log('Download STT:', id)}
-                    onDeleteSTT={(id) => console.log('Delete STT:', id)}
+                    installedSTTs={installedSTTs.map(m => ({
+                      ...m,
+                      description: m.description || '',
+                      installed: true
+                    }))}
+                    onDownloadSTT={handleDownloadSTT}
+                    onDeleteSTT={handleDeleteSTT}
+                    onPauseSTT={handlePauseSTT}
+                    onResumeSTT={handleResumeSTT}
                     availableTTSs={availableTTSs}
-                    installedTTSs={[]}
-                    onDownloadTTS={(id) => console.log('Download TTS:', id)}
-                    onDeleteTTS={(id) => console.log('Delete TTS:', id)}
+                    installedTTSs={installedTTSs.map(m => ({
+                      ...m,
+                      description: m.description || '',
+                      installed: true
+                    }))}
+                    onDownloadTTS={handleDownloadTTS}
+                    onDeleteTTS={handleDeleteTTS}
+                    onPauseTTS={handlePauseTTS}
+                    onResumeTTS={handleResumeTTS}
                     onRefresh={handleRefresh}
                   />
                 </FeatureSection>

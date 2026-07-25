@@ -17,6 +17,7 @@ import { DuplexConversationRuntime } from "../runtime/duplex-runtime.js";
 import { createProvider } from "../model/provider-registry.js";
 import { defaultPipelineProviderConfig, findExecutionBrain } from "../model/dual-role-config.js";
 import { ModelCenterService } from "../model/model-center-service.js";
+import { SpeechModelService } from "../model/speech-model-service.js";
 import { JsonlSessionStorage } from "../session/jsonl-storage.js";
 import { initAutoUpdater, checkForUpdatesManually } from "./auto-updater.js";
 
@@ -66,6 +67,13 @@ function broadcastModelCenter(snapshot: ModelCenterSnapshot): void {
 modelCenter.on(broadcastModelCenter);
 // 启动后自动刷新后端并尝试恢复上一次选中的执行大脑。
 setTimeout(() => void modelCenter.refreshBackend().catch(() => undefined), 2000);
+
+// ── 本地语音模型（STT/TTS）服务 ───────────────────────────────────────
+const speechService = new SpeechModelService();
+function refreshSpeechModelsDir(): void {
+  speechService.setModelsDir(modelCenter.getModelsDir() ?? "");
+}
+refreshSpeechModelsDir();
 
 const OVERLAY_MARGIN = 24;
 const OVERLAY_DEFAULT = { width: 208, height: 84 };
@@ -347,6 +355,57 @@ ipcMain.handle("model:locateInstaller", async () => {
 });
 
 ipcMain.handle("model:installOllama", () => modelCenter.installOllama());
+
+// ── 本地语音模型（STT/TTS）通道 ────────────────────────────────────────
+function ensureSpeechModelsDir(): void {
+  refreshSpeechModelsDir();
+}
+
+ipcMain.handle("speech:getCatalog", () => {
+  ensureSpeechModelsDir();
+  return speechService.getCatalog();
+});
+ipcMain.handle("speech:getStatus", () => {
+  ensureSpeechModelsDir();
+  return speechService.getStatus();
+});
+ipcMain.handle("speech:getActive", () => {
+  ensureSpeechModelsDir();
+  return speechService.getActive();
+});
+ipcMain.handle("speech:setActive", (_event, role: "stt" | "tts", modelId: string | undefined) => {
+  ensureSpeechModelsDir();
+  speechService.setActive(role, modelId);
+  return speechService.getStatus();
+});
+ipcMain.handle("speech:download", async (_event, modelId: string) => {
+  ensureSpeechModelsDir();
+  await speechService.download(modelId);
+  return speechService.getStatus();
+});
+ipcMain.handle("speech:cancelDownload", (_event, modelId: string) => {
+  speechService.cancelDownload(modelId);
+  return speechService.getStatus();
+});
+ipcMain.handle("speech:remove", async (_event, modelId: string) => {
+  ensureSpeechModelsDir();
+  await speechService.remove(modelId);
+  return speechService.getStatus();
+});
+ipcMain.handle("speech:transcribe", async (_event, samples: Float32Array, sampleRate: number) => {
+  ensureSpeechModelsDir();
+  // IPC 结构克隆可能把 Float32Array 恢复为普通对象，保险起见重建。
+  if (Array.isArray(samples)) {
+    samples = new Float32Array(samples);
+  } else if (samples && !(samples instanceof Float32Array) && (samples as any).length !== undefined) {
+    samples = new Float32Array(Object.values(samples));
+  }
+  return speechService.transcribe(samples, sampleRate);
+});
+ipcMain.handle("speech:synthesize", async (_event, text: string) => {
+  ensureSpeechModelsDir();
+  return speechService.synthesize(text);
+});
 
 ipcMain.handle("window:openMain", () => {
   showMainWindow();

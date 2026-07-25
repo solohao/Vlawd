@@ -65,6 +65,7 @@ export function useConversation(): ConversationController {
   const outputDeviceRef = useRef<string | undefined>(undefined);
   const userUtteranceAtRef = useRef<number | null>(null);
   const bargeInAtRef = useRef<number | null>(null);
+  const activeSpeechRef = useRef<{ stt?: string; tts?: string }>({});
   const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
   const [outputDeviceId, setOutputDeviceId] = useState<string | undefined>(undefined);
 
@@ -125,6 +126,9 @@ export function useConversation(): ConversationController {
     const api = desktopApi();
     const unsubscribe = api.onConversationEvent(handleEvent);
     void api.conversationSnapshot().then(setSnapshot).catch(() => undefined);
+    void api.speechGetActive().then((active) => {
+      activeSpeechRef.current = active;
+    }).catch(() => undefined);
     return () => {
       unsubscribe();
       tts.current?.cancel();
@@ -193,8 +197,21 @@ export function useConversation(): ConversationController {
     if (!MicVad.isSupported()) {
       throw new Error("当前环境不支持麦克风");
     }
-    // Electron 里 webkitSpeechRecognition 通常不可用，优先用 renderer 内 Whisper（transformers.js）。
-    const useWhisper = WhisperTranscriber.isSupported();
+
+    // 如果用户在模型中心选择了本地 STT 模型，优先走主进程 sherpa-onnx；
+    // 否则回退到 renderer 内 Whisper（transformers.js）或浏览器 ASR。
+    let activeStt = activeSpeechRef.current.stt;
+    if (!activeStt) {
+      try {
+        activeStt = (await desktopApi().speechGetActive()).stt;
+        activeSpeechRef.current = { ...activeSpeechRef.current, stt: activeStt };
+      } catch {
+        activeStt = undefined;
+      }
+    }
+    const useLocalStt = !!activeStt;
+    const useWhisper = !useLocalStt && WhisperTranscriber.isSupported();
+
     if (useWhisper) {
       whisper.current = new WhisperTranscriber({
         onProgress: (status, progress) => setWhisperLoading({ status, progress })
@@ -218,23 +235,31 @@ export function useConversation(): ConversationController {
         }
       },
       onLevel: (level) => setMicLevel(level),
-      onSpeechEnd: useWhisper
+      onSpeechEnd: useLocalStt || useWhisper
         ? (audio) => {
             setInterimTranscript("识别中…");
-            whisper.current
-              ?.transcribe(audio, "chinese", (text) => setInterimTranscript(text))
-              .then((text) => {
-                setInterimTranscript("");
-                if (text.trim()) {
-                  void submit(text);
-                }
-              })
-              .catch(() => setInterimTranscript(""));
+            const doSubmit = (text: string) => {
+              setInterimTranscript("");
+              if (text.trim()) {
+                void submit(text);
+              }
+            };
+            if (useLocalStt) {
+              desktopApi()
+                .speechTranscribe(audio, 16000)
+                .then(doSubmit)
+                .catch(() => setInterimTranscript(""));
+            } else {
+              whisper.current
+                ?.transcribe(audio, "chinese", (text) => setInterimTranscript(text))
+                .then(doSubmit)
+                .catch(() => setInterimTranscript(""));
+            }
           }
         : undefined
     });
 
-    if (!useWhisper && BrowserSpeechRecognizer.isSupported()) {
+    if (!useLocalStt && !useWhisper && BrowserSpeechRecognizer.isSupported()) {
       recognizer.current = new BrowserSpeechRecognizer();
       const started = recognizer.current.start({
         onInterim: (text) => setInterimTranscript(text),

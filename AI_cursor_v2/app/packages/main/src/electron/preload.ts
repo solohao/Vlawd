@@ -83,6 +83,17 @@ export interface AiCursorDesktopApi {
   modelInstallOllama(): Promise<ModelCenterSnapshot>;
   /** 订阅模型中心快照（含下载进度）；返回取消订阅函数。 */
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
+
+  // ── 本地语音模型（STT/TTS）──────────────────────────────────────────
+  speechGetCatalog(): Promise<any>;
+  speechGetStatus(): Promise<any>;
+  speechGetActive(): Promise<any>;
+  speechSetActive(role: "stt" | "tts", modelId: string | undefined): Promise<any>;
+  speechDownload(modelId: string): Promise<any>;
+  speechCancelDownload(modelId: string): Promise<any>;
+  speechRemove(modelId: string): Promise<any>;
+  speechTranscribe(samples: Float32Array, sampleRate: number): Promise<string>;
+  speechSynthesize(text: string): Promise<{ samples: Float32Array; sampleRate: number }>;
 }
 
 const api: AiCursorDesktopApi = {
@@ -158,7 +169,21 @@ const api: AiCursorDesktopApi = {
     const handler = (_event: unknown, payload: ModelCenterSnapshot): void => listener(payload);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
-  }
+  },
+
+  // ── 本地语音模型（STT/TTS）──────────────────────────────────────────
+  speechGetCatalog: () => ipcRenderer.invoke("speech:getCatalog") as Promise<any>,
+  speechGetStatus: () => ipcRenderer.invoke("speech:getStatus") as Promise<any>,
+  speechGetActive: () => ipcRenderer.invoke("speech:getActive") as Promise<any>,
+  speechSetActive: (role, modelId) =>
+    ipcRenderer.invoke("speech:setActive", role, modelId) as Promise<any>,
+  speechDownload: (modelId) => ipcRenderer.invoke("speech:download", modelId) as Promise<any>,
+  speechCancelDownload: (modelId) => ipcRenderer.invoke("speech:cancelDownload", modelId) as Promise<any>,
+  speechRemove: (modelId) => ipcRenderer.invoke("speech:remove", modelId) as Promise<any>,
+  speechTranscribe: (samples, sampleRate) =>
+    ipcRenderer.invoke("speech:transcribe", samples, sampleRate) as Promise<string>,
+  speechSynthesize: (text) =>
+    ipcRenderer.invoke("speech:synthesize", text) as Promise<{ samples: Float32Array; sampleRate: number }>
 };
 
 contextBridge.exposeInMainWorld("aiCursorDesktop", api);
