@@ -23,6 +23,7 @@ export interface AiCursorDesktopApi {
   connectAudio(): Promise<DesktopUiSnapshot>;
   pauseSession(): Promise<DesktopUiSnapshot>;
   cancelSession(): Promise<DesktopUiSnapshot>;
+  startResearch(goal: string): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
   browserOpen(url: string): Promise<DesktopUiSnapshot>;
   browserSearch(query: string): Promise<DesktopUiSnapshot>;

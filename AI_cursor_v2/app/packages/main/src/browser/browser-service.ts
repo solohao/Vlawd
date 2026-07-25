@@ -1,5 +1,5 @@
-import { BrowserWindow, WebContentsView, type Rectangle } from "electron";
-import type { DesktopBrowserRuntimeState } from "@ai-cursor-v2/shared";
+import { BrowserWindow, WebContentsView } from "electron";
+import type { ActionProposal, ActionResult, AtomicAction, DesktopBrowserRuntimeState } from "@ai-cursor-v2/shared";
 
 export interface BrowserBounds {
   x: number;
@@ -17,6 +17,7 @@ export class BrowserService {
   private title = "";
   private loading = false;
   private error?: string;
+  private lastResult?: ActionResult;
 
   setMainWindow(window: BrowserWindow): void {
     this.mainWindow = window;
@@ -40,7 +41,8 @@ export class BrowserService {
         value: "",
         reason: "",
         riskLevel: "safe"
-      }
+      },
+      lastResult: this.lastResult
     };
   }
 
@@ -84,7 +86,73 @@ export class BrowserService {
     this.title = "";
     this.loading = false;
     this.error = undefined;
+    this.lastResult = undefined;
     this.emit();
+  }
+
+  async execute(proposal: ActionProposal, signal?: AbortSignal): Promise<ActionResult[]> {
+    const results: ActionResult[] = [];
+    if (proposal.safety === "blocked") {
+      return [
+        {
+          action: { action: "overlay.label" },
+          ok: false,
+          message: `提案被安全策略阻止：${proposal.expected_result}`
+        }
+      ];
+    }
+    for (const atomic of proposal.actions) {
+      if (signal?.aborted) {
+        break;
+      }
+      const result = await this.executeAtomic(atomic, signal);
+      results.push(result);
+      if (!result.ok) break;
+    }
+    this.lastResult = results[results.length - 1];
+    this.emit();
+    return results;
+  }
+
+  private async executeAtomic(action: AtomicAction, signal?: AbortSignal): Promise<ActionResult> {
+    try {
+      switch (action.action) {
+        case "browser.search": {
+          const query = String(action.params?.query ?? "");
+          await this.search(query);
+          return { action, ok: true, message: `已搜索：${query}` };
+        }
+        case "browser.open": {
+          const url = String(action.params?.url ?? "");
+          await this.open(url);
+          return { action, ok: true, message: `已打开：${url}` };
+        }
+        case "browser.scroll": {
+          const distance = Number(action.params?.distance ?? 400);
+          if (this.view && !this.view.webContents.isDestroyed()) {
+            await this.view.webContents.executeJavaScript(`window.scrollBy(0, ${distance})`);
+          }
+          return { action, ok: true, message: `已向下滚动 ${distance}` };
+        }
+        case "browser.read": {
+          const text = await this.readVisibleText();
+          return {
+            action,
+            ok: true,
+            message: `已提取页面可见文本 ${text.length} 字`,
+            virtual_state: { text, url: this.url, title: this.title }
+          };
+        }
+        default:
+          return {
+            action,
+            ok: false,
+            message: `BrowserService 未实现的动作：${action.action}`
+          };
+      }
+    } catch (error) {
+      return { action, ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   setBounds(bounds: BrowserBounds): void {
@@ -167,3 +235,4 @@ export class BrowserService {
     }
   }
 }
+

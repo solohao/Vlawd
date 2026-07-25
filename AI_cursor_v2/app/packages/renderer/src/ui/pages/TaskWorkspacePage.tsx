@@ -25,7 +25,7 @@ const typeLabels: Record<string, string> = {
 
 export function TaskWorkspacePage() {
   const desktop = useDesktopRuntime();
-  const { snapshot, busy, pauseSession, cancelSession, executeRuntimeAction, browserOpen, browserSearch, browserPause, browserClose, browserSetBounds } = desktop;
+  const { snapshot, busy, pauseSession, cancelSession, startResearch, executeRuntimeAction, browserOpen, browserSearch, browserPause, browserClose, browserSetBounds } = desktop;
   const { runtimeState, session, graph, browser } = snapshot;
 
   const [goal, setGoal] = useState("");
@@ -84,7 +84,7 @@ export function TaskWorkspacePage() {
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
             />
-            <Button variant="primary" size="sm" className="w-full" disabled={busy} onClick={() => void browserSearch(goal)}>
+            <Button variant="primary" size="sm" className="w-full" disabled={busy} onClick={() => void startResearch(goal)}>
               <SearchIcon width={14} height={14} /> 开始研究
             </Button>
 
@@ -193,12 +193,23 @@ export function TaskWorkspacePage() {
                 <p className="text-[12px] font-semibold text-slate-800">下一步动作</p>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-sm" />
-                  <span className="text-[11.5px] font-medium text-slate-700">
+                  <span data-testid="next-action-type" className="text-[11.5px] font-medium text-slate-700">
                     {browser.nextAction.actionType} · {browser.nextAction.targetLabel}
                   </span>
                 </div>
                 <p className="mt-1 text-[10px] text-slate-400">{browser.nextAction.reason}</p>
                 <p className="mt-1 text-[10px] text-slate-400">风险等级：{browser.nextAction.riskLevel}</p>
+              </div>
+            )}
+            {browser.lastResult && (
+              <div className="rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 p-5 shadow-inner">
+                <p className="text-[12px] font-semibold text-slate-800">读取结果</p>
+                <p data-testid="last-result-message" className="mt-1 text-[11px] text-slate-600">{browser.lastResult.message}</p>
+                {browser.lastResult.virtual_state && typeof browser.lastResult.virtual_state.text === "string" && (
+                  <p className="mt-2 max-h-40 overflow-auto rounded-lg bg-white p-2 text-[10px] text-slate-500">
+                    {browser.lastResult.virtual_state.text}
+                  </p>
+                )}
               </div>
             )}
             <div className="space-y-2">

@@ -67,6 +67,7 @@ function broadcastModelCenter(snapshot: ModelCenterSnapshot): void {
   }
 }
 modelCenter.on(broadcastModelCenter);
+runtime.setPlannerLlm(() => modelCenter.getActiveBrainLlm());
 // 启动后自动刷新后端并尝试恢复上一次选中的执行大脑。
 setTimeout(() => void modelCenter.refreshBackend().catch(() => undefined), 2000);
 
@@ -299,6 +300,9 @@ ipcMain.handle("desktop:runHealthCheck", (_event, role: ModelRole) =>
 ipcMain.handle("desktop:connectAudio", () => handleDesktop(() => runtime.connectAudio()));
 ipcMain.handle("desktop:pauseSession", () => handleDesktop(() => runtime.pauseSession()));
 ipcMain.handle("desktop:cancelSession", () => handleDesktop(() => runtime.cancelSession()));
+ipcMain.handle("desktop:startResearch", (_event, goal: string) =>
+  handleDesktop(() => runtime.startResearch(goal))
+);
 ipcMain.handle("desktop:executeRuntimeAction", () => handleDesktop(() => runtime.executeRuntimeAction()));
 
 // ── BrowserView 研究任务通道 ───────────────────────────────────────

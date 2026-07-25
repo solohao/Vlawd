@@ -22,6 +22,7 @@ import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
 import { OllamaBackend } from "./ollama-backend.js";
 import { ollamaModelCatalog } from "./ollama-catalog.js";
 import { createProvider } from "./provider-registry.js";
+import { OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
 import { loadSettings, saveSettings } from "../settings.js";
 
 export type ModelCenterListener = (snapshot: ModelCenterSnapshot) => void;
@@ -582,6 +583,21 @@ export class ModelCenterService {
    * 设为执行大脑：用选定模型 + 当前激活后端的 OpenAI 端点重建方案 B 管线 Provider，
    * 切到热路径并做健康检查。三个后端共用同一套推理流，不重复造。
    */
+  /**
+   * 为任务规划器提供当前执行大脑的 LlmAdapter；未配置或不可用时返回 undefined。
+   */
+  getActiveBrainLlm(): LlmAdapter | undefined {
+    const backend = this.backends[this.activeBackend];
+    const model = this.activeBrainModel;
+    if (!backend || !model) return undefined;
+    if (this.backendStates[this.activeBackend].status !== "running") return undefined;
+    return new OpenAICompatibleLlmAdapter({
+      baseUrl: backend.openaiEndpoint,
+      model,
+      temperature: 0.3
+    });
+  }
+
   async useModelAsBrain(model: string): Promise<ModelCenterSnapshot> {
     const backend = this.backends[this.activeBackend];
     const provider = createProvider({

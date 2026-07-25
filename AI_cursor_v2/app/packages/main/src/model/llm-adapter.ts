@@ -20,6 +20,8 @@ export interface LlmAdapter {
   readonly usingRealInference: boolean;
   /** 流式返回文本增量（token/词/句片段皆可）。 */
   stream(messages: LlmMessage[], signal?: AbortSignal): AsyncIterable<string>;
+  /** 非流式一次性返回完整文本。 */
+  complete(messages: LlmMessage[], signal?: AbortSignal): Promise<string>;
   /** 轻量连通性检查。 */
   healthCheck(signal?: AbortSignal): Promise<boolean>;
 }
@@ -109,6 +111,14 @@ export class OpenAICompatibleLlmAdapter implements LlmAdapter {
     }
   }
 
+  async complete(messages: LlmMessage[], signal?: AbortSignal): Promise<string> {
+    const chunks: string[] = [];
+    for await (const delta of this.stream(messages, signal)) {
+      chunks.push(delta);
+    }
+    return chunks.join("");
+  }
+
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/models`, {
@@ -154,6 +164,14 @@ export class EchoLlmAdapter implements LlmAdapter {
       await delay(this.chunkDelayMs, signal);
       yield segment;
     }
+  }
+
+  async complete(messages: LlmMessage[]): Promise<string> {
+    const result: string[] = [];
+    for await (const delta of this.stream(messages)) {
+      result.push(delta);
+    }
+    return result.join("");
   }
 
   async healthCheck(): Promise<boolean> {

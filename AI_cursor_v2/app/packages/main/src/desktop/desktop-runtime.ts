@@ -2,9 +2,12 @@ import { join } from "node:path";
 import {
   appendChunk,
   createSession,
+  type ActionProposal,
+  type ActionResult,
   type DesktopBrowserRuntimeState,
   type DesktopModelDownloadState,
   type DesktopModelHealthCheck,
+  type DesktopRuntimeActionState,
   type DesktopUiSnapshot,
   type ModelRole,
   type ModelRuntimeState,
@@ -17,6 +20,8 @@ import {
   validateModelStorageConfig
 } from "../model/dual-role-config.js";
 import type { BrowserService } from "../browser/browser-service.js";
+import { ActionPlanner } from "../planner/action-planner.js";
+import type { LlmAdapter } from "../model/llm-adapter.js";
 
 const emptyGraph: SessionGraphSnapshot = {
   session_id: "",
@@ -39,6 +44,7 @@ const emptyRoute = {
 
 export interface DesktopRuntimeOptions {
   browserService?: BrowserService;
+  getPlannerLlm?: () => LlmAdapter | undefined;
 }
 
 export class DesktopRuntime {
@@ -49,9 +55,18 @@ export class DesktopRuntime {
   private downloads: DesktopModelDownloadState[] = [];
   private healthChecks: DesktopModelHealthCheck[] = [];
   private browserService?: BrowserService;
+  private getPlannerLlm?: () => LlmAdapter | undefined;
+  private currentProposal?: ActionProposal;
+  private lastResult?: ActionResult;
+  private executionController?: AbortController;
 
   constructor(options: DesktopRuntimeOptions = {}) {
     this.browserService = options.browserService;
+    this.getPlannerLlm = options.getPlannerLlm;
+  }
+
+  setPlannerLlm(getLlm: () => LlmAdapter | undefined): void {
+    this.getPlannerLlm = getLlm;
   }
 
   getSnapshot(): DesktopUiSnapshot {
@@ -143,6 +158,8 @@ export class DesktopRuntime {
   pauseSession(): DesktopUiSnapshot {
     this.runtimeState = "paused";
     this.session = { ...this.session, status: "paused", updated_at: new Date().toISOString() };
+    this.executionController?.abort();
+    this.browserService?.pause();
     this.appendState("用户暂停 AI 执行");
     return this.getSnapshot();
   }
@@ -150,27 +167,92 @@ export class DesktopRuntime {
   cancelSession(): DesktopUiSnapshot {
     this.runtimeState = "interrupted";
     this.session = { ...this.session, status: "interrupted", updated_at: new Date().toISOString() };
+    this.executionController?.abort();
+    this.browserService?.close();
     this.appendState("用户取消当前步骤");
     return this.getSnapshot();
   }
 
-  executeRuntimeAction(): DesktopUiSnapshot {
+  async startResearch(goal: string): Promise<DesktopUiSnapshot> {
+    this.runtimeState = "thinking";
+    this.appendState(`开始规划研究任务：${goal}`);
+    const llm = this.getPlannerLlm?.();
+    if (!llm) {
+      this.runtimeState = "interrupted";
+      this.currentProposal = undefined;
+      this.appendState("没有可用的执行大脑，无法生成动作提案");
+      return this.getSnapshot();
+    }
+
+    const planner = new ActionPlanner({ llm });
+    this.executionController?.abort();
+    this.executionController = new AbortController();
+    const proposal = await planner.plan(goal, this.executionController.signal);
+    this.currentProposal = proposal;
+    this.runtimeState = proposal.safety === "blocked" ? "interrupted" : "acting";
+    this.appendState(
+      `生成提案 ${proposal.proposal_id}，安全等级 ${proposal.safety}，预期结果：${proposal.expected_result}`
+    );
+    return this.getSnapshot();
+  }
+
+  async executeRuntimeAction(): Promise<DesktopUiSnapshot> {
+    if (!this.currentProposal) {
+      this.appendState("当前没有待执行的动作提案");
+      return this.getSnapshot();
+    }
+    if (!this.browserService) {
+      this.appendState("BrowserService 未初始化，无法执行浏览器动作");
+      return this.getSnapshot();
+    }
+
     this.runtimeState = "acting";
-    this.appendState("用户执行运行时动作");
+    this.executionController?.abort();
+    this.executionController = new AbortController();
+    const proposal = this.currentProposal;
+    this.currentProposal = undefined;
+    const results = await this.browserService.execute(proposal, this.executionController.signal);
+    this.lastResult = results[results.length - 1];
+    this.runtimeState = this.lastResult?.ok ? "thinking" : "interrupted";
+    this.appendState(
+      `执行结果：${this.lastResult?.ok ? "成功" : "失败"} - ${this.lastResult?.message ?? ""}`
+    );
     return this.getSnapshot();
   }
 
   private getBrowserSnapshot(): DesktopBrowserRuntimeState {
-    return this.browserService?.getState() ?? {
+    const browser = this.browserService?.getState() ?? {
       url: "",
       title: "",
-      nextAction: {
+      nextAction: this.buildNextAction(),
+      lastResult: this.lastResult
+    };
+    return {
+      ...browser,
+      nextAction: this.buildNextAction(),
+      lastResult: this.lastResult ?? browser.lastResult
+    };
+  }
+
+  private buildNextAction(): DesktopRuntimeActionState {
+    if (!this.currentProposal) {
+      return {
         actionType: "",
         targetLabel: "",
         value: "",
         reason: "",
         riskLevel: "safe"
-      }
+      };
+    }
+    const first = this.currentProposal.actions[0];
+    const type = first ? first.action : "";
+    const value = first?.params?.query ?? first?.params?.url ?? "";
+    return {
+      actionType: type,
+      targetLabel: this.currentProposal.expected_result,
+      value: String(value),
+      reason: `proposal ${this.currentProposal.proposal_id}（confidence ${this.currentProposal.confidence ?? 0}）`,
+      riskLevel: this.currentProposal.safety
     };
   }
 
