@@ -339,20 +339,24 @@ export class BrowserSpeechRecognizer {
  * 模型首次使用时下载并缓存；无 WebGPU 回退 WASM；任何失败都 reject，由上层降级。
  */
 export class WhisperTranscriber {
-  private worker: Worker | null = null;
-  private nextId = 1;
-  private readonly pending = new Map<
+  private static worker: Worker | null = null;
+  private static nextId = 1;
+  private static readonly pending = new Map<
     number,
     {
       resolve: (text: string) => void;
       reject: (error: Error) => void;
       onPartial?: (text: string) => void;
+      owner: WhisperTranscriber;
     }
   >();
+  private static initResolve: (() => void) | null = null;
+  private static initReject: ((error: Error) => void) | null = null;
+  private static initPromise: Promise<void> | null = null;
+  private static currentModel: string | null = null;
+  private static lastWarmupInstance: WhisperTranscriber | null = null;
+
   private onProgress?: (status: string, progress?: number) => void;
-  private initResolve: (() => void) | null = null;
-  private initReject: ((error: Error) => void) | null = null;
-  private initPromise: Promise<void> | null = null;
 
   static isSupported(): boolean {
     return typeof Worker !== "undefined";
@@ -362,68 +366,73 @@ export class WhisperTranscriber {
     this.onProgress = options.onProgress;
   }
 
-  private ensureWorker(): Worker {
-    if (this.worker) {
-      return this.worker;
+  private static ensureWorker(): Worker {
+    if (WhisperTranscriber.worker) {
+      return WhisperTranscriber.worker;
     }
     const worker = new Worker(new URL("./whisper-worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (event: MessageEvent<WhisperWorkerResponse>) => {
       const message = event.data;
       if (message.type === "progress") {
-        this.onProgress?.(message.status, message.progress);
+        WhisperTranscriber.lastWarmupInstance?.onProgress?.(message.status, message.progress);
         return;
       }
       if (message.type === "ready") {
-        this.initResolve?.();
-        this.initResolve = null;
-        this.initReject = null;
+        WhisperTranscriber.initResolve?.();
+        WhisperTranscriber.initResolve = null;
+        WhisperTranscriber.initReject = null;
         return;
       }
       if (message.type === "error" && message.id === null) {
-        this.initReject?.(new Error(message.message));
-        this.initResolve = null;
-        this.initReject = null;
+        WhisperTranscriber.initReject?.(new Error(message.message));
+        WhisperTranscriber.initResolve = null;
+        WhisperTranscriber.initReject = null;
         return;
       }
       if (message.type === "partial") {
-        this.pending.get(message.id)?.onPartial?.(message.text);
+        WhisperTranscriber.pending.get(message.id)?.onPartial?.(message.text);
         return;
       }
       if (message.type === "result") {
-        this.pending.get(message.id)?.resolve(message.text);
-        this.pending.delete(message.id);
+        const entry = WhisperTranscriber.pending.get(message.id);
+        entry?.resolve(message.text);
+        WhisperTranscriber.pending.delete(message.id);
         return;
       }
       if (message.type === "error" && message.id !== null) {
-        this.pending.get(message.id)?.reject(new Error(message.message));
-        this.pending.delete(message.id);
+        const entry = WhisperTranscriber.pending.get(message.id);
+        entry?.reject(new Error(message.message));
+        WhisperTranscriber.pending.delete(message.id);
       }
     };
     worker.onerror = (event) => {
       const error = new Error(event.message || "Whisper worker 出错");
-      this.initReject?.(error);
-      this.initResolve = null;
-      this.initReject = null;
-      for (const [, handlers] of this.pending) {
+      WhisperTranscriber.initReject?.(error);
+      WhisperTranscriber.initResolve = null;
+      WhisperTranscriber.initReject = null;
+      for (const [, handlers] of WhisperTranscriber.pending) {
         handlers.reject(error);
       }
-      this.pending.clear();
+      WhisperTranscriber.pending.clear();
     };
-    this.worker = worker;
+    WhisperTranscriber.worker = worker;
     return worker;
   }
 
   /** 预热：提前加载模型，缩短首次转写延迟。可指定 Hugging Face 模型 id。 */
   warmup(model = "Xenova/whisper-base"): Promise<void> {
-    if (!this.initPromise) {
-      this.initPromise = new Promise<void>((resolve, reject) => {
-        this.initResolve = resolve;
-        this.initReject = reject;
-      });
-      const request: WhisperWorkerRequest = { type: "init", model };
-      this.ensureWorker().postMessage(request);
+    if (WhisperTranscriber.initPromise && WhisperTranscriber.currentModel === model) {
+      return WhisperTranscriber.initPromise;
     }
-    return this.initPromise;
+    WhisperTranscriber.currentModel = model;
+    WhisperTranscriber.lastWarmupInstance = this;
+    WhisperTranscriber.initPromise = new Promise<void>((resolve, reject) => {
+      WhisperTranscriber.initResolve = resolve;
+      WhisperTranscriber.initReject = reject;
+    });
+    const request: WhisperWorkerRequest = { type: "init", model };
+    WhisperTranscriber.ensureWorker().postMessage(request);
+    return WhisperTranscriber.initPromise;
   }
 
   transcribe(
@@ -431,10 +440,10 @@ export class WhisperTranscriber {
     language = "chinese",
     onPartial?: (text: string) => void
   ): Promise<string> {
-    const worker = this.ensureWorker();
-    const id = this.nextId++;
+    const worker = WhisperTranscriber.ensureWorker();
+    const id = WhisperTranscriber.nextId++;
     return new Promise<string>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, onPartial });
+      WhisperTranscriber.pending.set(id, { resolve, reject, onPartial, owner: this });
       const request: WhisperTranscribeRequest = { type: "transcribe", id, audio, language };
       // 传所有权避免拷贝大数组。
       worker.postMessage(request, [audio.buffer]);
@@ -442,14 +451,11 @@ export class WhisperTranscriber {
   }
 
   stop(): void {
-    this.worker?.terminate();
-    this.worker = null;
-    this.initPromise = null;
-    this.initResolve = null;
-    this.initReject = null;
-    for (const [, handlers] of this.pending) {
-      handlers.reject(new Error("已停止"));
+    for (const [key, entry] of WhisperTranscriber.pending) {
+      if (entry.owner === this) {
+        entry.reject(new Error("已停止"));
+        WhisperTranscriber.pending.delete(key);
+      }
     }
-    this.pending.clear();
   }
 }
