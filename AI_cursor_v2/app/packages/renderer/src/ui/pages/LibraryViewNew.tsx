@@ -145,34 +145,6 @@ export function LibraryViewNew({
         <OllamaStartBanner onStart={onStartOllama} />
       )}
 
-      {/* 模型来源选择器 */}
-      <div className="flex items-center gap-2">
-        <StoreTab
-          name="Ollama"
-          status={ollamaStatus}
-          active={activeBackend === 'ollama'}
-          modelCount={installedLLMs.filter(m => m.id.startsWith('ollama:')).length}
-          onClick={() => onBackendSwitch('ollama')}
-        />
-        <StoreTab
-          name="LM Studio"
-          status={lmStudioStatus}
-          active={activeBackend === 'lmstudio'}
-          modelCount={installedLLMs.filter(m => m.id.startsWith('lmstudio:')).length}
-          onClick={() => onBackendSwitch('lmstudio')}
-        />
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRefresh}
-          className="h-8 gap-1.5"
-        >
-          <RefreshIcon width={14} />
-          刷新
-        </Button>
-      </div>
-
       {/* LLM商店 */}
       <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
@@ -186,6 +158,34 @@ export function LibraryViewNew({
                 已安装 {installedLLMs.length} 个 · 可下载 {availableLLMs.length} 个
               </p>
             </div>
+          </div>
+
+          {/* LLM的模型来源选择器 - 放在右侧 */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500">模型来源:</span>
+            <StoreTab
+              name="Ollama"
+              status={ollamaStatus}
+              active={activeBackend === 'ollama'}
+              modelCount={installedLLMs.filter(m => m.id.startsWith('ollama:')).length}
+              onClick={() => onBackendSwitch('ollama')}
+            />
+            <StoreTab
+              name="LM Studio"
+              status={lmStudioStatus}
+              active={activeBackend === 'lmstudio'}
+              modelCount={installedLLMs.filter(m => m.id.startsWith('lmstudio:')).length}
+              onClick={() => onBackendSwitch('lmstudio')}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              className="h-8 gap-1.5"
+            >
+              <RefreshIcon width={14} />
+              刷新
+            </Button>
           </div>
         </div>
 
@@ -223,13 +223,27 @@ export function LibraryViewNew({
               </p>
             </div>
           </div>
+
+          {/* STT的下载方式说明 - 未来会有后端 */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500">下载方式:</span>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+              <span className="text-[11px] font-medium text-slate-600">直接下载</span>
+              <span className="ml-2 text-[10px] text-slate-400">(未来支持)</span>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-2">
           {availableSTTs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-              <p className="text-[12px] text-slate-500">暂无可用的STT模型</p>
-              <p className="text-[11px] text-slate-400 mt-1">未来版本将支持本地STT模型下载</p>
+              <p className="text-[12px] text-slate-600 font-medium">🎙️ STT模型下载功能开发中</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                未来将支持Whisper等本地STT模型的直接下载和管理
+              </p>
+              <p className="text-[10px] text-slate-400 mt-2">
+                💡 当前版本使用浏览器内置的Web Speech API
+              </p>
             </div>
           ) : (
             availableSTTs.map(model => (
@@ -258,13 +272,27 @@ export function LibraryViewNew({
               </p>
             </div>
           </div>
+
+          {/* TTS的下载方式说明 - 未来会有后端 */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500">下载方式:</span>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+              <span className="text-[11px] font-medium text-slate-600">直接下载</span>
+              <span className="ml-2 text-[10px] text-slate-400">(未来支持)</span>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-2">
           {availableTTSs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-              <p className="text-[12px] text-slate-500">暂无可用的TTS模型</p>
-              <p className="text-[11px] text-slate-400 mt-1">未来版本将支持本地TTS模型下载</p>
+              <p className="text-[12px] text-slate-600 font-medium">🔊 TTS模型下载功能开发中</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                未来将支持ChatTTS、Piper等本地TTS模型的直接下载和管理
+              </p>
+              <p className="text-[10px] text-slate-400 mt-2">
+                💡 当前版本使用Edge TTS云端服务
+              </p>
             </div>
           ) : (
             availableTTSs.map(model => (
