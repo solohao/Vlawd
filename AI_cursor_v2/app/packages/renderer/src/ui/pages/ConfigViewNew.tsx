@@ -227,7 +227,7 @@ export function ConfigViewNew({
 
               {/* LLM 单元格 */}
               <TableCell className="align-top p-4 bg-brand-50/20">
-                {installedLLMs.length === 0 ? (
+                {installedLLMs.length === 0 && selectedConfig.brain.type !== 'remote' ? (
                   <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50/50 px-3 py-6 text-center">
                     <p className="text-[11px] text-amber-700 mb-2">
                       尚未安装LLM模型
@@ -241,30 +241,90 @@ export function ConfigViewNew({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <select
-                      value={selectedConfig.brain.modelId || ''}
-                      onChange={(e) => onConfigChange({
-                        ...selectedConfig,
-                        brain: { type: 'local', modelId: e.target.value }
-                      })}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all"
-                    >
-                      {installedLLMs.map(model => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onConfigChange({
+                          ...selectedConfig,
+                          brain: { type: 'local', modelId: selectedConfig.brain.modelId || installedLLMs[0]?.id }
+                        })}
+                        className={cn(
+                          "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
+                          selectedConfig.brain.type === 'local'
+                            ? "bg-brand-500 text-white"
+                            : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                        )}
+                      >
+                        本地模型
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (customEndpoints.length > 0) {
+                            onToggleEndpoint(customEndpoints[0].id);
+                          } else {
+                            setShowEndpointForm(true);
+                          }
+                        }}
+                        className={cn(
+                          "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
+                          selectedConfig.brain.type === 'remote'
+                            ? "bg-brand-500 text-white"
+                            : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                        )}
+                      >
+                        远程API
+                      </button>
+                    </div>
 
-                    {selectedConfig.brain.modelId && (
-                      <div className="flex items-center justify-between text-[10px]">
-                        <div className="flex items-center gap-1.5">
-                          <StatusDot active color="success" size="sm" />
-                          <span className="text-slate-600">已应用</span>
-                        </div>
-                        <span className="text-slate-500">
-                          {installedLLMs.find(m => m.id === selectedConfig.brain.modelId)?.size}
-                        </span>
+                    {selectedConfig.brain.type === 'local' ? (
+                      <>
+                        <select
+                          value={selectedConfig.brain.modelId || ''}
+                          onChange={(e) => onConfigChange({
+                            ...selectedConfig,
+                            brain: { type: 'local', modelId: e.target.value }
+                          })}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all"
+                        >
+                          {installedLLMs.map(model => (
+                            <option key={model.id} value={model.id}>
+                              {model.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        {selectedConfig.brain.modelId && (
+                          <div className="flex items-center justify-between text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <StatusDot active color="success" size="sm" />
+                              <span className="text-slate-600">已应用</span>
+                            </div>
+                            <span className="text-slate-500">
+                              {installedLLMs.find(m => m.id === selectedConfig.brain.modelId)?.size}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        {showEndpointForm ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-3">
+                            <EndpointForm
+                              endpoint={editingEndpoint}
+                              onSave={handleSaveEndpoint}
+                              onCancel={handleCancelEndpoint}
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <RemoteEndpointList
+                              endpoints={customEndpoints}
+                              onEdit={handleEditEndpoint}
+                              onDelete={onDeleteEndpoint}
+                              onToggle={onToggleEndpoint}
+                            />
+                            <AddEndpointButton onClick={() => setShowEndpointForm(true)} />
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
