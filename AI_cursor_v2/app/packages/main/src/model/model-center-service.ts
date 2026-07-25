@@ -300,34 +300,69 @@ export class ModelCenterService {
     };
     this.publish();
 
-    try {
-      const final = await this.ollama.pull(
-        model,
-        (progress) => {
-          this.activePull = progress;
-          this.publish();
-        },
-        controller.signal
-      );
-      this.activePull = final;
-    } catch (error) {
-      if (controller.signal.aborted) {
-        this.activePull = this.activePull
-          ? { ...this.activePull, phase: "cancelled", status: "已取消", updatedAt: new Date().toISOString() }
-          : null;
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        this.activePull = {
+    const isManifestMissingError = (message: string) =>
+      /manifest/i.test(message) && /(?:does not exist|file does not exist|no such file|not found)/i.test(message);
+
+    const attempt = async (ctl: AbortController, retryLeft: number): Promise<void> => {
+      try {
+        const final = await this.ollama.pull(
           model,
-          phase: "error",
+          (progress) => {
+            this.activePull = progress;
+            this.publish();
+          },
+          ctl.signal
+        );
+        this.activePull = final;
+      } catch (error) {
+        if (ctl.signal.aborted) {
+          this.activePull = this.activePull
+            ? { ...this.activePull, phase: "cancelled", status: "已取消", message: "下载已取消", updatedAt: new Date().toISOString() }
+            : null;
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        const progressSoFar = this.activePull ?? {
+          model,
+          phase: "downloading" as const,
           status: message,
           completedBytes: 0,
           totalBytes: 0,
           percent: 0,
+          updatedAt: new Date().toISOString()
+        };
+        if (retryLeft > 0 && isManifestMissingError(message)) {
+          // 清理可能损坏的 manifest 并重新拉取一次。
+          this.activePull = {
+            ...progressSoFar,
+            phase: "resolving",
+            status: "检测到本地 manifest 损坏，正在清理并重新下载…",
+            message: "检测到本地 manifest 损坏，正在清理并重新下载…",
+            updatedAt: new Date().toISOString()
+          };
+          this.publish();
+          try {
+            await this.ollama.remove(model, new AbortController().signal);
+          } catch {
+            // 模型可能尚未完全安装；忽略删除失败。
+          }
+          const nextController = new AbortController();
+          this.pullController = nextController;
+          await attempt(nextController, retryLeft - 1);
+          return;
+        }
+        this.activePull = {
+          ...progressSoFar,
+          phase: "error",
+          status: message,
           message,
           updatedAt: new Date().toISOString()
         };
       }
+    };
+
+    try {
+      await attempt(controller, 1);
     } finally {
       this.pullController = null;
     }
@@ -336,7 +371,16 @@ export class ModelCenterService {
 
   cancelPull(): ModelCenterSnapshot {
     this.pullController?.abort();
-    return this.getSnapshot();
+    if (this.activePull) {
+      this.activePull = {
+        ...this.activePull,
+        phase: "cancelled",
+        status: "已取消",
+        message: "下载已取消",
+        updatedAt: new Date().toISOString()
+      };
+    }
+    return this.publish();
   }
 
   async removeModel(model: string): Promise<ModelCenterSnapshot> {
@@ -367,6 +411,10 @@ export class ModelCenterService {
     });
     this.runtime.registerProvider(provider);
     await this.runtime.setActiveProvider("pipeline");
+    if (!this.runtime.getSnapshot().providerConnected) {
+      this.activeBrainModel = "";
+      throw new Error(`模型 ${model} 未通过健康检查，请确认已下载完成或后端可访问。`);
+    }
     this.activeBrainModel = model;
     return this.publish();
   }

@@ -119,11 +119,7 @@ export class OpenAICompatibleLlmAdapter implements LlmAdapter {
         return false;
       }
       const body = (await response.json()) as OpenAiModelsResponse;
-      if (!Array.isArray(body.data) || body.data.length === 0) {
-        // 端点在线但未报告模型列表；仍视为可用。
-        return true;
-      }
-      return body.data.some((entry) => entry.id === this.options.model) || body.data.length > 0;
+      return Array.isArray(body.data) && body.data.some((entry) => entry.id === this.options.model);
     } catch {
       return false;
     }
