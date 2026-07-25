@@ -36,34 +36,37 @@ export type WhisperWorkerResponse =
 
 const DEFAULT_MODEL = "Xenova/whisper-tiny";
 
-let pipelinePromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
+const pipelines = new Map<string, Promise<AutomaticSpeechRecognitionPipeline>>();
 
 function post(message: WhisperWorkerResponse): void {
   (self as unknown as Worker).postMessage(message);
 }
 
 async function loadPipeline(model: string): Promise<AutomaticSpeechRecognitionPipeline> {
-  if (!pipelinePromise) {
-    const onProgress: ProgressCallback = (report) => {
-      const progress = "progress" in report ? report.progress : undefined;
-      post({ type: "progress", status: report.status, progress });
-    };
-    pipelinePromise = (async () => {
-      try {
-        return await pipeline("automatic-speech-recognition", model, {
-          device: "webgpu",
-          progress_callback: onProgress
-        });
-      } catch {
-        // 无 WebGPU / 初始化失败时回退 WASM。
-        return pipeline("automatic-speech-recognition", model, {
-          device: "wasm",
-          progress_callback: onProgress
-        });
-      }
-    })();
+  const cached = pipelines.get(model);
+  if (cached) {
+    return cached;
   }
-  return pipelinePromise;
+  const onProgress: ProgressCallback = (report) => {
+    const progress = "progress" in report ? report.progress : undefined;
+    post({ type: "progress", status: report.status, progress });
+  };
+  const promise = (async () => {
+    try {
+      return await pipeline("automatic-speech-recognition", model, {
+        device: "webgpu",
+        progress_callback: onProgress
+      });
+    } catch {
+      // 无 WebGPU / 初始化失败时回退 WASM。
+      return pipeline("automatic-speech-recognition", model, {
+        device: "wasm",
+        progress_callback: onProgress
+      });
+    }
+  })();
+  pipelines.set(model, promise);
+  return promise;
 }
 
 self.addEventListener("message", (event: MessageEvent<WhisperWorkerRequest>) => {

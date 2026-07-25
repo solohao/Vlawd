@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useModelCenter } from "../../runtime/useModelCenter.js";
+import { WhisperTranscriber } from "../../runtime/audio-io.js";
 import { FeatureSection } from "../../app/feature-status.js";
 import {
   ArrowLeft,
@@ -47,6 +48,7 @@ import {
   deviceFromProbe,
   rankSlot,
   resolvePreset,
+  type Capability,
   type DeviceProfile,
   type IntentTemplate,
   type RankedModel,
@@ -770,11 +772,16 @@ type ModelStatus =
   | { kind: "missing" };
 
 interface LibModel {
+  id: string;
   name: string;
   size: string;
   version: string;
   status: ModelStatus;
   usedBy: string;
+  capability: Capability;
+  active: boolean;
+  tag: string;
+  pullable: boolean;
 }
 
 interface LibGroup {
@@ -782,37 +789,6 @@ interface LibGroup {
   title: string;
   models: LibModel[];
 }
-
-const libGroups: LibGroup[] = [
-  {
-    id: "stt",
-    title: "负责听 · 语音识别",
-    models: [
-      { name: "Whisper Large v3", size: "1.55 GB", version: "3.2.1", status: { kind: "ready" }, usedBy: "默认助手, 客服助手" },
-      { name: "Paraformer SenseTime", size: "420 MB", version: "2.1.0", status: { kind: "downloading", progress: 68 }, usedBy: "会议助手" },
-      { name: "FunASR Paraformer v2", size: "312 MB", version: "1.0.6", status: { kind: "update", from: "1.0.6", to: "1.1.0" }, usedBy: "智能家居助手" },
-      { name: "Vosk Small CN", size: "48 MB", version: "0.3.45", status: { kind: "missing" }, usedBy: "–" }
-    ]
-  },
-  {
-    id: "llm",
-    title: "负责想 · 语言模型",
-    models: [
-      { name: "Qwen2.5-7B-Instruct", size: "4.68 GB", version: "1.2.0", status: { kind: "ready" }, usedBy: "默认助手, 编程助手" },
-      { name: "ChatGLM3-6B", size: "3.62 GB", version: "1.0.4", status: { kind: "downloading", progress: 35 }, usedBy: "学术助手" },
-      { name: "Llama-3.1-8B-Instruct", size: "4.92 GB", version: "1.0.1", status: { kind: "update", from: "1.0.1", to: "1.1.0" }, usedBy: "创作助手" }
-    ]
-  },
-  {
-    id: "tts",
-    title: "负责说 · 语音合成",
-    models: [
-      { name: "CosyVoice 2", size: "1.6 GB", version: "2.0.1", status: { kind: "ready" }, usedBy: "默认助手" },
-      { name: "Edge TTS", size: "0.6 GB", version: "1.4.0", status: { kind: "ready" }, usedBy: "客服助手" },
-      { name: "Fish Speech 1.4", size: "2.5 GB", version: "1.4.0", status: { kind: "missing" }, usedBy: "–" }
-    ]
-  }
-];
 
 type LibFilter = "all" | "installed" | "downloadable" | "update";
 
@@ -836,22 +812,162 @@ function matchesFilter(status: ModelStatus, filter: LibFilter): boolean {
   }
 }
 
+function formatSize(gb: number): string {
+  if (gb >= 1) {
+    return `${gb.toFixed(gb < 10 ? 1 : 0)} GB`;
+  }
+  return `${(gb * 1024).toFixed(0)} MB`;
+}
+
+function toWhisperTag(id: string): string | null {
+  if (id.startsWith("whisper-")) {
+    return `Xenova/${id}`;
+  }
+  return null;
+}
+
+function buildLibraryGroups(
+  model: ReturnType<typeof useModelCenter>,
+  whisperStates: Record<string, ModelStatus>
+): LibGroup[] {
+  const catalog = model.snapshot.catalog;
+  const activePull = model.snapshot.activePull;
+  const pulling =
+    activePull &&
+    (activePull.phase === "resolving" || activePull.phase === "downloading" || activePull.phase === "verifying");
+
+  const thinking: LibModel[] = catalog.map((m) => {
+    let status: ModelStatus = m.installed ? { kind: "ready" } : { kind: "missing" };
+    if (pulling && activePull.model === m.id) {
+      status = { kind: "downloading", progress: activePull.percent };
+    }
+    return {
+      id: `llm-${m.id}`,
+      name: m.displayName,
+      size: formatSize(m.approxSizeGB),
+      version: "—",
+      status,
+      usedBy: m.active ? "执行大脑" : m.recommended ? "推荐" : "—",
+      capability: "thinking",
+      active: m.active,
+      tag: m.id,
+      pullable: true
+    };
+  });
+
+  const hearing: LibModel[] = modelCatalog
+    .filter((m) => m.capability === "hearing")
+    .map((m) => {
+      const tag = toWhisperTag(m.id);
+      const state = whisperStates[m.id];
+      return {
+        id: `stt-${m.id}`,
+        name: m.name,
+        size: formatSize(m.sizeGB),
+        version: "—",
+        status: state ?? { kind: "missing" },
+        usedBy: "语音识别",
+        capability: "hearing",
+        active: false,
+        tag: tag ?? m.id,
+        pullable: tag !== null
+      };
+    });
+
+  const speaking: LibModel[] = [
+    {
+      id: "tts-system",
+      name: "系统语音合成",
+      size: "—",
+      version: "—",
+      status: { kind: "ready" },
+      usedBy: "语音输出",
+      capability: "speaking",
+      active: false,
+      tag: "system-tts",
+      pullable: false
+    }
+  ];
+
+  return [
+    { id: "stt", title: "负责听 · 语音识别", models: hearing },
+    { id: "llm", title: "负责想 · 语言模型", models: thinking },
+    { id: "tts", title: "负责说 · 语音合成", models: speaking }
+  ];
+}
+
 function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
   const [filter, setFilter] = useState<LibFilter>("all");
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ tts: true });
+  const [whisperStates, setWhisperStates] = useState<Record<string, ModelStatus>>({});
+  const whisper = useRef<WhisperTranscriber | null>(null);
+  const currentWhisperId = useRef<string | null>(null);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return libGroups
+    return buildLibraryGroups(model, whisperStates)
       .map((g) => ({
         ...g,
         models: g.models.filter((m) => matchesFilter(m.status, filter) && (q === "" || m.name.toLowerCase().includes(q)))
       }))
       .filter((g) => g.models.length > 0);
-  }, [filter, query]);
+  }, [filter, query, model, whisperStates]);
 
-  const rootDir = model.snapshot.storage.rootDir || "D:\\AI\\VoiceAssistant\\Models";
+  const ensureWhisper = useCallback(() => {
+    if (!whisper.current) {
+      whisper.current = new WhisperTranscriber({
+        onProgress: (_status, progress) => {
+          const id = currentWhisperId.current;
+          if (!id) return;
+          const pct = progress == null ? 0 : progress < 1 ? Math.round(progress * 100) : Math.round(progress);
+          setWhisperStates((prev) => ({ ...prev, [id]: { kind: "downloading", progress: pct } }));
+        }
+      });
+    }
+    return whisper.current;
+  }, []);
+
+  const warmupWhisper = useCallback(
+    (id: string, tag: string) => {
+      if (!tag) return;
+      setWhisperStates((prev) => ({ ...prev, [id]: { kind: "downloading", progress: 0 } }));
+      currentWhisperId.current = id;
+      ensureWhisper()
+        .warmup(tag)
+        .then(() => {
+          setWhisperStates((prev) => ({ ...prev, [id]: { kind: "ready" } }));
+        })
+        .catch((error: Error) => {
+          console.error("[Whisper] warmup failed", error);
+          setWhisperStates((prev) => ({ ...prev, [id]: { kind: "missing" } }));
+        })
+        .finally(() => {
+          currentWhisperId.current = null;
+        });
+    },
+    [ensureWhisper]
+  );
+
+  const cancelWarmup = useCallback(() => {
+    whisper.current?.stop();
+    currentWhisperId.current = null;
+    setWhisperStates((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (next[k]?.kind === "downloading") {
+          next[k] = { kind: "missing" };
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const rootDir = model.snapshot.storage.rootDir || "未选择存储位置";
+  const disk = model.snapshot.environment?.disk;
+  const usedGB = disk ? disk.totalGB - disk.freeGB : 0;
+  const totalGB = disk ? disk.totalGB : 0;
+  const storagePercent = totalGB > 0 ? Math.round((usedGB / totalGB) * 100) : 0;
 
   return (
     <div className="space-y-5">
@@ -860,14 +976,20 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h3 className="text-[13px] font-semibold text-slate-900">存储空间</h3>
           <div className="mt-3 flex items-center gap-4">
-            <StorageRing percent={62} />
+            <StorageRing percent={storagePercent} />
             <div className="min-w-0 flex-1">
               <p className="text-[12.5px] text-slate-600">
-                已使用 <b className="text-slate-900">198.7 GB</b>
-                <span className="text-slate-400"> / 共 320 GB</span>
+                {disk ? (
+                  <>
+                    已使用 <b className="text-slate-900">{usedGB.toFixed(1)} GB</b>
+                    <span className="text-slate-400"> / 共 {totalGB.toFixed(1)} GB</span>
+                  </>
+                ) : (
+                  <span className="text-slate-400">尚未探测存储信息</span>
+                )}
               </p>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-brand-500" style={{ width: "62%" }} />
+                <div className="h-full rounded-full bg-brand-500" style={{ width: `${storagePercent}%` }} />
               </div>
               <div className="mt-3 flex items-end justify-between gap-2">
                 <div className="min-w-0">
@@ -955,7 +1077,13 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
                       </TableHead>
                       <TableBody>
                         {g.models.map((m) => (
-                          <LibRow key={m.name} m={m} model={model} />
+                          <LibRow
+                            key={m.id}
+                            m={m}
+                            model={model}
+                            onWarmup={warmupWhisper}
+                            onCancelWarmup={cancelWarmup}
+                          />
                         ))}
                       </TableBody>
                     </Table>
@@ -974,7 +1102,17 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
   );
 }
 
-function LibRow({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
+function LibRow({
+  m,
+  model,
+  onWarmup,
+  onCancelWarmup
+}: {
+  m: LibModel;
+  model: ReturnType<typeof useModelCenter>;
+  onWarmup: (id: string, tag: string) => void;
+  onCancelWarmup: () => void;
+}) {
   return (
     <TableRow>
       <TableCell className="w-2/5">
@@ -982,13 +1120,13 @@ function LibRow({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCe
       </TableCell>
       <TableCell className="w-24 text-[12px] text-slate-500">{m.size}</TableCell>
       <TableCell className="w-24 text-[12px] text-slate-500">{m.version}</TableCell>
-      <TableCell className="w-32"><StatusCell status={m.status} /></TableCell>
+      <TableCell className="w-32"><StatusCell m={m} /></TableCell>
       <TableCell className="w-1/4">
         <span className="block truncate text-[12px] text-slate-500">{m.usedBy}</span>
       </TableCell>
       <TableCell align="right" className="w-24">
         <div className="flex items-center justify-end gap-2">
-          <RowAction m={m} model={model} />
+          <RowAction m={m} model={model} onWarmup={onWarmup} onCancelWarmup={onCancelWarmup} />
           <button className="text-slate-300 hover:text-slate-500">
             <DotsIcon width={16} />
           </button>
@@ -998,20 +1136,20 @@ function LibRow({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCe
   );
 }
 
-function StatusCell({ status }: { status: ModelStatus }) {
-  switch (status.kind) {
+function StatusCell({ m }: { m: LibModel }) {
+  switch (m.status.kind) {
     case "ready":
       return (
         <span className="flex items-center gap-1.5 text-[12px] text-slate-600">
-          <span className="h-2 w-2 rounded-full bg-brand-500" /> 已就绪
+          <span className="h-2 w-2 rounded-full bg-brand-500" /> {m.active ? "已应用" : "已就绪"}
         </span>
       );
     case "downloading":
       return (
         <div className="pr-4">
-          <p className="text-[11.5px] text-slate-600">下载中 {status.progress}%</p>
+          <p className="text-[11.5px] text-slate-600">下载中 {m.status.progress}%</p>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-brand-500" style={{ width: `${status.progress}%` }} />
+            <div className="h-full rounded-full bg-brand-500" style={{ width: `${m.status.progress}%` }} />
           </div>
         </div>
       );
@@ -1022,7 +1160,7 @@ function StatusCell({ status }: { status: ModelStatus }) {
             <RefreshIcon width={13} /> 有更新
           </span>
           <span className="mt-0.5 block text-[10.5px] text-slate-400">
-            {status.from} → {status.to}
+            {m.status.from} → {m.status.to}
           </span>
         </span>
       );
@@ -1035,40 +1173,90 @@ function StatusCell({ status }: { status: ModelStatus }) {
   }
 }
 
-function RowAction({ m, model }: { m: LibModel; model: ReturnType<typeof useModelCenter> }) {
+function RowAction({
+  m,
+  model,
+  onWarmup,
+  onCancelWarmup
+}: {
+  m: LibModel;
+  model: ReturnType<typeof useModelCenter>;
+  onWarmup: (id: string, tag: string) => void;
+  onCancelWarmup: () => void;
+}) {
+  const base = "rounded-lg border px-3 py-1.5 text-[11.5px] font-medium transition-colors";
+  const disabledCls = " opacity-50 cursor-not-allowed";
+  const busy = model.busy;
+
   switch (m.status.kind) {
     case "ready":
+      if (m.capability === "thinking") {
+        if (m.active) {
+          return (
+            <button disabled className={cn(base, "border-slate-200 text-slate-400", disabledCls)}>
+              已应用
+            </button>
+          );
+        }
+        return (
+          <button
+            onClick={() => void model.useAsBrain(m.tag)}
+            disabled={busy}
+            className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", busy && disabledCls)}
+          >
+            应用
+          </button>
+        );
+      }
       return (
-        <button
-          onClick={() => void model.removeModel(m.name)}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
-        >
-          卸载
+        <button disabled className={cn(base, "border-slate-200 text-slate-400", disabledCls)}>
+          {m.capability === "speaking" ? "使用中" : "已就绪"}
         </button>
       );
     case "downloading":
       return (
         <button
-          onClick={() => void model.cancelPull()}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+          onClick={() => void (m.capability === "hearing" ? onCancelWarmup() : model.cancelPull())}
+          disabled={busy && m.capability !== "hearing"}
+          className={cn(base, "border-slate-200 text-slate-600 hover:border-slate-300")}
         >
-          暂停
+          取消
         </button>
       );
     case "update":
       return (
         <button
-          onClick={() => void model.pull(m.name)}
-          className="rounded-lg border border-brand-400 px-3 py-1.5 text-[11.5px] font-medium text-brand-700 hover:bg-brand-50"
+          onClick={() => void (m.capability === "thinking" ? model.pull(m.tag) : onWarmup(m.id, m.tag))}
+          disabled={busy || !m.pullable}
+          className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", (busy || !m.pullable) && disabledCls)}
         >
           更新
         </button>
       );
     case "missing":
+      if (!m.pullable) {
+        return (
+          <button disabled className={cn(base, "border-slate-200 text-slate-400", disabledCls)}>
+            暂不支持
+          </button>
+        );
+      }
+      if (m.capability === "hearing") {
+        return (
+          <button
+            onClick={() => onWarmup(m.id, m.tag)}
+            disabled={busy}
+            className={cn(base, "border-slate-200 text-slate-600 hover:border-slate-300", busy && disabledCls)}
+          >
+            下载
+          </button>
+        );
+      }
       return (
         <button
-          onClick={() => void model.pull(m.name)}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11.5px] font-medium text-slate-600 hover:border-slate-300"
+          onClick={() => void model.pull(m.tag)}
+          disabled={busy}
+          className={cn(base, "border-slate-200 text-slate-600 hover:border-slate-300", busy && disabledCls)}
         >
           下载
         </button>
