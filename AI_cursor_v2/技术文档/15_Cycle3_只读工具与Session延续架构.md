@@ -114,10 +114,23 @@ TaskStep
 3. 若页面已变化，记录 `revalidation` chunk，并生成新的 `browser.search` 提案，等待用户点击“接管并执行”。
 4. 若验证通过，保持 paused 状态，用户可继续。
 
-## 5. UI 表现
+## 5. UI 表现与 Todo 面板
 
-- `TaskWorkspacePage`：左侧显示 `TaskPlan` 步骤（done/current/failed），右下方显示“证据摘要”卡片（含未解决问题、下一步建议），顶部显示分支来源。
-- `SessionsPage`：列表行展示来源数、是否含证据摘要、是否分支自其他 Session。
+### 5.1 任务空间（TaskWorkspacePage）
+
+- 左侧固定列依次为：研究目标输入框、`开始研究` 按钮、`TodoPanel`、暂停/取消/保存按钮。
+- `TodoPanel`（`packages/renderer/src/ui/components/TodoPanel.tsx`）展示当前 `TaskPlan` 的进度条、步骤状态（done/current/pending/failed）、当前步骤说明、分支来源提示。
+- 右侧 BrowserView 区域上方显示当前 URL/标题/加载状态；下方 `证据摘要` 卡片展示已收集来源、结论引用、未解决问题。
+
+### 5.2 Session 记录（SessionsPage）
+
+- 列表行展示 `sourceCount`、`hasEvidence` 徽章、`parent_id` 分支徽章。
+- 点击左侧行后，右侧详情卡片复用 `TodoPanel`（`compact` 模式），并显示 `EvidenceSummary`（结论、来源、未解决问题）。
+- `恢复并继续研究` 调用 `DesktopRuntime.loadSession()`，触发 revalidation 后切回任务空间。
+
+### 5.3 页面切换时 BrowserView  lifecycle
+
+- `DesktopApp` 监听当前 `page`；离开 `task` 页面时调用 `browserClose()`，避免 `WebContentsView` 悬浮遮挡其他页面。
 
 ## 6. 参考项目
 

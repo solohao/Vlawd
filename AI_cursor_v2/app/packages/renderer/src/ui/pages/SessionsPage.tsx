@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "../UiPrimitives.js";
 import { FileIcon, GlobeIcon, NodesIcon, TrashIcon } from "../icons.js";
-import { Button, Card, List, ListRow } from "../../design-system/index.js";
+import { Badge, Button, Card, List, ListRow } from "../../design-system/index.js";
+import { TodoPanel } from "../components/TodoPanel.js";
 import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
 import { FeatureSection } from "../../app/feature-status.js";
 import type { SessionSummary } from "@ai-cursor-v2/shared";
@@ -105,6 +106,19 @@ export function SessionsPage({ onOpenTask }: SessionsPageProps) {
                 <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
                   {selected.goal || `包含 ${selected.sourceCount} 个来源`}
                 </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Badge variant="secondary" size="sm">{selected.sourceCount} 个来源</Badge>
+                  {selected.hasEvidence && <Badge variant="success" size="sm">含证据摘要</Badge>}
+                  {selected.parent_id && <Badge variant="warning" size="sm">分支 #{selected.parent_id.slice(0, 8)}</Badge>}
+                </div>
+                {(selected.plan || selected.evidence) && (
+                  <TodoPanel
+                    plan={selected.plan}
+                    evidence={selected.evidence}
+                    lineage={selected.parent_id ? { parent_id: selected.parent_id } : undefined}
+                    compact
+                  />
+                )}
                 <div className="mt-5 space-y-2">
                   <Button variant="primary" size="default" className="w-full gap-2" onClick={() => void handleLoad(selected.id)} disabled={loading}>
                     <NodesIcon width={15} height={15} /> 恢复并继续研究

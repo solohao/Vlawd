@@ -127,6 +127,20 @@ function parsePlan(raw: string, goal: string): TaskPlan {
       status: "pending" as const
     }));
 
+  // 只读研究任务必须至少包含搜索/打开 + 读取两步；如果 LLM 漏了读取，自动补上。
+  const hasRead = steps.some((s) => s.tool === "browser.read");
+  const lastSearchOpen = [...steps].reverse().find((s) => s.tool === "browser.search" || s.tool === "browser.open" || s.tool === "browser.find");
+  if (lastSearchOpen && !hasRead) {
+    steps.push({
+      id: `step-${steps.length + 1}`,
+      description: `阅读 ${lastSearchOpen.description} 的结果页面`,
+      tool: "browser.read",
+      params: {},
+      reason: "从搜索结果/页面提取事实",
+      status: "pending"
+    });
+  }
+
   return {
     goal: typeof planObj.goal === "string" ? planObj.goal : goal,
     steps

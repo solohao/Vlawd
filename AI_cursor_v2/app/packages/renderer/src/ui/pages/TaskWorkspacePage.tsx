@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { PageHeader, ToneBadge } from "../UiPrimitives.js";
 import {
   BrainIcon,
-  CheckIcon,
   CloseIcon,
   GlobeIcon,
   HandIcon,
+  ListIcon,
   PauseIcon,
   SearchIcon,
   ShieldIcon
@@ -13,6 +13,7 @@ import {
 import { Button, Card, List, ListRow } from "../../design-system/index.js";
 import { useDesktopRuntime } from "../../runtime/useDesktopRuntime.js";
 import { FeatureSection } from "../../app/feature-status.js";
+import { TodoPanel } from "../components/TodoPanel.js";
 
 const typeLabels: Record<string, string> = {
   user: "用户",
@@ -85,7 +86,10 @@ export function TaskWorkspacePage() {
         />
         <div className="grid grid-cols-[260px_minmax(480px,1fr)_320px] gap-4">
           <Card variant="default" padding="md" className="flex flex-col gap-4">
-            <h2 className="text-[13px] font-semibold text-slate-900">研究目标</h2>
+            <div className="flex items-center gap-2">
+              <ListIcon width={18} height={18} className="text-brand-600" />
+              <h2 className="text-[13px] font-semibold text-slate-900">研究目标</h2>
+            </div>
             <textarea
               className="min-h-[80px] w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
               placeholder="语音或输入研究目标，例如：帮我查太阳系有几颗行星"
@@ -96,43 +100,12 @@ export function TaskWorkspacePage() {
               <SearchIcon width={14} height={14} /> 开始研究
             </Button>
 
-            <h2 className="mt-2 text-[13px] font-semibold text-slate-900">任务步骤</h2>
-            <div className="mt-0 space-y-0">
-              {(session.payload?.plan?.steps ?? []).map((step, index) => {
-                const steps = session.payload?.plan?.steps ?? [];
-                const isLast = index === steps.length - 1;
-                const state = step.status === "done" ? "done" : step.status === "failed" ? "failed" : index === 0 || steps[index - 1]?.status === "done" ? "current" : "next";
-                return (
-                  <div key={step.id} className="relative flex gap-3 pb-5 last:pb-0">
-                    {!isLast && <span className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-slate-200" />}
-                    <span
-                      className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] shadow-sm ${
-                        state === "done"
-                          ? "border-brand-500 bg-brand-500 text-white"
-                          : state === "failed"
-                            ? "border-rose-400 bg-rose-50 text-rose-600"
-                            : state === "current"
-                              ? "border-blue-400 bg-blue-50 text-blue-600"
-                              : "border-slate-300 bg-white text-slate-400"
-                      }`}
-                    >
-                      {state === "done" ? <CheckIcon width={12} height={12} /> : index + 1}
-                    </span>
-                    <div>
-                      <p className={`text-[12px] font-medium ${state === "next" ? "text-slate-400" : state === "failed" ? "text-rose-600" : "text-slate-700"}`}>{step.description}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">{step.tool}{step.reason ? ` · ${step.reason}` : ""}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <TodoPanel
+              plan={session.payload?.plan}
+              lineage={session.payload?.lineage}
+              showEvidence={false}
+            />
 
-            {session.payload?.lineage?.parent_id && (
-              <div className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] text-slate-600">
-                从 Session <span className="font-mono">{session.payload.lineage.parent_id.slice(0, 8)}</span> 分支：
-                {session.payload.lineage.fork_reason}
-              </div>
-            )}
             <div className="mt-auto grid grid-cols-2 gap-2">
               <Button variant="secondary" size="sm" onClick={() => void pauseSession()} disabled={busy} className="gap-1.5">
                 <PauseIcon /> 暂停
