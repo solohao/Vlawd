@@ -227,7 +227,7 @@ export function validateModelStorageConfig(storage: ModelStorageConfig): string[
   }
 
   const normalized = storage.rootDir.replaceAll("\\", "/").toLowerCase();
-  if (normalized.includes("/ai_cursor_v2/app") || normalized.endsWith("/ai_cursor_v2")) {
+  if (normalized.endsWith("/ai_cursor_v2/app") || normalized.endsWith("/ai_cursor_v2")) {
     warnings.push("Repository directory is not recommended for large model downloads.");
   }
 

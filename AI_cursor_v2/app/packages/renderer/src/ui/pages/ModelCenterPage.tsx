@@ -1049,7 +1049,7 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
     });
   }, []);
 
-  const rootDir = model.snapshot.storage.rootDir || "未选择存储位置";
+  const modelsDir = model.snapshot.modelsDir || "未选择存储位置";
   const disk = model.snapshot.environment?.disk;
   const usedGB = disk ? disk.totalGB - disk.freeGB : 0;
   const totalGB = disk ? disk.totalGB : 0;
@@ -1080,7 +1080,7 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
               <div className="mt-3 flex items-end justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[11px] text-slate-400">存储位置</p>
-                  <p className="truncate text-[11.5px] text-slate-600">{rootDir}</p>
+                  <p className="break-all text-[11.5px] text-slate-600">{modelsDir}</p>
                 </div>
                 <button
                   onClick={() => void model.chooseStorageRoot()}
@@ -1562,6 +1562,7 @@ function OllamaReadyPanel({ model }: { model: ReturnType<typeof useModelCenter> 
 function OllamaInstallFlow({ model }: { model: ReturnType<typeof useModelCenter> }) {
   const { snapshot, busy } = model;
   const rootDir = snapshot.storage.rootDir;
+  const modelsDir = snapshot.modelsDir;
   const install = snapshot.ollamaInstall;
 
   const handleInstall = async () => {
@@ -1577,12 +1578,12 @@ function OllamaInstallFlow({ model }: { model: ReturnType<typeof useModelCenter>
       <div className="space-y-4">
         <Step number={1} title="选择安装 / 模型存储位置">
           <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <span className="min-w-0 truncate text-[12px] text-slate-600">{rootDir || "D:\\AI\\VoiceAssistant\\Models"}</span>
+            <span className="min-w-0 break-all text-[12px] text-slate-600">{modelsDir || "未选择存储位置"}</span>
             <Button variant="secondary" size="sm" disabled={busy} onClick={() => void model.chooseStorageRoot()}>
               更改...
             </Button>
           </div>
-          <p className="mt-1 text-[10.5px] text-slate-400">建议非系统盘、空间充足的目录</p>
+          <p className="mt-1 text-[10.5px] text-slate-400">选择父目录后，模型会自动下载到其下的 models 文件夹；建议非系统盘、空间充足的目录</p>
         </Step>
         <Step number={2} title="安装 Ollama 引擎">
           <div className="flex flex-wrap gap-2">
