@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { cn } from "../../design-system/index.js";
+import { cn, Button, StatusDot, Badge } from "../../design-system/index.js";
 
 interface StoreTabProps {
   name: string;
@@ -10,42 +10,38 @@ interface StoreTabProps {
 }
 
 export function StoreTab({ name, status, active, modelCount, onClick }: StoreTabProps) {
-  const getStatusColor = () => {
+  const getStatusColor = (): 'success' | 'warning' | 'neutral' => {
     switch (status) {
-      case 'running': return 'bg-emerald-500';
-      case 'stopped': return 'bg-amber-500';
-      case 'not-installed': return 'bg-slate-300';
-      default: return 'bg-slate-300';
-    }
-  };
-
-  const getStatusText = () => {
-    switch (status) {
-      case 'running': return '运行中';
-      case 'stopped': return '未启动';
-      case 'not-installed': return '未安装';
-      default: return '';
+      case 'running': return 'success';
+      case 'stopped': return 'warning';
+      case 'not-installed': return 'neutral';
+      default: return 'neutral';
     }
   };
 
   return (
-    <button
+    <Button
+      variant={active ? "secondary" : "ghost"}
+      size="sm"
       onClick={onClick}
       disabled={status === 'not-installed'}
       className={cn(
-        "flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium transition-all",
-        active
-          ? "border-brand-300 bg-brand-50 text-brand-900"
-          : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50",
-        status === 'not-installed' && "opacity-50 cursor-not-allowed"
+        "gap-2 h-8",
+        active && "bg-brand-50 text-brand-900 border-brand-200"
       )}
     >
-      <span className={cn("h-2 w-2 rounded-full shrink-0", getStatusColor())} />
+      <StatusDot
+        color={getStatusColor()}
+        active={status === 'running'}
+        size="sm"
+      />
       <span>{name}</span>
       {modelCount > 0 && (
-        <span className="text-[11px] text-slate-500">({modelCount})</span>
+        <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
+          {modelCount}
+        </Badge>
       )}
-    </button>
+    </Button>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, StatusDot } from "../../design-system/index.js";
+import { Button, StatusDot, ListRow, List } from "../../design-system/index.js";
 import { PlusIcon, PencilIcon, TrashIcon } from "../icons.js";
 
 export interface CustomEndpoint {
@@ -33,46 +33,46 @@ export function RemoteEndpointList({ endpoints, onEdit, onDelete, onToggle }: Re
   }
 
   return (
-    <div className="space-y-2">
+    <List>
       {endpoints.map(ep => (
-        <div
+        <ListRow
           key={ep.id}
-          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
-        >
-          <button
-            onClick={() => onToggle(ep.id)}
-            className="shrink-0"
-            title={ep.enabled ? '点击禁用' : '点击启用'}
-          >
-            <StatusDot active={ep.enabled} color={ep.enabled ? 'success' : 'neutral'} size="md" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-medium text-slate-900 truncate">
-              {ep.name}
-            </p>
-            <p className="text-[11px] text-slate-500 truncate">
-              {ep.url}
-            </p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
+          leading={
             <button
-              onClick={() => onEdit(ep)}
-              className="flex h-7 w-7 items-center justify-center rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900"
-              title="编辑"
+              onClick={() => onToggle(ep.id)}
+              className="shrink-0"
+              title={ep.enabled ? '点击禁用' : '点击启用'}
             >
-              <PencilIcon width={14} />
+              <StatusDot active={ep.enabled} color={ep.enabled ? 'success' : 'neutral'} size="md" />
             </button>
-            <button
-              onClick={() => onDelete(ep.id)}
-              className="flex h-7 w-7 items-center justify-center rounded hover:bg-red-50 text-slate-600 hover:text-red-600"
-              title="删除"
-            >
-              <TrashIcon width={14} />
-            </button>
-          </div>
-        </div>
+          }
+          title={ep.name}
+          description={ep.url}
+          trailing={
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(ep)}
+                className="h-7 w-7 p-0"
+                title="编辑"
+              >
+                <PencilIcon width={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDelete(ep.id)}
+                className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-600"
+                title="删除"
+              >
+                <TrashIcon width={14} />
+              </Button>
+            </div>
+          }
+        />
       ))}
-    </div>
+    </List>
   );
 }
 
