@@ -119,6 +119,7 @@ export class ModelCenterService {
       backends: BACKEND_ORDER.map((kind) => this.backendStates[kind]),
       customEndpoint: this.customEndpoint,
       storage: this.storage,
+      modelsDir: this.modelsDir() ?? "",
       storageWarnings: this.storage.rootDir.trim() ? validateModelStorageConfig(this.storage) : [],
       activePull: this.activePull,
       catalog: this.buildCatalog(),
@@ -190,6 +191,10 @@ export class ModelCenterService {
 
   async setStorageRoot(rootDir: string): Promise<ModelCenterSnapshot> {
     this.storage = { ...this.storage, rootDir, source: "user-selected" };
+    const modelsDir = this.modelsDir();
+    if (modelsDir) {
+      mkdirSync(modelsDir, { recursive: true });
+    }
     // 选目录后若 Ollama 已安装但未运行，尝试用该目录启动，使 OLLAMA_MODELS 生效。
     if (this.backendStates.ollama.status !== "running") {
       const started = await this.ollama.ensureServing(this.modelsDir());

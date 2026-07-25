@@ -302,7 +302,7 @@ ipcMain.handle("model:refreshBackend", () => modelCenter.refreshBackend());
 ipcMain.handle("model:chooseStorageRoot", async () => {
   const currentRoot = modelCenter.getSnapshot().storage.rootDir;
   const result = await dialog.showOpenDialog({
-    title: "选择模型下载目录（将通过 OLLAMA_MODELS 生效）",
+    title: "选择模型存储父目录（将在其下自动创建 models 文件夹）",
     defaultPath: currentRoot || undefined,
     properties: ["openDirectory", "createDirectory"]
   });

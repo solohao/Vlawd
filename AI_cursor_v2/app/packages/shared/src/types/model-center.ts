@@ -171,6 +171,8 @@ export interface ModelCenterSnapshot {
   /** 自定义 OpenAI 兼容端点配置。 */
   customEndpoint: CustomEndpointConfig;
   storage: ModelStorageConfig;
+  /** 实际用于存放模型文件的目录（rootDir + managedSubdir）。 */
+  modelsDir: string;
   storageWarnings: string[];
   activePull: ModelPullProgress | null;
   catalog: ModelCatalogItem[];

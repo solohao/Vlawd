@@ -35,6 +35,7 @@ const EMPTY_SNAPSHOT: ModelCenterSnapshot = {
   backends: [EMPTY_BACKEND],
   customEndpoint: { baseUrl: "", model: "" },
   storage: { rootDir: "", managedSubdir: "models", preferNonSystemDrive: true, source: "default" },
+  modelsDir: "",
   storageWarnings: [],
   activePull: null,
   catalog: [],
