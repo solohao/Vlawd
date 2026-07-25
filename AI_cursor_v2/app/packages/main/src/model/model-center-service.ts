@@ -22,6 +22,7 @@ import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
 import { OllamaBackend } from "./ollama-backend.js";
 import { ollamaModelCatalog } from "./ollama-catalog.js";
 import { createProvider } from "./provider-registry.js";
+import { loadSettings, saveSettings } from "../settings.js";
 
 export type ModelCenterListener = (snapshot: ModelCenterSnapshot) => void;
 
@@ -86,6 +87,7 @@ export class ModelCenterService {
       custom: this.emptyState("custom", "尚未配置自定义端点。")
     };
     this.initializeDefaultStorage();
+    this.applySettings();
   }
 
   private getDefaultStorageRoot(): string {
@@ -109,6 +111,38 @@ export class ModelCenterService {
     } catch {
       // 默认目录不可写时由后续选择/检测流程处理。
     }
+  }
+
+  private applySettings(): void {
+    const settings = loadSettings();
+    const model = settings.model;
+    if (!model) {
+      return;
+    }
+    if (model.storage?.rootDir?.trim()) {
+      this.storage = { ...this.storage, ...model.storage };
+    }
+    if (model.activeBackend && BACKEND_ORDER.includes(model.activeBackend)) {
+      this.activeBackend = model.activeBackend;
+    }
+    if (model.customEndpoint) {
+      this.customEndpoint = { ...DEFAULT_CUSTOM_ENDPOINT, ...model.customEndpoint };
+      this.custom.configure(this.customEndpoint);
+    }
+    if (model.activeBrainModel !== undefined) {
+      this.activeBrainModel = model.activeBrainModel;
+    }
+  }
+
+  private persistModelSettings(): void {
+    saveSettings({
+      model: {
+        storage: this.storage,
+        activeBackend: this.activeBackend,
+        activeBrainModel: this.activeBrainModel,
+        customEndpoint: this.customEndpoint
+      }
+    });
   }
 
   on(listener: ModelCenterListener): () => void {
@@ -143,9 +177,16 @@ export class ModelCenterService {
     return this.publish();
   }
 
-  /** 检测全部后端的实时状态。 */
+  /** 检测全部后端的实时状态。启动后若已保存过执行大脑，尝试自动恢复连接。 */
   async refreshBackend(): Promise<ModelCenterSnapshot> {
     await Promise.all(BACKEND_ORDER.map((kind) => this.detectBackend(kind)));
+    if (this.activeBrainModel && this.isRunning(this.activeBackend)) {
+      try {
+        return await this.useModelAsBrain(this.activeBrainModel);
+      } catch {
+        // 恢复失败时仍返回当前快照，保留用户选择供手动重试。
+      }
+    }
     return this.publish();
   }
 
@@ -153,14 +194,20 @@ export class ModelCenterService {
   async setBackend(kind: ModelBackendKind): Promise<ModelCenterSnapshot> {
     this.activeBackend = kind;
     await this.detectBackend(kind);
+    this.persistModelSettings();
     return this.publish();
   }
 
   /** 配置并检测自定义 OpenAI 兼容端点。 */
   async setCustomEndpoint(config: CustomEndpointConfig): Promise<ModelCenterSnapshot> {
-    this.customEndpoint = { baseUrl: config.baseUrl.trim(), model: config.model.trim() };
+    this.customEndpoint = {
+      ...config,
+      baseUrl: config.baseUrl.trim(),
+      model: config.model.trim()
+    };
     this.custom.configure(this.customEndpoint);
     await this.detectBackend("custom");
+    this.persistModelSettings();
     return this.publish();
   }
 
@@ -203,6 +250,7 @@ export class ModelCenterService {
     if (modelsDir) {
       mkdirSync(modelsDir, { recursive: true });
     }
+    this.persistModelSettings();
     // 选目录后若 Ollama 已安装但未运行，尝试用该目录启动，使 OLLAMA_MODELS 生效。
     if (this.backendStates.ollama.status !== "running") {
       const started = await this.ollama.ensureServing(this.modelsDir());
@@ -457,6 +505,7 @@ export class ModelCenterService {
     await this.ollama.remove(model);
     if (this.activeBrainModel === model) {
       this.activeBrainModel = "";
+      this.persistModelSettings();
     }
     if (this.activePull?.model === model) {
       this.activePull = null;
@@ -482,10 +531,13 @@ export class ModelCenterService {
     this.runtime.registerProvider(provider);
     await this.runtime.setActiveProvider("pipeline");
     if (!this.runtime.getSnapshot().providerConnected) {
-      this.activeBrainModel = "";
+      // 保留用户上一次的选择，避免临时连接失败导致配置被清空；
+      // 再次尝试 useAsBrain 或切换后端时会重新做健康检查。
+      this.persistModelSettings();
       throw new Error(`模型 ${model} 未通过健康检查，请确认已下载完成或后端可访问。`);
     }
     this.activeBrainModel = model;
+    this.persistModelSettings();
     return this.publish();
   }
 

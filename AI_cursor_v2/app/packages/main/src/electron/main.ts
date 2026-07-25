@@ -64,6 +64,8 @@ function broadcastModelCenter(snapshot: ModelCenterSnapshot): void {
   }
 }
 modelCenter.on(broadcastModelCenter);
+// 启动后自动刷新后端并尝试恢复上一次选中的执行大脑。
+setTimeout(() => void modelCenter.refreshBackend().catch(() => undefined), 2000);
 
 const OVERLAY_MARGIN = 24;
 const OVERLAY_DEFAULT = { width: 208, height: 84 };

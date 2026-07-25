@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useModelCenter } from "../../runtime/useModelCenter.js";
 import { FeatureSection } from "../../app/feature-status.js";
 import { PlusIcon } from "../icons.js";
@@ -61,15 +61,44 @@ export function ModelCenterPage() {
   const availableSTTs: ModelItem[] = [];
   const availableTTSs: ModelItem[] = [];
 
-  // 自定义端点（占位数据）
+  // 自定义端点：从后端 snapshot.customEndpoint 恢复（目前只保存一个）
   const [customEndpoints, setCustomEndpoints] = useState<CustomEndpoint[]>([]);
 
   // 配置状态
   const [selectedConfig, setSelectedConfig] = useState({
-    brain: { type: 'local' as 'local' | 'remote', modelId: snapshot.activeBrainModel },
+    brain: { type: 'local' as 'local' | 'remote', modelId: snapshot.activeBrainModel, endpointId: undefined as string | undefined },
     hearing: { modelId: undefined as string | undefined },
     speaking: { modelId: undefined as string | undefined }
   });
+
+  // 用后端持久化配置同步 UI 选择态
+  useEffect(() => {
+    const isRemote = snapshot.activeBackend === 'custom';
+    setSelectedConfig(prev => ({
+      ...prev,
+      brain: {
+        type: isRemote ? 'remote' : 'local',
+        modelId: snapshot.activeBrainModel,
+        endpointId: isRemote ? 'endpoint-1' : undefined
+      }
+    }));
+    if (snapshot.customEndpoint?.baseUrl) {
+      setCustomEndpoints(prev => {
+        const existing = prev[0] ?? { id: 'endpoint-1', enabled: false, type: 'openai-compatible' as const };
+        return [{
+          ...existing,
+          id: 'endpoint-1',
+          name: snapshot.customEndpoint!.name || existing.name || snapshot.customEndpoint!.baseUrl,
+          url: snapshot.customEndpoint!.baseUrl,
+          model: snapshot.customEndpoint!.model,
+          apiKey: snapshot.customEndpoint!.apiKey,
+          enabled: isRemote
+        }];
+      });
+    } else {
+      setCustomEndpoints([]);
+    }
+  }, [snapshot.activeBackend, snapshot.activeBrainModel, snapshot.customEndpoint?.baseUrl, snapshot.customEndpoint?.model, snapshot.customEndpoint?.name, snapshot.customEndpoint?.apiKey]);
 
   // Ollama状态映射
   const ollamaStatus = useMemo(() => {
@@ -91,10 +120,13 @@ export function ModelCenterPage() {
   }, [snapshot.backends]);
 
   // 事件处理
-  const handleConfigChange = (config: typeof selectedConfig) => {
+  const handleConfigChange = async (config: typeof selectedConfig) => {
     setSelectedConfig(config);
     if (config.brain.type === 'local' && config.brain.modelId) {
-      void model.useAsBrain(config.brain.modelId);
+      if (model.snapshot.activeBackend !== 'ollama') {
+        await model.setBackend('ollama');
+      }
+      await model.useAsBrain(config.brain.modelId);
     }
   };
 
@@ -132,25 +164,69 @@ export function ModelCenterPage() {
   };
 
   const handleAddEndpoint = (endpoint: Omit<CustomEndpoint, 'id'>) => {
-    const newEndpoint = {
+    const newEndpoint: CustomEndpoint = {
       ...endpoint,
-      id: `endpoint-${Date.now()}`
+      id: `endpoint-${Date.now()}`,
+      enabled: false
     };
-    setCustomEndpoints(prev => [...prev, newEndpoint]);
+    setCustomEndpoints([newEndpoint]);
+    // 保存端点配置并尝试切换为远程大脑
+    void model.setCustomEndpoint({
+      baseUrl: newEndpoint.url,
+      model: newEndpoint.model,
+      name: newEndpoint.name,
+      apiKey: newEndpoint.apiKey
+    });
+    void model.setBackend('custom');
+    void model.useAsBrain(newEndpoint.model);
+    setSelectedConfig(prev => ({
+      ...prev,
+      brain: { type: 'remote' as const, modelId: newEndpoint.model, endpointId: newEndpoint.id }
+    }));
   };
 
   const handleEditEndpoint = (endpoint: CustomEndpoint) => {
-    setCustomEndpoints(prev => prev.map(e => e.id === endpoint.id ? endpoint : e));
+    setCustomEndpoints([endpoint]);
+    void model.setCustomEndpoint({
+      baseUrl: endpoint.url,
+      model: endpoint.model,
+      name: endpoint.name,
+      apiKey: endpoint.apiKey
+    });
+    if (selectedConfig.brain.type === 'remote' && selectedConfig.brain.endpointId === endpoint.id) {
+      void model.setBackend('custom');
+      void model.useAsBrain(endpoint.model);
+    }
   };
 
   const handleDeleteEndpoint = (id: string) => {
-    setCustomEndpoints(prev => prev.filter(e => e.id !== id));
+    setCustomEndpoints([]);
+    setSelectedConfig(prev => ({
+      ...prev,
+      brain: { type: 'local' as const, modelId: prev.brain.modelId, endpointId: undefined }
+    }));
+    // 删除后端保存的自定义端点，切回 Ollama 本地
+    void model.setCustomEndpoint({ baseUrl: '', model: '' });
+    void model.setBackend('ollama');
   };
 
   const handleToggleEndpoint = (id: string) => {
-    setCustomEndpoints(prev => prev.map(e =>
-      e.id === id ? { ...e, enabled: !e.enabled } : e
-    ));
+    const ep = customEndpoints.find(e => e.id === id);
+    if (!ep) return;
+    const next = customEndpoints.map(e => ({ ...e, enabled: e.id === id }));
+    setCustomEndpoints(next);
+    setSelectedConfig(prev => ({
+      ...prev,
+      brain: { type: 'remote' as const, modelId: ep.model, endpointId: id }
+    }));
+    void model.setCustomEndpoint({
+      baseUrl: ep.url,
+      model: ep.model,
+      name: ep.name,
+      apiKey: ep.apiKey
+    });
+    void model.setBackend('custom');
+    void model.useAsBrain(ep.model);
   };
 
   const handleChangeStorage = () => {
