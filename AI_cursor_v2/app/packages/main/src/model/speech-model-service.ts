@@ -228,7 +228,7 @@ export class SpeechModelService {
   private async extractArchive(archive: string, destDir: string): Promise<void> {
     mkdirSync(destDir, { recursive: true });
     return new Promise((resolve, reject) => {
-      const child = spawn("tar", ["-xjf", archive, "-C", destDir], { stdio: "pipe" });
+      const child = spawn("tar", ["-xjf", archive, "-C", destDir], { stdio: "pipe", windowsHide: true });
       let stderr = "";
       child.stderr?.on("data", (chunk) => {
         stderr += chunk.toString();

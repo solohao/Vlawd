@@ -47,7 +47,7 @@ async function runCommand(
     let stderr = "";
     let child;
     try {
-      child = spawn(command, args, { signal });
+      child = spawn(command, args, { signal, windowsHide: true });
     } catch (error) {
       reject(error);
       return;

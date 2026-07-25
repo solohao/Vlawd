@@ -182,6 +182,7 @@ export class OllamaBackend implements ModelBackend {
   readonly installGuidanceUrl = INSTALL_GUIDANCE_URL;
 
   private readonly managedBinaryDir: string;
+  private ensureServingPromise: Promise<boolean> | null = null;
 
   constructor(options?: OllamaBackendOptions) {
     this.managedBinaryDir =
@@ -330,7 +331,7 @@ export class OllamaBackend implements ModelBackend {
     const command = process.platform === "win32" ? "where" : "which";
     try {
       const found = await new Promise<boolean>((resolve) => {
-        const child = spawn(command, ["ollama"]);
+        const child = spawn(command, ["ollama"], { windowsHide: true, stdio: "ignore" });
         child.on("error", () => resolve(false));
         child.on("close", (code) => resolve(code === 0));
       });
@@ -350,6 +351,21 @@ export class OllamaBackend implements ModelBackend {
       // 已有进程在跑（可能是用户自己启动的），不重复启动。
       return false;
     }
+    if (this.ensureServingPromise) {
+      return this.ensureServingPromise;
+    }
+
+    this.ensureServingPromise = this.doEnsureServing(modelsDir, signal).finally(() => {
+      this.ensureServingPromise = null;
+    });
+    return this.ensureServingPromise;
+  }
+
+  private async doEnsureServing(modelsDir: string | undefined, signal?: AbortSignal): Promise<boolean> {
+    // 再次检查，避免并发等待期间其他调用已启动成功。
+    if ((await this.version(signal)) !== null) {
+      return false;
+    }
     const managed = this.binaryPath();
     const hasManaged = existsSync(managed);
     const hasSystem = await this.binaryInstalled();
@@ -365,12 +381,14 @@ export class OllamaBackend implements ModelBackend {
       env,
       detached: true,
       stdio: "ignore",
+      windowsHide: true,
       cwd: this.managedBinaryDir
     });
     child.unref();
 
     // 轮询等待 API 就绪（最多约 6 秒）。
     for (let attempt = 0; attempt < 20; attempt++) {
+      if (signal?.aborted) break;
       await delay(300);
       if ((await this.version(signal)) !== null) {
         return true;
@@ -464,7 +482,7 @@ export class OllamaBackend implements ModelBackend {
           "-Command",
           `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${dest}' -Force`
         ],
-        { detached: false }
+        { detached: false, windowsHide: true }
       );
       let stderr = "";
       child.stderr?.on("data", (chunk) => {
@@ -491,7 +509,7 @@ export class OllamaBackend implements ModelBackend {
     signal?: AbortSignal
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const child = spawn(command, args, { detached: false });
+      const child = spawn(command, args, { detached: false, windowsHide: true });
       let stderr = "";
       child.stderr?.on("data", (chunk) => {
         stderr += chunk.toString();
