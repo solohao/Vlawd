@@ -62,6 +62,8 @@ export interface AiCursorDesktopApi {
   modelDetectOllamaInstaller(): Promise<ModelCenterSnapshot>;
   modelLocateOllamaInstaller(): Promise<ModelCenterSnapshot>;
   modelInstallOllama(): Promise<ModelCenterSnapshot>;
+  modelPauseInstallOllama(): Promise<ModelCenterSnapshot>;
+  modelResumeInstallOllama(): Promise<ModelCenterSnapshot>;
   onModelSnapshot(listener: (snapshot: ModelCenterSnapshot) => void): () => void;
 
   // ── 本地语音模型（STT/TTS）──────────────────────────────────────────
@@ -76,19 +78,52 @@ export interface AiCursorDesktopApi {
   speechSynthesize(text: string): Promise<{ samples: Float32Array; sampleRate: number }>;
 }
 
+export type SpeechQuality = "low" | "medium" | "high";
+
+export interface SpeechSttConfig {
+  type: "whisper" | "paraformer" | "senseVoice" | "zipformerCtc";
+  encoder?: string;
+  decoder?: string;
+  model?: string;
+  tokens: string;
+  language?: string;
+  task?: string;
+  tailPaddings?: number;
+}
+
+export interface SpeechTtsConfig {
+  type: "vits" | "kokoro";
+  model: string;
+  tokens: string;
+  lexicon?: string;
+  dataDir?: string;
+  voices?: string;
+  ruleFsts?: string[];
+  numThreads?: number;
+}
+
 export interface SpeechCatalogItem {
   id: string;
   name: string;
   role: "stt" | "tts";
+  language: string;
+  quality: SpeechQuality;
   archiveUrl: string;
   archiveSizeBytes: number;
   extractedDirName: string;
   approxSizeGB: number;
+  memoryRecommendedGB: number;
+  description?: string;
+  tags?: string[];
+  sttConfig?: SpeechSttConfig;
+  ttsConfig?: SpeechTtsConfig;
 }
 
 export interface SpeechModelStatus extends SpeechCatalogItem {
   installed: boolean;
   downloading: boolean;
+  paused?: boolean;
+  recommended?: boolean;
   progress?: number;
   error?: string;
 }

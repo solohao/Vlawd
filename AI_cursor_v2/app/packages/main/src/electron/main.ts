@@ -355,6 +355,8 @@ ipcMain.handle("model:locateInstaller", async () => {
 });
 
 ipcMain.handle("model:installOllama", () => modelCenter.installOllama());
+ipcMain.handle("model:pauseInstallOllama", () => modelCenter.pauseInstallOllama());
+ipcMain.handle("model:resumeInstallOllama", () => modelCenter.resumeInstallOllama());
 
 // ── 本地语音模型（STT/TTS）通道 ────────────────────────────────────────
 function ensureSpeechModelsDir(): void {

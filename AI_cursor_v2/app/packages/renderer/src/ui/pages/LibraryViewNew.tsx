@@ -15,6 +15,8 @@ export interface ModelItem {
   paused?: boolean;
   downloading?: boolean;
   progress?: number;
+  recommended?: boolean;
+  quality?: string;
 }
 
 interface LibraryViewNewProps {
@@ -25,6 +27,8 @@ interface LibraryViewNewProps {
   activeBackend: ModelBackendKind;
   onBackendSwitch: (backend: ModelBackendKind) => void;
   onInstallOllama: () => void;
+  onPauseInstallOllama?: () => void;
+  onResumeInstallOllama?: () => void;
   onStartOllama: () => void;
 
   // Storage
@@ -68,6 +72,8 @@ export function LibraryViewNew({
   activeBackend,
   onBackendSwitch,
   onInstallOllama,
+  onPauseInstallOllama,
+  onResumeInstallOllama,
   onStartOllama,
   modelsDir,
   storageFreeGB,
@@ -163,7 +169,12 @@ export function LibraryViewNew({
         <OllamaInstallBanner
           phase={ollamaInstall.phase}
           message={ollamaInstall.message}
+          progress={ollamaInstall.progress}
+          completedBytes={ollamaInstall.completedBytes}
+          totalBytes={ollamaInstall.totalBytes}
           onInstall={onInstallOllama}
+          onPause={onPauseInstallOllama}
+          onResume={onResumeInstallOllama}
         />
       )}
       {ollamaInstalled && !ollamaRunning && (
@@ -357,6 +368,21 @@ function ModelItemRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-[12px] font-medium text-slate-900">{model.name}</p>
+          {model.recommended && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+              推荐
+            </span>
+          )}
+          {model.quality && (
+            <span className={cn(
+              "rounded px-1.5 py-0.5 text-[10px] font-medium",
+              model.quality === "high" ? "bg-emerald-100 text-emerald-700" :
+              model.quality === "medium" ? "bg-blue-100 text-blue-700" :
+              "bg-slate-100 text-slate-600"
+            )}>
+              {model.quality === "low" ? "入门" : model.quality === "medium" ? "标准" : "高质"}
+            </span>
+          )}
           {model.installed && (
             <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-600">
               <CheckIcon width={10} /> 已安装

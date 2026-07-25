@@ -62,6 +62,8 @@ export class ModelCenterService {
   private pullController: AbortController | null = null;
   private pauseRequested = false;
   private activeBrainModel = "";
+  private coreDownloadController: AbortController | null = null;
+  private coreDownloadPaused = false;
   private ollamaInstall: OllamaInstallState = {
     supported: true,
     installed: false,
@@ -295,9 +297,16 @@ export class ModelCenterService {
   /**
    * 一键准备 Ollama：从官方发布页下载对应平台的核心二进制并解压到 App 目录，
    * 然后使用当前模型存储目录启动 `ollama serve`。
+   *
+   * - `resume=true` 会保留已下载的部分并继续；
+   * - `resume=false/undefined` 会清理旧缓存并从头下载。
    */
-  async installOllama(_installDir?: string): Promise<ModelCenterSnapshot> {
-    if (await this.ollama.binaryInstalled()) {
+  async installOllama(options?: { resume?: boolean }): Promise<ModelCenterSnapshot> {
+    if (this.coreDownloadController) {
+      return this.getSnapshot();
+    }
+
+    if (await this.ollama.binaryInstalled() && !options?.resume) {
       this.setInstallState({ installed: true, phase: "installed", message: "Ollama 核心服务已就绪。" });
       const started = await this.ollama.ensureServing(this.modelsDir());
       if (started) {
@@ -306,24 +315,80 @@ export class ModelCenterService {
       return this.refreshBackend();
     }
 
+    const freshStart = !options?.resume;
+    if (freshStart) {
+      this.coreDownloadPaused = false;
+    }
+
     this.setInstallState({
       phase: "installing",
-      message: "正在下载 Ollama 核心服务（约 1.4GB），请保持网络连接…"
+      message: freshStart
+        ? "正在下载 Ollama 核心服务（约 1.4GB），请保持网络连接…"
+        : "正在继续下载 Ollama 核心服务…",
+      progress: freshStart ? 0 : this.ollamaInstall.progress
     });
+
+    const controller = new AbortController();
+    this.coreDownloadController = controller;
+
     try {
-      await this.ollama.downloadCoreBinary();
+      await this.ollama.downloadCoreBinary(
+        (progress) => {
+          const percent = progress.totalBytes
+            ? Math.min(100, Math.round((progress.downloadedBytes / progress.totalBytes) * 100))
+            : 0;
+          this.setInstallState({
+            progress: percent,
+            completedBytes: progress.downloadedBytes,
+            totalBytes: progress.totalBytes,
+            message: `正在下载 Ollama 核心服务：${percent}%`
+          });
+        },
+        controller.signal,
+        freshStart
+      );
+
+      this.setInstallState({
+        installed: true,
+        phase: "installed",
+        message: "Ollama 核心服务已就绪。",
+        progress: 100
+      });
+      const started = await this.ollama.ensureServing(this.modelsDir());
+      if (started) {
+        this.ollamaManagedByApp = true;
+      }
+      return this.refreshBackend();
     } catch (error) {
+      if (controller.signal.aborted && this.coreDownloadPaused) {
+        this.setInstallState({ phase: "paused", message: "下载已暂停，点击继续下载可断点续传。" });
+        return this.getSnapshot();
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.setInstallState({ phase: "error", message: `下载失败：${message}` });
       return this.getSnapshot();
+    } finally {
+      this.coreDownloadController = null;
+      this.coreDownloadPaused = false;
     }
+  }
 
-    this.setInstallState({ installed: true, phase: "installed", message: "Ollama 核心服务已就绪。" });
-    const started = await this.ollama.ensureServing(this.modelsDir());
-    if (started) {
-      this.ollamaManagedByApp = true;
+  pauseInstallOllama(): ModelCenterSnapshot {
+    if (!this.coreDownloadController) {
+      throw new Error("当前没有进行中的 Ollama 核心服务下载任务。");
     }
-    return this.refreshBackend();
+    this.coreDownloadPaused = true;
+    this.coreDownloadController.abort();
+    this.setInstallState({
+      phase: "paused",
+      message: "下载已暂停，点击继续下载可断点续传。"
+    });
+    return this.getSnapshot();
+  }
+
+  resumeInstallOllama(): Promise<ModelCenterSnapshot> {
+    this.coreDownloadPaused = false;
+    return this.installOllama({ resume: true });
   }
 
   private setInstallState(patch: Partial<OllamaInstallState>): void {

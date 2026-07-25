@@ -65,6 +65,8 @@ export interface ModelCenterController {
   detectOllamaInstaller(): Promise<void>;
   locateOllamaInstaller(): Promise<void>;
   installOllama(): Promise<void>;
+  pauseInstallOllama(): Promise<void>;
+  resumeInstallOllama(): Promise<void>;
 }
 
 export function useModelCenter(): ModelCenterController {
@@ -125,6 +127,12 @@ export function useModelCenter(): ModelCenterController {
   const detectOllamaInstaller = useCallback(() => run(() => desktopApi().modelDetectOllamaInstaller()), [run]);
   const locateOllamaInstaller = useCallback(() => run(() => desktopApi().modelLocateOllamaInstaller()), [run]);
   const installOllama = useCallback(() => run(() => desktopApi().modelInstallOllama()), [run]);
+  const pauseInstallOllama = useCallback(async () => {
+    if (available) {
+      setSnapshot(await desktopApi().modelPauseInstallOllama());
+    }
+  }, [available]);
+  const resumeInstallOllama = useCallback(() => run(() => desktopApi().modelResumeInstallOllama()), [run]);
 
   const cancelPull = useCallback(async () => {
     if (available) {
@@ -164,7 +172,9 @@ export function useModelCenter(): ModelCenterController {
       openInstallGuide,
       detectOllamaInstaller,
       locateOllamaInstaller,
-      installOllama
+      installOllama,
+      pauseInstallOllama,
+      resumeInstallOllama
     }),
     [
       available,
@@ -185,7 +195,9 @@ export function useModelCenter(): ModelCenterController {
       openInstallGuide,
       detectOllamaInstaller,
       locateOllamaInstaller,
-      installOllama
+      installOllama,
+      pauseInstallOllama,
+      resumeInstallOllama
     ]
   );
 }
