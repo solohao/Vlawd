@@ -80,6 +80,34 @@ html[data-paint="on"] #root {
   transition: filter 0.25s ease, outline 0.25s ease;
 }
 
+/* ============================================================
+   异常行为检测可视化
+   当功能被频繁点击但无响应时，自动标记为可疑/损坏状态
+   ============================================================ */
+.feature-paint[data-anomaly="suspicious"] {
+  outline: 2px dashed rgba(239, 68, 68, 0.5) !important;
+  outline-offset: -2px;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.feature-paint[data-anomaly="broken"] {
+  outline: 3px solid rgba(220, 38, 38, 0.8) !important;
+  outline-offset: -2px;
+  background: rgba(254, 226, 226, 0.15);
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { outline-color: rgba(239, 68, 68, 0.3); }
+  50% { outline-color: rgba(239, 68, 68, 0.8); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+  20%, 40%, 60%, 80% { transform: translateX(3px); }
+}
+
 /* frameless-window drag handles */
 .drag {
   -webkit-app-region: drag;

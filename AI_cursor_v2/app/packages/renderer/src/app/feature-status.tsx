@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "../design-system/index.js";
+import detector, { type AnomalyStatus } from "./feature-anomaly-detector.js";
 
 export type FeatureStatus = "todo" | "wip" | "done";
 
@@ -146,6 +147,20 @@ export function useFeatureInteractions(id: string): { count: number; lastUsedAt?
   return { count: ctx.interactions[id] ?? 0, lastUsedAt: ctx.lastUsedAt[id] };
 }
 
+export function useAnomalyStatus(id: string): AnomalyStatus {
+  const [status, setStatus] = useState<AnomalyStatus>(detector.getStatus(id));
+
+  useEffect(() => {
+    const unsubscribe = detector.subscribe((patterns) => {
+      const pattern = patterns.get(id);
+      setStatus(pattern?.status || 'normal');
+    });
+    return unsubscribe;
+  }, [id]);
+
+  return status;
+}
+
 export function useMarkFeature(): (id: string, status: FeatureStatus) => void {
   return useFeatureContext().mark;
 }
@@ -168,9 +183,15 @@ export function FeaturePaint({
   children: ReactNode;
 }): JSX.Element {
   const status = useFeatureStatus(id);
+  const anomaly = useAnomalyStatus(id);
   const paint = status === "done" ? "off" : status === "todo" ? "on" : "wip";
+
   return (
-    <div className={cn("feature-paint", className)} data-paint={paint}>
+    <div
+      className={cn("feature-paint", className)}
+      data-paint={paint}
+      data-anomaly={anomaly}
+    >
       {children}
     </div>
   );
@@ -190,6 +211,7 @@ export function FeatureSection({
   const status = useFeatureStatus(id);
   const { count, lastUsedAt } = useFeatureInteractions(id);
   const { mark, recordInteraction } = useFeatureContext();
+  const anomaly = useAnomalyStatus(id);
 
   const handleVerify = useCallback(
     (event: React.MouseEvent) => {
@@ -199,7 +221,13 @@ export function FeatureSection({
     [mark, id]
   );
 
-  const handleClickCapture = useCallback(() => {
+  const handleClickCapture = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+
+    // 检测异常点击（传入实际点击的元素）
+    detector.detectClick(id, target);
+
+    // 原有进度追踪逻辑
     if (status === "todo") {
       mark(id, "wip");
     }
