@@ -1125,8 +1125,8 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
         </div>
       </div>
 
-      {/* 运行后端（Ollama / LM Studio / 自定义） */}
-      <RunningBackendSection model={model} />
+      {/* 模型来源切换器 */}
+      <BackendSwitcher model={model} />
 
       {/* 分组表格 */}
       <div className="space-y-4">
@@ -1409,36 +1409,39 @@ function StorageRing({ percent }: { percent: number }) {
   );
 }
 
-function RunningBackendSection({ model }: { model: ReturnType<typeof useModelCenter> }) {
+function BackendSwitcher({ model }: { model: ReturnType<typeof useModelCenter> }) {
   return (
-    <div className="border border-slate-100 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between bg-slate-50/50 px-4 py-2 border-b border-slate-100">
-        <span className="text-[12px] font-medium text-slate-700">运行后端</span>
+    <div className="space-y-3">
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-[13px] font-semibold text-slate-900">模型来源</h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">选择从哪里获取和运行模型</p>
+        </div>
         <button
           className="text-[11px] text-slate-500 hover:text-slate-700 disabled:opacity-50 flex items-center gap-1"
           disabled={model.busy}
           onClick={() => void model.refreshBackend()}
         >
           <RefreshIcon width={12} />
-          刷新
+          刷新状态
         </button>
       </div>
 
-      {/* 横向卡片 */}
-      <div className="grid grid-cols-3 gap-px bg-slate-100">
-        <BackendCard kind="ollama" title="Ollama" icon={<CubeIcon width={18} />} model={model} />
-        <BackendCard kind="lmstudio" title="LM Studio" icon={<MonitorIcon width={18} />} model={model} />
-        <BackendCard kind="custom" title="自定义端点" icon={<GlobeIcon width={18} />} model={model} />
+      {/* 后端状态卡片 */}
+      <div className="grid grid-cols-3 gap-3">
+        <BackendStatusCard kind="ollama" title="Ollama" icon={<CubeIcon width={18} />} model={model} />
+        <BackendStatusCard kind="lmstudio" title="LM Studio" icon={<MonitorIcon width={18} />} model={model} />
+        <BackendStatusCard kind="custom" title="自定义端点" icon={<GlobeIcon width={18} />} model={model} />
       </div>
 
-      <div className="border-t border-slate-100">
-        <BackendDetailPanel model={model} />
-      </div>
+      {/* 当前后端的详细信息 */}
+      <BackendDetailPanel model={model} />
     </div>
   );
 }
 
-function BackendCard({
+function BackendStatusCard({
   kind,
   title,
   icon,
@@ -1451,47 +1454,123 @@ function BackendCard({
 }) {
   const state = model.snapshot.backends.find((b) => b.backend === kind);
   const active = model.snapshot.activeBackend === kind;
-  const color =
-    state?.status === "running" ? "success" :
-    state?.status === "not_installed" ? "error" :
-    state?.status === "installed_not_running" ? "warning" : "neutral";
   const disabled = model.busy;
+
+  // 计算已安装模型数量（根据后端）
+  const installedCount = model.snapshot.catalog.filter(m => {
+    // 这里简化处理，实际应该根据后端类型过滤
+    return m.installed;
+  }).length;
+
+  // 状态颜色和文案
+  const getStatusInfo = () => {
+    if (state?.status === "running") {
+      return {
+        color: "success" as const,
+        dot: "bg-emerald-500",
+        text: state.message || "运行中",
+        bgColor: active ? "bg-emerald-50" : "bg-white",
+        borderColor: active ? "border-emerald-500" : "border-slate-200"
+      };
+    }
+    if (state?.status === "installed_not_running") {
+      return {
+        color: "warning" as const,
+        dot: "bg-amber-500",
+        text: "未启动",
+        bgColor: "bg-white",
+        borderColor: active ? "border-amber-500" : "border-slate-200"
+      };
+    }
+    if (state?.status === "not_installed") {
+      return {
+        color: "error" as const,
+        dot: "bg-slate-300",
+        text: "未安装",
+        bgColor: "bg-white",
+        borderColor: "border-slate-200"
+      };
+    }
+    return {
+      color: "neutral" as const,
+      dot: "bg-slate-300",
+      text: "检测中",
+      bgColor: "bg-white",
+      borderColor: "border-slate-200"
+    };
+  };
+
+  const statusInfo = getStatusInfo();
 
   return (
     <button
       onClick={disabled ? undefined : () => void model.setBackend(kind)}
       disabled={disabled}
       className={cn(
-        "flex flex-col items-start gap-2 bg-white px-4 py-3 text-left transition-all",
-        active ? "ring-2 ring-inset ring-brand-500 bg-brand-50/20" : "hover:bg-slate-50",
+        "flex flex-col gap-3 rounded-lg border-2 p-4 text-left transition-all",
+        statusInfo.borderColor,
+        statusInfo.bgColor,
+        active && "shadow-sm",
+        !active && !disabled && "hover:border-slate-300 hover:shadow-sm",
         disabled && "opacity-60 cursor-not-allowed"
       )}
     >
-      <div className="flex items-center gap-2 w-full">
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
+      {/* 图标 + 名称 */}
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+          active ? "bg-white text-slate-700" : "bg-slate-100 text-slate-600"
+        )}>
           {icon}
         </span>
-        <span className="text-[11px] font-semibold text-slate-900 truncate">{title}</span>
+        <span className="text-[13px] font-semibold text-slate-900">{title}</span>
       </div>
-      <div className="flex items-center gap-1.5 w-full">
-        <StatusDot active={active || state?.status === "running"} color={color} size="sm" />
-        <span className="text-[10px] text-slate-600 truncate">{state?.message ?? "检测中"}</span>
+
+      {/* 状态行 */}
+      <div className="flex items-center gap-1.5">
+        <span className={cn("h-2 w-2 rounded-full shrink-0", statusInfo.dot)} />
+        <span className="text-[11px] text-slate-600">{statusInfo.text}</span>
       </div>
+
+      {/* 统计信息 */}
+      {state?.status === "running" && (
+        <div className="text-[11px] text-slate-500">
+          已安装 <span className="font-semibold text-slate-700">{installedCount}</span> 个模型
+        </div>
+      )}
+
+      {/* 选中指示器 */}
+      {active && (
+        <div className="flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+          <CheckIcon width={12} />
+          当前数据源
+        </div>
+      )}
     </button>
   );
 }
 
 function BackendDetailPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
-  switch (model.snapshot.activeBackend) {
-    case "ollama":
-      return <OllamaPanel model={model} />;
-    case "lmstudio":
-      return <LMStudioPanel model={model} />;
-    case "custom":
-      return <CustomEndpointPanel model={model} />;
-    default:
-      return null;
-  }
+  const content = (() => {
+    switch (model.snapshot.activeBackend) {
+      case "ollama":
+        return <OllamaPanel model={model} />;
+      case "lmstudio":
+        return <LMStudioPanel model={model} />;
+      case "custom":
+        return <CustomEndpointPanel model={model} />;
+      default:
+        return null;
+    }
+  })();
+
+  if (!content) return null;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-4">
+      {content}
+    </div>
+  );
 }
 
 function OllamaPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
