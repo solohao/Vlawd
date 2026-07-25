@@ -334,7 +334,6 @@ function ConfigView({
 
   return (
     <div className="space-y-4">
-      <RunningBackendSection model={model} />
       <BrainSelector model={model} />
 
       {/* 配置选择 + 概览 - 合并为一个卡片 */}
@@ -1125,6 +1124,9 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
           </button>
         </div>
       </div>
+
+      {/* 运行后端（Ollama / LM Studio / 自定义） */}
+      <RunningBackendSection model={model} />
 
       {/* 分组表格 */}
       <div className="space-y-4">

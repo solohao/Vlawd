@@ -19,9 +19,9 @@ export const defaultSafetyPreemptionConfig: SafetyPreemptionConfig = {
 
 export const defaultModelStorageConfig: ModelStorageConfig = {
   rootDir: "",
-  managedSubdir: "ai-cursor-v2-models",
+  managedSubdir: "models",
   preferNonSystemDrive: true,
-  source: "user-selected"
+  source: "default"
 };
 
 export const defaultConversationEndpointPreference: ConversationEndpointPreference = {

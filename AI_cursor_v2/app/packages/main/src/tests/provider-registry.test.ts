@@ -70,7 +70,7 @@ describe("duplex model providers", () => {
       throw new Error("Expected model storage to be attached to the workflow binding.");
     }
     expect(storage.rootDir).toBe("D:/ai-models");
-    expect(binding.executionBrain.modelPath).toContain("ai-cursor-v2-models");
+    expect(binding.executionBrain.modelPath).toContain("models");
     expect(binding.executionBrain.modelPath).toContain("bayling-duplex");
     expect(binding.executionBrain.speechTokenizerPath).toContain("glm-4-voice-tokenizer");
     expect(validateModelStorageConfig(storage)).toEqual([]);
