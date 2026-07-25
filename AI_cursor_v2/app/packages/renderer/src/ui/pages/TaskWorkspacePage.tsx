@@ -21,7 +21,12 @@ const typeLabels: Record<string, string> = {
   action_result: "结果",
   safety: "安全",
   state: "状态",
-  conclusion: "结论"
+  conclusion: "结论",
+  correction: "纠正",
+  todo: "计划",
+  evidence: "证据",
+  revalidation: "验证",
+  branch: "分支"
 };
 
 export function TaskWorkspacePage() {
@@ -93,38 +98,41 @@ export function TaskWorkspacePage() {
 
             <h2 className="mt-2 text-[13px] font-semibold text-slate-900">任务步骤</h2>
             <div className="mt-0 space-y-0">
-              {graph.nodes.map((node, index) => {
-                const isLast = index === graph.nodes.length - 1;
-                const state =
-                  node.status === "completed"
-                    ? "done"
-                    : node.status === "active" || node.id === graph.current_node_id
-                      ? "current"
-                      : "next";
+              {(session.payload?.plan?.steps ?? []).map((step, index) => {
+                const steps = session.payload?.plan?.steps ?? [];
+                const isLast = index === steps.length - 1;
+                const state = step.status === "done" ? "done" : step.status === "failed" ? "failed" : index === 0 || steps[index - 1]?.status === "done" ? "current" : "next";
                 return (
-                  <div key={node.id} className="relative flex gap-3 pb-5 last:pb-0">
+                  <div key={step.id} className="relative flex gap-3 pb-5 last:pb-0">
                     {!isLast && <span className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-slate-200" />}
                     <span
                       className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] shadow-sm ${
                         state === "done"
                           ? "border-brand-500 bg-brand-500 text-white"
-                          : state === "current"
-                            ? "border-blue-400 bg-blue-50 text-blue-600"
-                            : "border-slate-300 bg-white text-slate-400"
+                          : state === "failed"
+                            ? "border-rose-400 bg-rose-50 text-rose-600"
+                            : state === "current"
+                              ? "border-blue-400 bg-blue-50 text-blue-600"
+                              : "border-slate-300 bg-white text-slate-400"
                       }`}
                     >
                       {state === "done" ? <CheckIcon width={12} height={12} /> : index + 1}
                     </span>
                     <div>
-                      <p className={`text-[12px] font-medium ${state === "next" ? "text-slate-400" : "text-slate-700"}`}>{node.label}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">
-                        {state === "done" ? "完成" : state === "current" ? "进行中" : "等待"}
-                      </p>
+                      <p className={`text-[12px] font-medium ${state === "next" ? "text-slate-400" : state === "failed" ? "text-rose-600" : "text-slate-700"}`}>{step.description}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">{step.tool}{step.reason ? ` · ${step.reason}` : ""}</p>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {session.payload?.lineage?.parent_id && (
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] text-slate-600">
+                从 Session <span className="font-mono">{session.payload.lineage.parent_id.slice(0, 8)}</span> 分支：
+                {session.payload.lineage.fork_reason}
+              </div>
+            )}
             <div className="mt-auto grid grid-cols-2 gap-2">
               <Button variant="secondary" size="sm" onClick={() => void pauseSession()} disabled={busy} className="gap-1.5">
                 <PauseIcon /> 暂停
@@ -274,6 +282,30 @@ export function TaskWorkspacePage() {
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <p className="text-[12px] font-semibold text-slate-800">研究结论</p>
                 <p className="mt-2 whitespace-pre-wrap text-[11px] leading-relaxed text-slate-700">{conclusion}</p>
+              </div>
+            )}
+
+            {session.payload?.evidence && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <p className="text-[12px] font-semibold text-slate-800">证据摘要</p>
+                <div className="mt-2 space-y-1.5 text-[11px] text-slate-600">
+                  <p><span className="text-slate-400">目标：</span>{session.payload.evidence.goal || "-"}</p>
+                  <p><span className="text-slate-400">状态：</span>{session.payload.evidence.status}</p>
+                  <p><span className="text-slate-400">来源数：</span>{session.payload.evidence.source_refs.length}</p>
+                  {session.payload.evidence.unresolved_questions.length > 0 && (
+                    <div>
+                      <p className="text-slate-400">未解决问题：</p>
+                      <ul className="ml-4 list-disc">
+                        {session.payload.evidence.unresolved_questions.map((q, i) => (
+                          <li key={i} className="text-slate-700">{q}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {session.payload.evidence.next_recommended_step && (
+                    <p><span className="text-slate-400">下一步建议：</span>{session.payload.evidence.next_recommended_step}</p>
+                  )}
+                </div>
               </div>
             )}
             <div className="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">

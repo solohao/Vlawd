@@ -5,16 +5,22 @@ import {
   type ActionProposal,
   type ActionResult,
   type DesktopBrowserRuntimeState,
-  type ResearchSource,
-  type SessionSummary,
   type DesktopModelDownloadState,
   type DesktopModelHealthCheck,
   type DesktopRuntimeActionState,
   type DesktopUiSnapshot,
+  type EvidenceSummary,
   type ModelRole,
   type ModelRuntimeState,
+  type ResearchSource,
+  type ResumeAnchor,
   type SessionGraphSnapshot,
-  type SessionRun
+  type SessionLineage,
+  type SessionPayload,
+  type SessionRun,
+  type SessionStatus,
+  type SessionSummary,
+  type TaskPlan
 } from "@ai-cursor-v2/shared";
 import {
   bindPresetToWorkflow,
@@ -22,7 +28,7 @@ import {
   validateModelStorageConfig
 } from "../model/dual-role-config.js";
 import type { BrowserService } from "../browser/browser-service.js";
-import { ActionPlanner } from "../planner/action-planner.js";
+import { TaskPlanner, proposalFromPlan } from "./task-planner.js";
 import type { LlmAdapter } from "../model/llm-adapter.js";
 import * as sessionPersistence from "./session-persistence.js";
 import type { PersistedSession } from "./session-persistence.js";
@@ -55,12 +61,14 @@ export class DesktopRuntime {
   private runtimeState: ModelRuntimeState = "listening";
   private modelStorageRoot = "";
   private connectedAudio = false;
-  private session: SessionRun = createSession("desktop_session");
+  private session: SessionRun = createSession(`session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
   private downloads: DesktopModelDownloadState[] = [];
   private healthChecks: DesktopModelHealthCheck[] = [];
   private browserService?: BrowserService;
   private getPlannerLlm?: () => LlmAdapter | undefined;
+  private taskPlanner?: TaskPlanner;
   private currentProposal?: ActionProposal;
+  private currentPlan?: TaskPlan;
   private lastResult?: ActionResult;
   private executionController?: AbortController;
   private listeners = new Set<(snapshot: DesktopUiSnapshot) => void>();
@@ -72,6 +80,10 @@ export class DesktopRuntime {
 
   setPlannerLlm(getLlm: () => LlmAdapter | undefined): void {
     this.getPlannerLlm = getLlm;
+    const llm = getLlm();
+    if (llm) {
+      this.taskPlanner = new TaskPlanner({ llm });
+    }
   }
 
   onUpdate(listener: (snapshot: DesktopUiSnapshot) => void): () => void {
@@ -174,7 +186,7 @@ export class DesktopRuntime {
 
   pauseSession(): DesktopUiSnapshot {
     this.runtimeState = "paused";
-    this.session = { ...this.session, status: "paused", updated_at: new Date().toISOString() };
+    this.session = this.withStatus("paused");
     this.executionController?.abort();
     this.browserService?.pause();
     this.appendState("用户暂停 AI 执行");
@@ -184,10 +196,11 @@ export class DesktopRuntime {
 
   cancelSession(): DesktopUiSnapshot {
     this.runtimeState = "interrupted";
-    this.session = { ...this.session, status: "interrupted", updated_at: new Date().toISOString() };
+    this.session = this.withStatus("interrupted");
     this.executionController?.abort();
     this.browserService?.close();
     this.currentProposal = undefined;
+    this.currentPlan = undefined;
     this.lastResult = undefined;
     this.appendState("用户取消当前步骤");
     this.emit();
@@ -202,7 +215,10 @@ export class DesktopRuntime {
     this.runtimeState = "interrupted";
     this.appendState(`语音插话：${heardText ?? ""}`);
     this.emit();
+
     if (heardText && isResearchIntent(heardText)) {
+      // 在开启新研究前保存并 fork 当前 Session
+      this.forkCurrentSession(heardText);
       return this.startResearch(heardText);
     }
     return this.getSnapshot();
@@ -210,23 +226,43 @@ export class DesktopRuntime {
 
   async startResearch(goal: string): Promise<DesktopUiSnapshot> {
     this.runtimeState = "thinking";
+
+    // 如果当前 Session 已有研究目标或来源，fork 出一个新分支继续，旧分支保留
+    const hasSources = this.browserService ? this.browserService.getState().sources.length > 0 : false;
+    if (this.session.payload?.goal || hasSources) {
+      this.forkCurrentSession(goal);
+    }
+
+    this.setPayload({ goal });
     this.appendState(`开始规划研究任务：${goal}`);
+    this.emit();
+
     const llm = this.getPlannerLlm?.();
     if (!llm) {
       this.runtimeState = "interrupted";
       this.currentProposal = undefined;
+      this.currentPlan = undefined;
       this.appendState("没有可用的执行大脑，无法生成动作提案");
+      this.emit();
       return this.getSnapshot();
     }
 
-    const planner = new ActionPlanner({ llm });
+    if (!this.taskPlanner) {
+      this.taskPlanner = new TaskPlanner({ llm });
+    }
+
     this.executionController?.abort();
     this.executionController = new AbortController();
-    const proposal = await planner.plan(goal, this.executionController.signal);
+    const plan = await this.taskPlanner.plan(goal, this.executionController.signal);
+    this.currentPlan = plan;
+    this.setPayload({ plan });
+    this.appendTodoChunk(plan);
+
+    const proposal = proposalFromPlan(plan);
     this.currentProposal = proposal;
-    this.runtimeState = proposal.safety === "blocked" ? "interrupted" : "acting";
+    this.runtimeState = proposal && proposal.safety !== "blocked" ? "acting" : "interrupted";
     this.appendState(
-      `生成提案 ${proposal.proposal_id}，安全等级 ${proposal.safety}，预期结果：${proposal.expected_result}`
+      `生成任务计划 ${plan.steps.length} 步；下一步：${proposal?.expected_result ?? "无可用步骤"}`
     );
     this.emit();
     return this.getSnapshot();
@@ -235,10 +271,12 @@ export class DesktopRuntime {
   async executeRuntimeAction(): Promise<DesktopUiSnapshot> {
     if (!this.currentProposal) {
       this.appendState("当前没有待执行的动作提案");
+      this.emit();
       return this.getSnapshot();
     }
     if (!this.browserService) {
       this.appendState("BrowserService 未初始化，无法执行浏览器动作");
+      this.emit();
       return this.getSnapshot();
     }
 
@@ -249,6 +287,10 @@ export class DesktopRuntime {
     this.currentProposal = undefined;
     const results = await this.browserService.execute(proposal, this.executionController.signal);
     this.lastResult = results[results.length - 1];
+
+    // 推进任务计划
+    this.advancePlan(proposal, this.lastResult?.ok ?? false);
+
     this.runtimeState = this.lastResult?.ok ? "thinking" : "interrupted";
     this.appendState(
       `执行结果：${this.lastResult?.ok ? "成功" : "失败"} - ${this.lastResult?.message ?? ""}`
@@ -277,13 +319,17 @@ export class DesktopRuntime {
     }
 
     const prompt = buildConclusionPrompt(sources);
-    const conclusion = await llm.complete(
+    const raw = await llm.complete(
       [
         { role: "system", content: CONCLUSION_SYSTEM_PROMPT },
         { role: "user", content: prompt }
       ],
       this.executionController?.signal
     );
+
+    const parsed = parseConclusionJson(raw);
+    const conclusion = parsed.conclusion || raw;
+    const unresolved = parsed.unresolved_questions ?? [];
 
     this.runtimeState = "complete";
     this.session = appendChunk(this.session, {
@@ -292,6 +338,18 @@ export class DesktopRuntime {
       summary: conclusion,
       payload: { sources: sources.map((s) => s.id) }
     });
+    this.session = appendChunk(this.session, {
+      id: `chunk-${this.session.chunks.length + 1}`,
+      type: "evidence",
+      summary: `Evidence Summary: ${sources.length} 个来源，${unresolved.length} 个未解决问题`,
+      payload: { unresolved_questions: unresolved }
+    });
+
+    this.setPayload({
+      evidence: this.buildEvidenceSummary(conclusion, unresolved),
+      recovery: this.buildRecoveryAnchor(sources)
+    });
+
     this.appendState("结论已生成");
     this.emit();
     return this.getSnapshot();
@@ -299,9 +357,13 @@ export class DesktopRuntime {
 
   saveSession(): DesktopUiSnapshot {
     const snapshot = this.getSnapshot();
-    sessionPersistence.saveSession(snapshot);
-    this.runtimeState = "complete";
-    this.appendState(`会话已保存：${snapshot.session.id}`);
+    const evidence = this.session.payload?.evidence ?? this.buildEvidenceSummaryFromSnapshot(snapshot);
+    const recovery = this.session.payload?.recovery ?? this.buildRecoveryAnchor(snapshot.browser.sources);
+    const plan = this.session.payload?.plan;
+    sessionPersistence.saveSession(snapshot, { evidence, recovery, plan });
+    this.runtimeState = "paused";
+    this.session = this.withStatus("paused");
+    this.appendState(`会话已保存：${this.session.id}`);
     this.emit();
     return this.getSnapshot();
   }
@@ -321,8 +383,17 @@ export class DesktopRuntime {
 
     this.executionController?.abort();
     this.currentProposal = undefined;
+    this.currentPlan = undefined;
     this.lastResult = undefined;
-    this.session = persisted.session;
+    this.session = {
+      ...persisted.session,
+      payload: {
+        ...(persisted.session.payload || {}),
+        evidence: persisted.evidenceSummary ?? persisted.session.payload?.evidence,
+        recovery: persisted.recovery ?? persisted.session.payload?.recovery,
+        plan: persisted.plan ?? persisted.session.payload?.plan
+      }
+    };
     this.browserService?.setSources(persisted.sources);
     if (persisted.lastUrl) {
       await this.browserService?.open(persisted.lastUrl);
@@ -331,6 +402,9 @@ export class DesktopRuntime {
     }
     this.runtimeState = "paused";
     this.appendState(`恢复会话：${persisted.title}`);
+
+    // 重新验证页面：若标题或关键摘录已变，提示并生成搜索提案
+    await this.revalidateSession(persisted);
     this.emit();
     return this.getSnapshot();
   }
@@ -369,7 +443,7 @@ export class DesktopRuntime {
     }
     const first = this.currentProposal.actions[0];
     const type = first ? first.action : "";
-    const value = first?.params?.query ?? first?.params?.url ?? "";
+    const value = first?.params?.query ?? first?.params?.url ?? first?.params?.text ?? "";
     return {
       actionType: type,
       targetLabel: this.currentProposal.expected_result,
@@ -387,6 +461,181 @@ export class DesktopRuntime {
       payload: { runtimeState: this.runtimeState }
     });
   }
+
+  private appendTodoChunk(plan: TaskPlan): void {
+    this.session = appendChunk(this.session, {
+      id: `chunk-${this.session.chunks.length + 1}`,
+      type: "todo",
+      summary: `任务计划：${plan.goal}（${plan.steps.length} 步）`,
+      payload: { plan }
+    });
+  }
+
+  private withStatus(status: SessionStatus): SessionRun {
+    return { ...this.session, status, updated_at: new Date().toISOString() };
+  }
+
+  private setPayload(patch: Partial<SessionPayload>): void {
+    this.session = {
+      ...this.session,
+      payload: { ...this.session.payload, ...patch },
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  private forkCurrentSession(reason: string): void {
+    // 先保存当前会话，保留旧分支
+    const snapshot = this.getSnapshot();
+    sessionPersistence.saveSession(snapshot, {
+      evidence: this.session.payload?.evidence ?? this.buildEvidenceSummaryFromSnapshot(snapshot),
+      recovery: this.session.payload?.recovery ?? this.buildRecoveryAnchor(snapshot.browser.sources),
+      plan: this.session.payload?.plan
+    });
+
+    const oldId = this.session.id;
+    const newId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newSession = createSession(newId, oldId);
+    const lineage: SessionLineage = {
+      parent_id: oldId,
+      fork_from: oldId,
+      fork_reason: reason
+    };
+    newSession.payload = { lineage };
+    this.session = newSession;
+    this.currentPlan = undefined;
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
+    this.appendState(`从会话 ${oldId} 分叉：${reason}`);
+    this.session = appendChunk(this.session, {
+      id: `chunk-${this.session.chunks.length + 1}`,
+      type: "branch",
+      summary: `分支起点：${reason}`,
+      payload: { parent_id: oldId, fork_reason: reason }
+    });
+  }
+
+  private advancePlan(proposal: ActionProposal, ok: boolean): void {
+    if (!this.currentPlan) return;
+    const steps = [...this.currentPlan.steps];
+    let consumed = 0;
+    for (const proposalAction of proposal.actions) {
+      const next = steps.find((s) => s.status === "pending" && s.tool === proposalAction.action);
+      if (next) {
+        next.status = ok ? "done" : "failed";
+        consumed++;
+      }
+    }
+    // 如果 proposal 一次性执行了多个只读动作，把同类型的后续 pending step 也标记完成
+    if (consumed === 0) {
+      for (const action of proposal.actions) {
+        const next = steps.find((s) => s.status === "pending");
+        if (next) next.status = ok ? "done" : "failed";
+      }
+    }
+    const nextPlan: TaskPlan = { ...this.currentPlan, steps };
+    this.currentPlan = nextPlan;
+    this.setPayload({ plan: nextPlan });
+    this.currentProposal = proposalFromPlan(nextPlan);
+  }
+
+  private buildEvidenceSummary(conclusion: string, unresolved: string[]): EvidenceSummary {
+    const sources = this.browserService?.getState().sources ?? [];
+    return {
+      goal: this.session.payload?.goal,
+      status: this.session.status,
+      conclusions: [conclusion],
+      source_refs: sources.map((s) => s.id),
+      corrections: this.correctionChunks(),
+      failed_attempts: this.failedAttemptChunks(),
+      unresolved_questions: unresolved,
+      next_recommended_step: unresolved.length > 0 ? `继续研究：${unresolved[0]}` : undefined,
+      environment: `BrowserView: ${this.browserService?.getState().url ?? ""}`,
+      model_and_provider: "local-qwen2.5-3b"
+    };
+  }
+
+  private buildEvidenceSummaryFromSnapshot(snapshot: DesktopUiSnapshot): EvidenceSummary {
+    const conclusion = [...snapshot.session.chunks]
+      .reverse()
+      .find((c) => c.type === "conclusion")?.summary;
+    const unresolved = (snapshot.session.payload?.evidence?.unresolved_questions as string[]) ?? [];
+    return {
+      goal: snapshot.session.payload?.goal,
+      status: snapshot.session.status,
+      conclusions: conclusion ? [conclusion] : [],
+      source_refs: snapshot.browser.sources.map((s) => s.id),
+      corrections: this.correctionChunks(snapshot.session),
+      failed_attempts: this.failedAttemptChunks(snapshot.session),
+      unresolved_questions: unresolved,
+      environment: `BrowserView: ${snapshot.browser.url}`
+    };
+  }
+
+  private buildRecoveryAnchor(sources: ResearchSource[]): ResumeAnchor {
+    const last = sources[sources.length - 1];
+    return {
+      query: this.session.payload?.goal,
+      active_constraints: [],
+      last_successful_step: this.currentPlan?.steps.find((s) => s.status === "done")?.description,
+      required_permissions: ["network"],
+      last_verified_url: last?.url,
+      last_verified_title: last?.title,
+      last_verified_at: new Date().toISOString(),
+      expected_excerpt: last?.excerpt?.slice(0, 400)
+    };
+  }
+
+  private async revalidateSession(persisted: PersistedSession): Promise<void> {
+    const recovery = (persisted.recovery ?? persisted.session.payload?.recovery) as ResumeAnchor | undefined;
+    if (!this.browserService || !persisted.lastUrl) return;
+
+    await new Promise((resolve) => setTimeout(resolve, 1500)); // 等页面 settle
+    const text = await this.browserService.readVisibleText();
+    const title = this.browserService.getState().title;
+    const excerpt = text.trim().slice(0, 400);
+    const expectedExcerpt = recovery?.expected_excerpt ?? persisted.sources[persisted.sources.length - 1]?.excerpt?.slice(0, 400);
+    const titleChanged = recovery?.last_verified_title && title !== recovery.last_verified_title;
+    const excerptChanged = expectedExcerpt && !text.toLowerCase().includes(expectedExcerpt.toLowerCase().slice(0, 100));
+
+    if (titleChanged || excerptChanged) {
+      const query = recovery?.query ?? persisted.goal ?? persisted.session.payload?.goal ?? persisted.title;
+      this.appendState(`页面已变化，需要重新搜索：${query}`);
+      this.session = appendChunk(this.session, {
+        id: `chunk-${this.session.chunks.length + 1}`,
+        type: "revalidation",
+        summary: `页面重新验证失败：标题或内容与保存时不符`,
+        payload: { expected_title: recovery?.last_verified_title, actual_title: title, query }
+      });
+      this.currentProposal = {
+        proposal_id: `revalidate_${Date.now()}`,
+        type: "sequence",
+        visibility: "visible_virtual",
+        target_view: "browser_view_main",
+        actions: [
+          { action: "browser.search", params: { query: String(query) } },
+          { action: "browser.read", params: {} }
+        ],
+        safety: "safe",
+        expected_result: `页面变化，重新搜索 "${query}"`,
+        confidence: 0.7
+      };
+      this.runtimeState = "acting";
+    } else {
+      this.appendState(`页面重新验证通过：${title}`);
+    }
+  }
+
+  private correctionChunks(session: SessionRun = this.session): string[] {
+    return session.chunks
+      .filter((c) => c.type === "correction" || (c.type === "branch" && c.payload?.fork_reason))
+      .map((c) => c.summary);
+  }
+
+  private failedAttemptChunks(session: SessionRun = this.session): string[] {
+    return session.chunks
+      .filter((c) => c.type === "action_result" && c.payload?.ok === false)
+      .map((c) => c.summary);
+  }
 }
 
 const RESEARCH_INTENT_RE = /查|搜索|搜|研究|调研|打开|找|维基|百科|google|duckduckgo|bing|百度/i;
@@ -403,7 +652,12 @@ const CONCLUSION_SYSTEM_PROMPT = `你是一名严谨的研究助手。请根据�
 - 只使用提供的来源，不要编造；
 - 即使信息不完整，也尝试基于摘录给出简短总结，并在引用处说明信息有限；
 - 除非完全没有任何相关信息，否则不要回答「现有来源不足以得出结论」；
-- 输出格式示例："太阳系有 8 颗行星[1]，地球是其中之一[1]。"`;
+- 请同时输出 1-3 个「未解决问题」，作为 JSON 字段 unresolved_questions 数组；
+- 输出格式必须是可被 JSON.parse 解析的 JSON：
+{
+  "conclusion": "太阳系有 8 颗行星[1]，地球是其中之一[1]。",
+  "unresolved_questions": ["冥王星为何被降级？", "太阳系行星定义的历史变化是？"]
+}`;
 
 function buildConclusionPrompt(sources: ResearchSource[]): string {
   const body = sources
@@ -412,5 +666,21 @@ function buildConclusionPrompt(sources: ResearchSource[]): string {
         `[${index + 1}] ${source.title}\nURL: ${source.url}\n摘录：${source.excerpt}`
     )
     .join("\n\n");
-  return `当前共有 ${sources.length} 个来源。请只使用编号 [1] 到 [${sources.length}] 的引用，禁止引用不存在的来源。\n\n${body}`;
+  return `当前共有 ${sources.length} 个来源。请只使用编号 [1] 到 [${sources.length}] 的引用，禁止引用不存在的来源。请用 JSON 输出结论和未解决问题。\n\n${body}`;
+}
+
+function parseConclusionJson(raw: string): { conclusion: string; unresolved_questions: string[] } {
+  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (typeof parsed.conclusion === "string") {
+      return {
+        conclusion: parsed.conclusion,
+        unresolved_questions: Array.isArray(parsed.unresolved_questions) ? parsed.unresolved_questions : []
+      };
+    }
+  } catch {
+    // fall through
+  }
+  return { conclusion: raw, unresolved_questions: [] };
 }

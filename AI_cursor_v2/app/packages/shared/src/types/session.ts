@@ -2,7 +2,20 @@ import type { ActionProposal, ActionResult, SafetyLevel } from "./action.js";
 import type { ModelRuntimeState } from "./model.js";
 
 export type SessionStatus = "active" | "paused" | "completed" | "interrupted" | "failed";
-export type SessionChunkType = "user" | "model" | "proposal" | "action_result" | "safety" | "state" | "conclusion";
+export type SessionChunkType =
+  | "user"
+  | "model"
+  | "proposal"
+  | "action_result"
+  | "safety"
+  | "state"
+  | "conclusion"
+  | "correction"
+  | "todo"
+  | "evidence"
+  | "revalidation"
+  | "branch";
+
 export type SessionGraphNodeType =
   | "user_instruction"
   | "ai_plan"
@@ -20,6 +33,61 @@ export interface SessionChunk {
   created_at: string;
   summary: string;
   payload: Record<string, unknown>;
+}
+
+export interface SessionLineage {
+  parent_id?: string;
+  fork_from?: string;
+  fork_reason?: string;
+  merged_into?: string;
+  branch_ids?: string[];
+}
+
+export interface ResumeAnchor {
+  query?: string;
+  active_constraints?: string[];
+  last_successful_step?: string;
+  required_permissions?: string[];
+  last_verified_url?: string;
+  last_verified_title?: string;
+  last_verified_at?: string;
+  expected_excerpt?: string;
+}
+
+export interface EvidenceSummary {
+  goal?: string;
+  status: SessionStatus;
+  conclusions: string[];
+  source_refs: string[];
+  corrections: string[];
+  failed_attempts: string[];
+  unresolved_questions: string[];
+  next_recommended_step?: string;
+  environment?: string;
+  model_and_provider?: string;
+}
+
+export interface TaskStep {
+  id: string;
+  description: string;
+  tool: string;
+  params: Record<string, unknown>;
+  reason?: string;
+  status: "pending" | "done" | "failed";
+}
+
+export interface TaskPlan {
+  goal: string;
+  steps: TaskStep[];
+  current_step_id?: string;
+}
+
+export interface SessionPayload {
+  goal?: string;
+  lineage?: SessionLineage;
+  recovery?: ResumeAnchor;
+  evidence?: EvidenceSummary;
+  plan?: TaskPlan;
 }
 
 export interface SessionGraphNode {
@@ -51,6 +119,7 @@ export interface SessionRun {
   created_at: string;
   updated_at: string;
   chunks: SessionChunk[];
+  payload?: SessionPayload;
 }
 
 export interface SafetyDecision {
@@ -75,7 +144,8 @@ export function createSession(id: string, parent_id?: string): SessionRun {
     status: "active",
     created_at: now,
     updated_at: now,
-    chunks: []
+    chunks: [],
+    payload: parent_id ? { lineage: { parent_id } } : {}
   };
 }
 

@@ -72,7 +72,7 @@ export function SessionsPage({ onOpenTask }: SessionsPageProps) {
                 <ListRow
                   key={session.id}
                   title={session.title || session.goal || "未命名研究任务"}
-                  description={session.goal || `${session.sourceCount} 个来源 · ${new Date(session.updated_at).toLocaleString()}`}
+                  description={`${session.sourceCount} 个来源${session.hasEvidence ? " · 含证据摘要" : ""}${session.parent_id ? ` · 分支自 #${session.parent_id.slice(0, 8)}` : ""}`}
                   trailing={
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-slate-400">{new Date(session.updated_at).toLocaleDateString()}</span>
