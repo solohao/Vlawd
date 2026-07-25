@@ -337,6 +337,9 @@ export class WhisperTranscriber {
     }
   >();
   private onProgress?: (status: string, progress?: number) => void;
+  private initResolve: (() => void) | null = null;
+  private initReject: ((error: Error) => void) | null = null;
+  private initPromise: Promise<void> | null = null;
 
   static isSupported(): boolean {
     return typeof Worker !== "undefined";
@@ -357,6 +360,18 @@ export class WhisperTranscriber {
         this.onProgress?.(message.status, message.progress);
         return;
       }
+      if (message.type === "ready") {
+        this.initResolve?.();
+        this.initResolve = null;
+        this.initReject = null;
+        return;
+      }
+      if (message.type === "error" && message.id === null) {
+        this.initReject?.(new Error(message.message));
+        this.initResolve = null;
+        this.initReject = null;
+        return;
+      }
       if (message.type === "partial") {
         this.pending.get(message.id)?.onPartial?.(message.text);
         return;
@@ -373,6 +388,9 @@ export class WhisperTranscriber {
     };
     worker.onerror = (event) => {
       const error = new Error(event.message || "Whisper worker 出错");
+      this.initReject?.(error);
+      this.initResolve = null;
+      this.initReject = null;
       for (const [, handlers] of this.pending) {
         handlers.reject(error);
       }
@@ -382,10 +400,17 @@ export class WhisperTranscriber {
     return worker;
   }
 
-  /** 预热：提前加载模型，缩短首次转写延迟。 */
-  warmup(): void {
-    const request: WhisperWorkerRequest = { type: "init" };
-    this.ensureWorker().postMessage(request);
+  /** 预热：提前加载模型，缩短首次转写延迟。可指定 Hugging Face 模型 id。 */
+  warmup(model = "Xenova/whisper-tiny"): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = new Promise<void>((resolve, reject) => {
+        this.initResolve = resolve;
+        this.initReject = reject;
+      });
+      const request: WhisperWorkerRequest = { type: "init", model };
+      this.ensureWorker().postMessage(request);
+    }
+    return this.initPromise;
   }
 
   transcribe(
@@ -406,6 +431,9 @@ export class WhisperTranscriber {
   stop(): void {
     this.worker?.terminate();
     this.worker = null;
+    this.initPromise = null;
+    this.initResolve = null;
+    this.initReject = null;
     for (const [, handlers] of this.pending) {
       handlers.reject(new Error("已停止"));
     }
