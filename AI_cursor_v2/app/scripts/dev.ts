@@ -1,6 +1,27 @@
 import { spawn } from "node:child_process";
+import { createServer as createNetServer } from "node:net";
 import { resolve } from "node:path";
 import { createServer } from "vite";
+
+function findFreePort(preferred = 9333): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        // 尝试使用随机端口
+        server.listen(0);
+      } else {
+        reject(err);
+      }
+    });
+    server.on("listening", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : preferred;
+      server.close(() => resolve(port));
+    });
+    server.listen(preferred);
+  });
+}
 
 const smokeMode = process.argv.includes("--smoke");
 const appRoot = resolve(import.meta.dirname, "..");
@@ -37,10 +58,12 @@ const electronBin = process.platform === "win32"
   ? resolve(appRoot, "node_modules/.bin/electron.cmd")
   : resolve(appRoot, "node_modules/.bin/electron");
 
+const remoteDebugPort = await findFreePort();
 console.log(`AI Cursor V2 renderer: ${address}`);
 console.log(`AI Cursor V2 electron main: ${electronMain}`);
+console.log(`AI Cursor V2 remote debugging port: ${remoteDebugPort}`);
 
-const electronProcess = spawn(electronBin, [electronMain, "--remote-debugging-port=9333"], {
+const electronProcess = spawn(electronBin, [electronMain, `--remote-debugging-port=${remoteDebugPort}`], {
   cwd: appRoot,
   shell: true,
   stdio: "inherit",
