@@ -30,6 +30,10 @@ export type ModelBackendStatus = OllamaBackendStatus;
 export interface CustomEndpointConfig {
   baseUrl: string;
   model: string;
+  /** 用户给该端点起的别名，仅用于展示。 */
+  name?: string;
+  /** API 密钥，连接需要鉴权的端点时使用（当前由前端保存，后端透传）。 */
+  apiKey?: string;
 }
 
 export interface GpuInfo {

@@ -6,6 +6,7 @@ export interface CustomEndpoint {
   id: string;
   name: string;
   url: string;
+  model: string;
   apiKey?: string;
   type: 'openai-compatible' | 'custom';
   enabled: boolean;
@@ -103,6 +104,7 @@ interface EndpointFormProps {
 export function EndpointForm({ endpoint, onSave, onCancel }: EndpointFormProps) {
   const [name, setName] = useState(endpoint?.name || '');
   const [url, setUrl] = useState(endpoint?.url || '');
+  const [model, setModel] = useState(endpoint?.model || '');
   const [apiKey, setApiKey] = useState(endpoint?.apiKey || '');
   const [type, setType] = useState<'openai-compatible' | 'custom'>(
     endpoint?.type || 'openai-compatible'
@@ -113,6 +115,7 @@ export function EndpointForm({ endpoint, onSave, onCancel }: EndpointFormProps) 
     onSave({
       name,
       url,
+      model,
       apiKey: apiKey || undefined,
       type,
       enabled: true
@@ -144,6 +147,20 @@ export function EndpointForm({ endpoint, onSave, onCancel }: EndpointFormProps) 
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="http://localhost:8000"
+          required
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        />
+      </div>
+
+      <div>
+        <label className="block text-[12px] font-medium text-slate-700 mb-1.5">
+          模型名称
+        </label>
+        <input
+          type="text"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder="例如：qwen2.5:3b-instruct"
           required
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
         />

@@ -32,6 +32,7 @@ export interface CustomEndpoint {
   id: string;
   name: string;
   url: string;
+  model: string;
   apiKey?: string;
   type: 'openai-compatible' | 'custom';
   enabled: boolean;
