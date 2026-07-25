@@ -116,7 +116,8 @@ export class MockDesktopRuntime {
           reason: "依据行程天数 × 城市预算标准补齐草稿表格",
           riskLevel: "safe",
           countdownSeconds: 3
-        }
+        },
+        sources: []
       },
       session: this.session,
       graph: this.createGraph()

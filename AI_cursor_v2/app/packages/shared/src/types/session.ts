@@ -2,7 +2,7 @@ import type { ActionProposal, ActionResult, SafetyLevel } from "./action.js";
 import type { ModelRuntimeState } from "./model.js";
 
 export type SessionStatus = "active" | "paused" | "completed" | "interrupted" | "failed";
-export type SessionChunkType = "user" | "model" | "proposal" | "action_result" | "safety" | "state";
+export type SessionChunkType = "user" | "model" | "proposal" | "action_result" | "safety" | "state" | "conclusion";
 export type SessionGraphNodeType =
   | "user_instruction"
   | "ai_plan"

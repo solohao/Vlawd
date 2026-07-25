@@ -52,6 +52,22 @@ export interface DesktopRuntimeActionState {
   countdownSeconds?: number;
 }
 
+export interface ResearchSource {
+  id: string;
+  url: string;
+  title: string;
+  excerpt: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  goal?: string;
+  sourceCount: number;
+}
+
 export interface DesktopBrowserRuntimeState {
   url: string;
   title: string;
@@ -59,6 +75,7 @@ export interface DesktopBrowserRuntimeState {
   error?: string;
   nextAction: DesktopRuntimeActionState;
   lastResult?: ActionResult;
+  sources: ResearchSource[];
 }
 
 export interface DesktopUiSnapshot {

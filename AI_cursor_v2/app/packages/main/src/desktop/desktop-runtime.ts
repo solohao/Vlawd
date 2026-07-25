@@ -5,6 +5,8 @@ import {
   type ActionProposal,
   type ActionResult,
   type DesktopBrowserRuntimeState,
+  type ResearchSource,
+  type SessionSummary,
   type DesktopModelDownloadState,
   type DesktopModelHealthCheck,
   type DesktopRuntimeActionState,
@@ -22,6 +24,8 @@ import {
 import type { BrowserService } from "../browser/browser-service.js";
 import { ActionPlanner } from "../planner/action-planner.js";
 import type { LlmAdapter } from "../model/llm-adapter.js";
+import * as sessionPersistence from "./session-persistence.js";
+import type { PersistedSession } from "./session-persistence.js";
 
 const emptyGraph: SessionGraphSnapshot = {
   session_id: "",
@@ -59,6 +63,7 @@ export class DesktopRuntime {
   private currentProposal?: ActionProposal;
   private lastResult?: ActionResult;
   private executionController?: AbortController;
+  private listeners = new Set<(snapshot: DesktopUiSnapshot) => void>();
 
   constructor(options: DesktopRuntimeOptions = {}) {
     this.browserService = options.browserService;
@@ -67,6 +72,18 @@ export class DesktopRuntime {
 
   setPlannerLlm(getLlm: () => LlmAdapter | undefined): void {
     this.getPlannerLlm = getLlm;
+  }
+
+  onUpdate(listener: (snapshot: DesktopUiSnapshot) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(): void {
+    const snapshot = this.getSnapshot();
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
   }
 
   getSnapshot(): DesktopUiSnapshot {
@@ -161,6 +178,7 @@ export class DesktopRuntime {
     this.executionController?.abort();
     this.browserService?.pause();
     this.appendState("用户暂停 AI 执行");
+    this.emit();
     return this.getSnapshot();
   }
 
@@ -169,7 +187,24 @@ export class DesktopRuntime {
     this.session = { ...this.session, status: "interrupted", updated_at: new Date().toISOString() };
     this.executionController?.abort();
     this.browserService?.close();
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
     this.appendState("用户取消当前步骤");
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  async bargeIn(heardText?: string): Promise<DesktopUiSnapshot> {
+    this.executionController?.abort();
+    this.browserService?.close();
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
+    this.runtimeState = "interrupted";
+    this.appendState(`语音插话：${heardText ?? ""}`);
+    this.emit();
+    if (heardText && isResearchIntent(heardText)) {
+      return this.startResearch(heardText);
+    }
     return this.getSnapshot();
   }
 
@@ -193,6 +228,7 @@ export class DesktopRuntime {
     this.appendState(
       `生成提案 ${proposal.proposal_id}，安全等级 ${proposal.safety}，预期结果：${proposal.expected_result}`
     );
+    this.emit();
     return this.getSnapshot();
   }
 
@@ -217,6 +253,92 @@ export class DesktopRuntime {
     this.appendState(
       `执行结果：${this.lastResult?.ok ? "成功" : "失败"} - ${this.lastResult?.message ?? ""}`
     );
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  async finalizeResearch(): Promise<DesktopUiSnapshot> {
+    const sources = this.browserService?.getState().sources ?? [];
+    if (sources.length === 0) {
+      this.appendState("暂无来源，无法生成结论");
+      this.emit();
+      return this.getSnapshot();
+    }
+    this.runtimeState = "thinking";
+    this.appendState("正在汇总来源并生成结论");
+    this.emit();
+
+    const llm = this.getPlannerLlm?.();
+    if (!llm) {
+      this.runtimeState = "interrupted";
+      this.appendState("没有可用的执行大脑，无法生成结论");
+      this.emit();
+      return this.getSnapshot();
+    }
+
+    const prompt = buildConclusionPrompt(sources);
+    const conclusion = await llm.complete(
+      [
+        { role: "system", content: CONCLUSION_SYSTEM_PROMPT },
+        { role: "user", content: prompt }
+      ],
+      this.executionController?.signal
+    );
+
+    this.runtimeState = "complete";
+    this.session = appendChunk(this.session, {
+      id: `chunk-${this.session.chunks.length + 1}`,
+      type: "conclusion",
+      summary: conclusion,
+      payload: { sources: sources.map((s) => s.id) }
+    });
+    this.appendState("结论已生成");
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  saveSession(): DesktopUiSnapshot {
+    const snapshot = this.getSnapshot();
+    sessionPersistence.saveSession(snapshot);
+    this.runtimeState = "complete";
+    this.appendState(`会话已保存：${snapshot.session.id}`);
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  listSessions(): SessionSummary[] {
+    return sessionPersistence.listSessions();
+  }
+
+  async loadSession(id: string): Promise<DesktopUiSnapshot> {
+    const persisted = sessionPersistence.loadSession(id);
+    if (!persisted) {
+      this.runtimeState = "interrupted";
+      this.appendState(`找不到会话：${id}`);
+      this.emit();
+      return this.getSnapshot();
+    }
+
+    this.executionController?.abort();
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
+    this.session = persisted.session;
+    this.browserService?.setSources(persisted.sources);
+    if (persisted.lastUrl) {
+      await this.browserService?.open(persisted.lastUrl);
+    } else {
+      this.browserService?.close();
+    }
+    this.runtimeState = "paused";
+    this.appendState(`恢复会话：${persisted.title}`);
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  deleteSession(id: string): DesktopUiSnapshot {
+    const ok = sessionPersistence.deleteSession(id);
+    this.appendState(ok ? `已删除会话：${id}` : `删除会话失败：${id}`);
+    this.emit();
     return this.getSnapshot();
   }
 
@@ -225,7 +347,8 @@ export class DesktopRuntime {
       url: "",
       title: "",
       nextAction: this.buildNextAction(),
-      lastResult: this.lastResult
+      lastResult: this.lastResult,
+      sources: []
     };
     return {
       ...browser,
@@ -264,4 +387,30 @@ export class DesktopRuntime {
       payload: { runtimeState: this.runtimeState }
     });
   }
+}
+
+const RESEARCH_INTENT_RE = /查|搜索|搜|研究|调研|打开|找|维基|百科|google|duckduckgo|bing|百度/i;
+
+export function isResearchIntent(text: string): boolean {
+  return RESEARCH_INTENT_RE.test(text);
+}
+
+const CONCLUSION_SYSTEM_PROMPT = `你是一名严谨的研究助手。请根据用户提供的来源摘录，用中文生成一段带引用标记的研究结论。
+
+要求：
+- 结论控制在 200 字以内；
+- 关键事实后使用 [1]、[2] 等编号引用来源；
+- 只使用提供的来源，不要编造；
+- 即使信息不完整，也尝试基于摘录给出简短总结，并在引用处说明信息有限；
+- 除非完全没有任何相关信息，否则不要回答「现有来源不足以得出结论」；
+- 输出格式示例："太阳系有 8 颗行星[1]，地球是其中之一[1]。"`;
+
+function buildConclusionPrompt(sources: ResearchSource[]): string {
+  const body = sources
+    .map(
+      (source, index) =>
+        `[${index + 1}] ${source.title}\nURL: ${source.url}\n摘录：${source.excerpt}`
+    )
+    .join("\n\n");
+  return `当前共有 ${sources.length} 个来源。请只使用编号 [1] 到 [${sources.length}] 的引用，禁止引用不存在的来源。\n\n${body}`;
 }

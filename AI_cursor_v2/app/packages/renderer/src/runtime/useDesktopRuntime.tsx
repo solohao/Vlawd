@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CustomEndpointConfig, DesktopUiSnapshot, ModelBackendKind, ModelRole } from "@ai-cursor-v2/shared";
+import type { CustomEndpointConfig, DesktopUiSnapshot, ModelBackendKind, ModelRole, SessionSummary } from "@ai-cursor-v2/shared";
 import { desktopApi } from "../app/desktop-api.js";
 
 const EMPTY_SNAPSHOT: DesktopUiSnapshot = {
@@ -25,7 +25,8 @@ const EMPTY_SNAPSHOT: DesktopUiSnapshot = {
       value: "",
       reason: "",
       riskLevel: "safe"
-    }
+    },
+    sources: []
   },
   session: {
     id: "",
@@ -54,6 +55,11 @@ export interface DesktopRuntimeController {
   cancelSession(): Promise<void>;
   startResearch(goal: string): Promise<void>;
   executeRuntimeAction(): Promise<void>;
+  finalizeResearch(): Promise<void>;
+  saveSession(): Promise<void>;
+  listSessions(): Promise<SessionSummary[]>;
+  loadSession(id: string): Promise<void>;
+  deleteSession(id: string): Promise<void>;
   browserOpen(url: string): Promise<void>;
   browserSearch(query: string): Promise<void>;
   browserPause(): Promise<void>;
@@ -114,6 +120,11 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
   const cancelSession = useCallback(() => run(() => desktopApi().cancelSession()), [run]);
   const startResearch = useCallback((goal: string) => run(() => desktopApi().startResearch(goal)), [run]);
   const executeRuntimeAction = useCallback(() => run(() => desktopApi().executeRuntimeAction()), [run]);
+  const finalizeResearch = useCallback(() => run(() => desktopApi().finalizeResearch()), [run]);
+  const saveSession = useCallback(() => run(() => desktopApi().saveSession()), [run]);
+  const listSessions = useCallback(() => desktopApi().listSessions(), [run]);
+  const loadSession = useCallback((id: string) => run(() => desktopApi().loadSession(id)), [run]);
+  const deleteSession = useCallback((id: string) => run(() => desktopApi().deleteSession(id)), [run]);
   const browserOpen = useCallback((url: string) => run(() => desktopApi().browserOpen(url)), [run]);
   const browserSearch = useCallback((query: string) => run(() => desktopApi().browserSearch(query)), [run]);
   const browserPause = useCallback(() => run(() => desktopApi().browserPause()), [run]);
@@ -138,6 +149,11 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       cancelSession,
       startResearch,
       executeRuntimeAction,
+      finalizeResearch,
+      saveSession,
+      listSessions,
+      loadSession,
+      deleteSession,
       browserOpen,
       browserSearch,
       browserPause,
@@ -157,6 +173,11 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       cancelSession,
       startResearch,
       executeRuntimeAction,
+      finalizeResearch,
+      saveSession,
+      listSessions,
+      loadSession,
+      deleteSession,
       browserOpen,
       browserSearch,
       browserPause,

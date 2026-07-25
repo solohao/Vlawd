@@ -20,12 +20,13 @@ const typeLabels: Record<string, string> = {
   proposal: "提案",
   action_result: "结果",
   safety: "安全",
-  state: "状态"
+  state: "状态",
+  conclusion: "结论"
 };
 
 export function TaskWorkspacePage() {
   const desktop = useDesktopRuntime();
-  const { snapshot, busy, pauseSession, cancelSession, startResearch, executeRuntimeAction, browserOpen, browserSearch, browserPause, browserClose, browserSetBounds } = desktop;
+  const { snapshot, busy, pauseSession, cancelSession, startResearch, executeRuntimeAction, finalizeResearch, saveSession, browserOpen, browserSearch, browserPause, browserClose, browserSetBounds } = desktop;
   const { runtimeState, session, graph, browser } = snapshot;
 
   const [goal, setGoal] = useState("");
@@ -57,10 +58,12 @@ export function TaskWorkspacePage() {
     };
   }, [browserSetBounds]);
 
-  const stateTone = runtimeState === "interrupted" ? "danger" : runtimeState === "paused" ? "warning" : "brand";
-  const stateText = runtimeState === "paused" ? "Paused" : runtimeState === "interrupted" ? "Interrupted" : runtimeState === "acting" ? "Acting" : "Active";
+  const stateTone = runtimeState === "interrupted" ? "danger" : runtimeState === "paused" ? "warning" : runtimeState === "complete" ? "info" : "brand";
+  const stateText =
+    runtimeState === "paused" ? "Paused" : runtimeState === "interrupted" ? "Interrupted" : runtimeState === "acting" ? "Acting" : runtimeState === "complete" ? "Done" : "Active";
 
   const visibleChunks = [...session.chunks].slice(-6).reverse();
+  const conclusion = [...session.chunks].reverse().find((chunk) => chunk.type === "conclusion")?.summary;
 
   return (
     <FeatureSection id="ui.task" title="任务空间" className="h-full">
@@ -184,7 +187,7 @@ export function TaskWorkspacePage() {
 
             {browser.url && (
               <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600 shadow-sm">
-                <span className="font-medium">URL:</span> {browser.url}
+                <span className="font-medium">URL:</span> <span data-testid="browser-url">{browser.url}</span>
               </div>
             )}
 
@@ -197,6 +200,11 @@ export function TaskWorkspacePage() {
                     {browser.nextAction.actionType} · {browser.nextAction.targetLabel}
                   </span>
                 </div>
+                {browser.nextAction.value && (
+                  <p data-testid="next-action-value" className="mt-1 text-[10px] text-slate-500">
+                    参数：{browser.nextAction.value}
+                  </p>
+                )}
                 <p className="mt-1 text-[10px] text-slate-400">{browser.nextAction.reason}</p>
                 <p className="mt-1 text-[10px] text-slate-400">风险等级：{browser.nextAction.riskLevel}</p>
               </div>
@@ -220,6 +228,12 @@ export function TaskWorkspacePage() {
               <Button variant="primary" size="default" className="w-full gap-2" onClick={() => void executeRuntimeAction()} disabled={busy}>
                 <HandIcon width={14} height={14} /> 接管并执行
               </Button>
+              <Button variant="secondary" size="sm" className="w-full" onClick={() => void finalizeResearch()} disabled={busy || browser.sources.length === 0}>
+                生成结论（引用 {browser.sources.length} 个来源）
+              </Button>
+              <Button variant="secondary" size="sm" className="w-full" onClick={() => void saveSession()} disabled={busy}>
+                保存会话
+              </Button>
             </div>
           </Card>
 
@@ -238,6 +252,30 @@ export function TaskWorkspacePage() {
                 />
               ))}
             </List>
+            {browser.sources.length > 0 && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <p className="text-[12px] font-semibold text-slate-800">来源</p>
+                <List className="mt-2 space-y-2">
+                  {browser.sources.map((source) => (
+                    <ListRow
+                      key={source.id}
+                      data-testid="source-link"
+                      data-url={source.url}
+                      title={source.title || source.url}
+                      description={source.excerpt.slice(0, 80)}
+                      onClick={() => void browserOpen(source.url)}
+                      trailing={<span className="text-[10px] text-slate-400">{source.id}</span>}
+                    />
+                  ))}
+                </List>
+              </div>
+            )}
+            {conclusion && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <p className="text-[12px] font-semibold text-slate-800">研究结论</p>
+                <p className="mt-2 whitespace-pre-wrap text-[11px] leading-relaxed text-slate-700">{conclusion}</p>
+              </div>
+            )}
             <div className="mt-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
               <div className="flex items-center gap-2">
                 <BrainIcon width={15} height={15} className="text-brand-700" />
