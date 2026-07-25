@@ -25,6 +25,7 @@ export interface AiCursorDesktopApi {
   cancelSession(): Promise<DesktopUiSnapshot>;
   startResearch(goal: string): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
+  finalizeResearch(): Promise<DesktopUiSnapshot>;
   browserOpen(url: string): Promise<DesktopUiSnapshot>;
   browserSearch(query: string): Promise<DesktopUiSnapshot>;
   browserPause(): Promise<DesktopUiSnapshot>;

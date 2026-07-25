@@ -5,6 +5,7 @@ import {
   type ActionProposal,
   type ActionResult,
   type DesktopBrowserRuntimeState,
+  type ResearchSource,
   type DesktopModelDownloadState,
   type DesktopModelHealthCheck,
   type DesktopRuntimeActionState,
@@ -253,12 +254,53 @@ export class DesktopRuntime {
     return this.getSnapshot();
   }
 
+  async finalizeResearch(): Promise<DesktopUiSnapshot> {
+    const sources = this.browserService?.getState().sources ?? [];
+    if (sources.length === 0) {
+      this.appendState("暂无来源，无法生成结论");
+      this.emit();
+      return this.getSnapshot();
+    }
+    this.runtimeState = "thinking";
+    this.appendState("正在汇总来源并生成结论");
+    this.emit();
+
+    const llm = this.getPlannerLlm?.();
+    if (!llm) {
+      this.runtimeState = "interrupted";
+      this.appendState("没有可用的执行大脑，无法生成结论");
+      this.emit();
+      return this.getSnapshot();
+    }
+
+    const prompt = buildConclusionPrompt(sources);
+    const conclusion = await llm.complete(
+      [
+        { role: "system", content: CONCLUSION_SYSTEM_PROMPT },
+        { role: "user", content: prompt }
+      ],
+      this.executionController?.signal
+    );
+
+    this.runtimeState = "complete";
+    this.session = appendChunk(this.session, {
+      id: `chunk-${this.session.chunks.length + 1}`,
+      type: "conclusion",
+      summary: conclusion,
+      payload: { sources: sources.map((s) => s.id) }
+    });
+    this.appendState("结论已生成");
+    this.emit();
+    return this.getSnapshot();
+  }
+
   private getBrowserSnapshot(): DesktopBrowserRuntimeState {
     const browser = this.browserService?.getState() ?? {
       url: "",
       title: "",
       nextAction: this.buildNextAction(),
-      lastResult: this.lastResult
+      lastResult: this.lastResult,
+      sources: []
     };
     return {
       ...browser,
@@ -303,4 +345,24 @@ const RESEARCH_INTENT_RE = /查|搜索|搜|研究|调研|打开|找|维基|百�
 
 export function isResearchIntent(text: string): boolean {
   return RESEARCH_INTENT_RE.test(text);
+}
+
+const CONCLUSION_SYSTEM_PROMPT = `你是一名严谨的研究助手。请根据用户提供的来源摘录，用中文生成一段带引用标记的研究结论。
+
+要求：
+- 结论控制在 200 字以内；
+- 关键事实后使用 [1]、[2] 等编号引用来源；
+- 只使用提供的来源，不要编造；
+- 即使信息不完整，也尝试基于摘录给出简短总结，并在引用处说明信息有限；
+- 除非完全没有任何相关信息，否则不要回答「现有来源不足以得出结论」；
+- 输出格式示例："太阳系有 8 颗行星[1]，地球是其中之一[1]。"`;
+
+function buildConclusionPrompt(sources: ResearchSource[]): string {
+  const body = sources
+    .map(
+      (source, index) =>
+        `[${index + 1}] ${source.title}\nURL: ${source.url}\n摘录：${source.excerpt}`
+    )
+    .join("\n\n");
+  return `当前共有 ${sources.length} 个来源。请只使用编号 [1] 到 [${sources.length}] 的引用，禁止引用不存在的来源。\n\n${body}`;
 }

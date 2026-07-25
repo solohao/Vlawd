@@ -25,7 +25,8 @@ const EMPTY_SNAPSHOT: DesktopUiSnapshot = {
       value: "",
       reason: "",
       riskLevel: "safe"
-    }
+    },
+    sources: []
   },
   session: {
     id: "",
@@ -54,6 +55,7 @@ export interface DesktopRuntimeController {
   cancelSession(): Promise<void>;
   startResearch(goal: string): Promise<void>;
   executeRuntimeAction(): Promise<void>;
+  finalizeResearch(): Promise<void>;
   browserOpen(url: string): Promise<void>;
   browserSearch(query: string): Promise<void>;
   browserPause(): Promise<void>;
@@ -114,6 +116,7 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
   const cancelSession = useCallback(() => run(() => desktopApi().cancelSession()), [run]);
   const startResearch = useCallback((goal: string) => run(() => desktopApi().startResearch(goal)), [run]);
   const executeRuntimeAction = useCallback(() => run(() => desktopApi().executeRuntimeAction()), [run]);
+  const finalizeResearch = useCallback(() => run(() => desktopApi().finalizeResearch()), [run]);
   const browserOpen = useCallback((url: string) => run(() => desktopApi().browserOpen(url)), [run]);
   const browserSearch = useCallback((query: string) => run(() => desktopApi().browserSearch(query)), [run]);
   const browserPause = useCallback(() => run(() => desktopApi().browserPause()), [run]);
@@ -138,6 +141,7 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       cancelSession,
       startResearch,
       executeRuntimeAction,
+      finalizeResearch,
       browserOpen,
       browserSearch,
       browserPause,
@@ -157,6 +161,7 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       cancelSession,
       startResearch,
       executeRuntimeAction,
+      finalizeResearch,
       browserOpen,
       browserSearch,
       browserPause,

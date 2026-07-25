@@ -1,5 +1,5 @@
 import { BrowserWindow, WebContentsView } from "electron";
-import type { ActionProposal, ActionResult, AtomicAction, DesktopBrowserRuntimeState } from "@ai-cursor-v2/shared";
+import type { ActionProposal, ActionResult, AtomicAction, DesktopBrowserRuntimeState, ResearchSource } from "@ai-cursor-v2/shared";
 
 export interface BrowserBounds {
   x: number;
@@ -18,6 +18,7 @@ export class BrowserService {
   private loading = false;
   private error?: string;
   private lastResult?: ActionResult;
+  private sources: ResearchSource[] = [];
 
   setMainWindow(window: BrowserWindow): void {
     this.mainWindow = window;
@@ -42,7 +43,8 @@ export class BrowserService {
         reason: "",
         riskLevel: "safe"
       },
-      lastResult: this.lastResult
+      lastResult: this.lastResult,
+      sources: [...this.sources]
     };
   }
 
@@ -87,6 +89,7 @@ export class BrowserService {
     this.loading = false;
     this.error = undefined;
     this.lastResult = undefined;
+    this.sources = [];
     this.emit();
   }
 
@@ -136,11 +139,18 @@ export class BrowserService {
         }
         case "browser.read": {
           const text = await this.readVisibleText();
+          const source: ResearchSource = {
+            id: `source-${this.sources.length + 1}`,
+            url: this.url,
+            title: this.title,
+            excerpt: text.trim().slice(0, 1200).replace(/\s+/g, " ")
+          };
+          this.sources.push(source);
           return {
             action,
             ok: true,
             message: `已提取页面可见文本 ${text.length} 字`,
-            virtual_state: { text, url: this.url, title: this.title }
+            virtual_state: { text, url: this.url, title: this.title, source }
           };
         }
         default:

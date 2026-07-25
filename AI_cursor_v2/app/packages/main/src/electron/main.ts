@@ -305,6 +305,7 @@ ipcMain.handle("desktop:startResearch", (_event, goal: string) =>
   handleDesktop(() => runtime.startResearch(goal))
 );
 ipcMain.handle("desktop:executeRuntimeAction", () => handleDesktop(() => runtime.executeRuntimeAction()));
+ipcMain.handle("desktop:finalizeResearch", () => handleDesktop(() => runtime.finalizeResearch()));
 
 // ── BrowserView 研究任务通道 ───────────────────────────────────────
 ipcMain.handle("browser:open", (_event, url: string) => {
