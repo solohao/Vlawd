@@ -24,6 +24,12 @@ export interface AiCursorDesktopApi {
   pauseSession(): Promise<DesktopUiSnapshot>;
   cancelSession(): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
+  browserOpen(url: string): Promise<DesktopUiSnapshot>;
+  browserSearch(query: string): Promise<DesktopUiSnapshot>;
+  browserPause(): Promise<DesktopUiSnapshot>;
+  browserClose(): Promise<DesktopUiSnapshot>;
+  browserSetBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<DesktopUiSnapshot>;
+  browserRead(): Promise<{ text: string }>;
   openMainWindow(): Promise<void>;
   hideMainWindow(): Promise<void>;
   resizeOverlay(size: OverlaySize): Promise<void>;

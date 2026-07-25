@@ -53,6 +53,11 @@ export interface DesktopRuntimeController {
   pauseSession(): Promise<void>;
   cancelSession(): Promise<void>;
   executeRuntimeAction(): Promise<void>;
+  browserOpen(url: string): Promise<void>;
+  browserSearch(query: string): Promise<void>;
+  browserPause(): Promise<void>;
+  browserClose(): Promise<void>;
+  browserSetBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<void>;
   refresh(): Promise<void>;
 }
 
@@ -107,6 +112,15 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
   const pauseSession = useCallback(() => run(() => desktopApi().pauseSession()), [run]);
   const cancelSession = useCallback(() => run(() => desktopApi().cancelSession()), [run]);
   const executeRuntimeAction = useCallback(() => run(() => desktopApi().executeRuntimeAction()), [run]);
+  const browserOpen = useCallback((url: string) => run(() => desktopApi().browserOpen(url)), [run]);
+  const browserSearch = useCallback((query: string) => run(() => desktopApi().browserSearch(query)), [run]);
+  const browserPause = useCallback(() => run(() => desktopApi().browserPause()), [run]);
+  const browserClose = useCallback(() => run(() => desktopApi().browserClose()), [run]);
+  const browserSetBounds = useCallback(
+    (bounds: { x: number; y: number; width: number; height: number }) =>
+      run(() => desktopApi().browserSetBounds(bounds)),
+    [run]
+  );
   const refresh = useCallback(() => run(() => desktopApi().getSnapshot()), [run]);
 
   const value = useMemo(
@@ -121,6 +135,11 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       pauseSession,
       cancelSession,
       executeRuntimeAction,
+      browserOpen,
+      browserSearch,
+      browserPause,
+      browserClose,
+      browserSetBounds,
       refresh
     }),
     [
@@ -134,6 +153,11 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       pauseSession,
       cancelSession,
       executeRuntimeAction,
+      browserOpen,
+      browserSearch,
+      browserPause,
+      browserClose,
+      browserSetBounds,
       refresh
     ]
   );
