@@ -59,6 +59,15 @@ export interface ResearchSource {
   excerpt: string;
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  goal?: string;
+  sourceCount: number;
+}
+
 export interface DesktopBrowserRuntimeState {
   url: string;
   title: string;

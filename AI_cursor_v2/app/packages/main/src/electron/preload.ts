@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { SessionSummary } from "@ai-cursor-v2/shared";
 import type {
   CustomEndpointConfig,
   DesktopUiSnapshot,
@@ -28,6 +29,10 @@ export interface AiCursorDesktopApi {
   startResearch(goal: string): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
   finalizeResearch(): Promise<DesktopUiSnapshot>;
+  saveSession(): Promise<DesktopUiSnapshot>;
+  listSessions(): Promise<SessionSummary[]>;
+  loadSession(id: string): Promise<DesktopUiSnapshot>;
+  deleteSession(id: string): Promise<DesktopUiSnapshot>;
   /** 在 Task Workspace 的浏览器容器里打开指定 URL。 */
   browserOpen(url: string): Promise<DesktopUiSnapshot>;
   /** 用默认搜索引擎打开查询词。 */
@@ -126,6 +131,10 @@ const api: AiCursorDesktopApi = {
   startResearch: (goal: string) => ipcRenderer.invoke("desktop:startResearch", goal) as Promise<DesktopUiSnapshot>,
   executeRuntimeAction: () => ipcRenderer.invoke("desktop:executeRuntimeAction") as Promise<DesktopUiSnapshot>,
   finalizeResearch: () => ipcRenderer.invoke("desktop:finalizeResearch") as Promise<DesktopUiSnapshot>,
+  saveSession: () => ipcRenderer.invoke("desktop:saveSession") as Promise<DesktopUiSnapshot>,
+  listSessions: () => ipcRenderer.invoke("desktop:listSessions") as Promise<SessionSummary[]>,
+  loadSession: (id: string) => ipcRenderer.invoke("desktop:loadSession", id) as Promise<DesktopUiSnapshot>,
+  deleteSession: (id: string) => ipcRenderer.invoke("desktop:deleteSession", id) as Promise<DesktopUiSnapshot>,
   browserOpen: (url: string) => ipcRenderer.invoke("browser:open", url) as Promise<DesktopUiSnapshot>,
   browserSearch: (query: string) => ipcRenderer.invoke("browser:search", query) as Promise<DesktopUiSnapshot>,
   browserPause: () => ipcRenderer.invoke("browser:pause") as Promise<DesktopUiSnapshot>,

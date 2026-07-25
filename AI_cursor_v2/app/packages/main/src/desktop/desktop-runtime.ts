@@ -6,6 +6,7 @@ import {
   type ActionResult,
   type DesktopBrowserRuntimeState,
   type ResearchSource,
+  type SessionSummary,
   type DesktopModelDownloadState,
   type DesktopModelHealthCheck,
   type DesktopRuntimeActionState,
@@ -23,6 +24,8 @@ import {
 import type { BrowserService } from "../browser/browser-service.js";
 import { ActionPlanner } from "../planner/action-planner.js";
 import type { LlmAdapter } from "../model/llm-adapter.js";
+import * as sessionPersistence from "./session-persistence.js";
+import type { PersistedSession } from "./session-persistence.js";
 
 const emptyGraph: SessionGraphSnapshot = {
   session_id: "",
@@ -290,6 +293,51 @@ export class DesktopRuntime {
       payload: { sources: sources.map((s) => s.id) }
     });
     this.appendState("结论已生成");
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  saveSession(): DesktopUiSnapshot {
+    const snapshot = this.getSnapshot();
+    sessionPersistence.saveSession(snapshot);
+    this.runtimeState = "complete";
+    this.appendState(`会话已保存：${snapshot.session.id}`);
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  listSessions(): SessionSummary[] {
+    return sessionPersistence.listSessions();
+  }
+
+  async loadSession(id: string): Promise<DesktopUiSnapshot> {
+    const persisted = sessionPersistence.loadSession(id);
+    if (!persisted) {
+      this.runtimeState = "interrupted";
+      this.appendState(`找不到会话：${id}`);
+      this.emit();
+      return this.getSnapshot();
+    }
+
+    this.executionController?.abort();
+    this.currentProposal = undefined;
+    this.lastResult = undefined;
+    this.session = persisted.session;
+    this.browserService?.setSources(persisted.sources);
+    if (persisted.lastUrl) {
+      await this.browserService?.open(persisted.lastUrl);
+    } else {
+      this.browserService?.close();
+    }
+    this.runtimeState = "paused";
+    this.appendState(`恢复会话：${persisted.title}`);
+    this.emit();
+    return this.getSnapshot();
+  }
+
+  deleteSession(id: string): DesktopUiSnapshot {
+    const ok = sessionPersistence.deleteSession(id);
+    this.appendState(ok ? `已删除会话：${id}` : `删除会话失败：${id}`);
     this.emit();
     return this.getSnapshot();
   }

@@ -1,6 +1,7 @@
 import type {
   CustomEndpointConfig,
   DesktopUiSnapshot,
+  SessionSummary,
   DuplexConversationSnapshot,
   DuplexProviderKind,
   DuplexRuntimeEvent,
@@ -26,6 +27,10 @@ export interface AiCursorDesktopApi {
   startResearch(goal: string): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
   finalizeResearch(): Promise<DesktopUiSnapshot>;
+  saveSession(): Promise<DesktopUiSnapshot>;
+  listSessions(): Promise<SessionSummary[]>;
+  loadSession(id: string): Promise<DesktopUiSnapshot>;
+  deleteSession(id: string): Promise<DesktopUiSnapshot>;
   browserOpen(url: string): Promise<DesktopUiSnapshot>;
   browserSearch(query: string): Promise<DesktopUiSnapshot>;
   browserPause(): Promise<DesktopUiSnapshot>;

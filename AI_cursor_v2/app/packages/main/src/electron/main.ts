@@ -306,6 +306,10 @@ ipcMain.handle("desktop:startResearch", (_event, goal: string) =>
 );
 ipcMain.handle("desktop:executeRuntimeAction", () => handleDesktop(() => runtime.executeRuntimeAction()));
 ipcMain.handle("desktop:finalizeResearch", () => handleDesktop(() => runtime.finalizeResearch()));
+ipcMain.handle("desktop:saveSession", () => handleDesktop(() => runtime.saveSession()));
+ipcMain.handle("desktop:listSessions", () => runtime.listSessions());
+ipcMain.handle("desktop:loadSession", (_event, id: string) => handleDesktop(() => runtime.loadSession(id)));
+ipcMain.handle("desktop:deleteSession", (_event, id: string) => handleDesktop(() => runtime.deleteSession(id)));
 
 // ── BrowserView 研究任务通道 ───────────────────────────────────────
 ipcMain.handle("browser:open", (_event, url: string) => {

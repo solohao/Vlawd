@@ -24,6 +24,11 @@ export class BrowserService {
     this.mainWindow = window;
   }
 
+  setSources(sources: ResearchSource[]): void {
+    this.sources = sources;
+    this.emit();
+  }
+
   onUpdate(listener: (state: DesktopBrowserRuntimeState) => void): () => void {
     this.listeners.add(listener);
     listener(this.getState());

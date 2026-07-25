@@ -26,7 +26,7 @@ const typeLabels: Record<string, string> = {
 
 export function TaskWorkspacePage() {
   const desktop = useDesktopRuntime();
-  const { snapshot, busy, pauseSession, cancelSession, startResearch, executeRuntimeAction, finalizeResearch, browserOpen, browserSearch, browserPause, browserClose, browserSetBounds } = desktop;
+  const { snapshot, busy, pauseSession, cancelSession, startResearch, executeRuntimeAction, finalizeResearch, saveSession, browserOpen, browserSearch, browserPause, browserClose, browserSetBounds } = desktop;
   const { runtimeState, session, graph, browser } = snapshot;
 
   const [goal, setGoal] = useState("");
@@ -230,6 +230,9 @@ export function TaskWorkspacePage() {
               </Button>
               <Button variant="secondary" size="sm" className="w-full" onClick={() => void finalizeResearch()} disabled={busy || browser.sources.length === 0}>
                 生成结论（引用 {browser.sources.length} 个来源）
+              </Button>
+              <Button variant="secondary" size="sm" className="w-full" onClick={() => void saveSession()} disabled={busy}>
+                保存会话
               </Button>
             </div>
           </Card>
