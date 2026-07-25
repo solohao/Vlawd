@@ -414,7 +414,7 @@ export class WhisperTranscriber {
   }
 
   /** 预热：提前加载模型，缩短首次转写延迟。可指定 Hugging Face 模型 id。 */
-  warmup(model = "Xenova/whisper-tiny"): Promise<void> {
+  warmup(model = "Xenova/whisper-base"): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = new Promise<void>((resolve, reject) => {
         this.initResolve = resolve;

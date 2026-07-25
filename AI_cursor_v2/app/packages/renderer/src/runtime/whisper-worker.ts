@@ -43,7 +43,7 @@ export type WhisperWorkerResponse =
   | { type: "result"; id: number; text: string }
   | { type: "error"; id: number | null; message: string };
 
-const DEFAULT_MODEL = "Xenova/whisper-tiny";
+const DEFAULT_MODEL = "Xenova/whisper-base";
 
 const pipelines = new Map<string, Promise<AutomaticSpeechRecognitionPipeline>>();
 
