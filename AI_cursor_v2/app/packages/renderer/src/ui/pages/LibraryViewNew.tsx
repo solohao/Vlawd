@@ -24,6 +24,12 @@ interface LibraryViewNewProps {
   onInstallOllama: () => void;
   onStartOllama: () => void;
 
+  // Storage
+  modelsDir: string;
+  storageFreeGB: number;
+  storageTotalGB: number;
+  onChangeStorage: () => void;
+
   // LLM models
   availableLLMs: ModelItem[];
   installedLLMs: ModelItem[];
@@ -53,6 +59,10 @@ export function LibraryViewNew({
   onBackendSwitch,
   onInstallOllama,
   onStartOllama,
+  modelsDir,
+  storageFreeGB,
+  storageTotalGB,
+  onChangeStorage,
   availableLLMs,
   installedLLMs,
   onDownloadLLM,
@@ -72,8 +82,61 @@ export function LibraryViewNew({
   const ollamaInstalled = ollamaStatus !== 'not-installed';
   const ollamaRunning = ollamaStatus === 'running';
 
+  const storageUsedGB = storageTotalGB - storageFreeGB;
+  const storagePercent = storageTotalGB > 0 ? Math.round((storageUsedGB / storageTotalGB) * 100) : 0;
+
   return (
     <div className="space-y-4">
+      {/* 存储空间卡片 */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-[13px] font-semibold text-slate-900">存储空间</h3>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              已使用 {storageUsedGB.toFixed(1)} GB / 共 {storageTotalGB.toFixed(1)} GB
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative h-12 w-12">
+              <svg className="h-12 w-12 -rotate-90 transform">
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                  className="text-slate-100"
+                />
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 20}`}
+                  strokeDashoffset={`${2 * Math.PI * 20 * (1 - storagePercent / 100)}`}
+                  className="text-brand-500 transition-all duration-300"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[11px] font-semibold text-slate-700">{storagePercent}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] text-slate-500">存储位置</p>
+            <p className="truncate text-[11px] font-medium text-slate-700">{modelsDir || "未设置"}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onChangeStorage} className="shrink-0 text-[11px]">
+            更改位置
+          </Button>
+        </div>
+      </Card>
+
       {/* Ollama状态横幅 */}
       {!ollamaInstalled && (
         <OllamaInstallBanner onInstall={onInstallOllama} />

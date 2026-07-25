@@ -140,6 +140,16 @@ export function ModelCenterPage() {
     ));
   };
 
+  const handleChangeStorage = () => {
+    void model.chooseStorageRoot();
+  };
+
+  // 存储信息
+  const modelsDir = snapshot.modelsDir || "未设置";
+  const disk = snapshot.environment?.disk;
+  const storageFreeGB = disk?.freeGB || 0;
+  const storageTotalGB = disk?.totalGB || 0;
+
   return (
     <DensityProvider density="compact">
       <div className="flex h-screen flex-col overflow-hidden bg-white">
@@ -196,6 +206,10 @@ export function ModelCenterPage() {
                     onBackendSwitch={handleBackendSwitch}
                     onInstallOllama={handleInstallOllama}
                     onStartOllama={handleStartOllama}
+                    modelsDir={modelsDir}
+                    storageFreeGB={storageFreeGB}
+                    storageTotalGB={storageTotalGB}
+                    onChangeStorage={handleChangeStorage}
                     availableLLMs={availableLLMs}
                     installedLLMs={installedLLMs.map(m => ({
                       ...m,
