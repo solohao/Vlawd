@@ -132,7 +132,7 @@ export class ModelCenterService {
   private async detectBackend(kind: ModelBackendKind): Promise<void> {
     if (kind === "ollama" && this.activeBackend === "ollama") {
       const running = await this.ollama.version().catch(() => null);
-      if (running === null && await this.ollama.binaryInstalled()) {
+      if (running === null && (await this.ollama.binaryInstalled()) && this.storage.rootDir.trim()) {
         const started = await this.ollama.ensureServing(this.modelsDir());
         if (started) {
           this.ollamaManagedByApp = true;
