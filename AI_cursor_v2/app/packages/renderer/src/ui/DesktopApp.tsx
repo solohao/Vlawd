@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FeatureStatusProvider } from "../app/feature-status.js";
+import { AnomalyMonitor } from "../app/AnomalyMonitor.js";
 import { DesktopRuntimeProvider } from "../runtime/useDesktopRuntime.js";
 import { Sidebar } from "./Sidebar.js";
 import { LiveConversationPage } from "./pages/LiveConversationPage.js";
@@ -65,6 +66,9 @@ export function DesktopApp() {
             {page === "devices" && <DevicesPage />}
             {page === "settings" && <SettingsPage />}
           </main>
+
+          {/* 异常检测监控面板 */}
+          <AnomalyMonitor />
         </div>
       </DesktopRuntimeProvider>
     </FeatureStatusProvider>
