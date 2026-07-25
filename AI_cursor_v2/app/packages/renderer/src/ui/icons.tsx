@@ -102,6 +102,12 @@ export const CloseIcon = (p: IconProps) => (
   </svg>
 );
 
+export const TrashIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14M10 11v6M14 11v6" />
+  </svg>
+);
+
 export const DotsIcon = (p: IconProps) => (
   <svg {...base({ width: 18, height: 18, ...p })}>
     <circle cx="12" cy="5" r="1.3" fill="currentColor" stroke="none" />

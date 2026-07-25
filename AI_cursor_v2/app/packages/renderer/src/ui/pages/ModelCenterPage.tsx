@@ -23,13 +23,13 @@ import {
   SearchIcon,
   SlidersIcon,
   SparkIcon,
-  SpeakerIcon
+  SpeakerIcon,
+  TrashIcon
 } from "../icons.js";
 import {
   Button,
   cn,
   StatusDot,
-  Progress,
   ListRow,
   KeyValueRow,
   DensityProvider,
@@ -236,6 +236,75 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 /* ------------------------------------------------------------------ 配置 */
 
+function BrainSelector({ model }: { model: ReturnType<typeof useModelCenter> }) {
+  const snapshot = model.snapshot;
+  const backend = snapshot.backend;
+  const [selected, setSelected] = useState(snapshot.activeBrainModel || "");
+
+  useEffect(() => {
+    setSelected(snapshot.activeBrainModel || "");
+  }, [snapshot.activeBrainModel]);
+
+  if (backend.status !== "running") {
+    return null;
+  }
+
+  const options = snapshot.catalog.filter((m) => m.installed && m.role === "duplex_execution_brain");
+  const activeOption = options.find((o) => o.id === snapshot.activeBrainModel);
+  const connected = snapshot.providerConnected && selected === snapshot.activeBrainModel;
+
+  if (options.length === 0) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4">
+        <p className="text-[12.5px] font-medium text-amber-800">尚未安装执行大脑</p>
+        <p className="mt-0.5 text-[11px] text-amber-700">
+          请先切换到「模型库」下载一个语言模型，再回这里选择作为执行大脑。
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[13px] font-semibold text-slate-900">执行大脑</h3>
+        {connected && activeOption ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+            <CheckIcon width={12} /> 已连接：{activeOption.displayName}
+          </span>
+        ) : (
+          <span className="text-[11px] text-slate-400">选择已下载的模型并应用</span>
+        )}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          disabled={model.busy}
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400 disabled:opacity-60"
+        >
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.displayName}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={!selected || model.busy || connected}
+          onClick={() => void model.useAsBrain(selected)}
+        >
+          应用为执行大脑
+        </Button>
+      </div>
+      {snapshot.activePull?.phase === "error" && snapshot.activePull.model === selected && (
+        <p className="mt-2 text-[11px] text-rose-600">{snapshot.activePull.message}</p>
+      )}
+    </div>
+  );
+}
+
 function ConfigView({
   model,
   selectedPreset,
@@ -250,7 +319,6 @@ function ConfigView({
   onEdit: () => void;
 }) {
   const template = templateById(selectedPreset);
-  // 概览按默认"分步"架构，为当前设备解析出实际组合。
   const resolved = useMemo(
     () => resolvePreset(template, modelCatalog, device, "pipeline"),
     [template, device]
@@ -259,9 +327,15 @@ function ConfigView({
   const brain = resolved.slots.executionBrain;
   const speaking = resolved.slots.speaking;
 
+  const activeBrainName = useMemo(() => {
+    const active = model.snapshot.catalog.find((m) => m.id === model.snapshot.activeBrainModel);
+    return active?.displayName ?? model.snapshot.activeBrainModel ?? brain.model?.name ?? "暂无";
+  }, [model.snapshot.catalog, model.snapshot.activeBrainModel, brain.model?.name]);
+
   return (
     <div className="space-y-4">
       <RunningBackendSection model={model} />
+      <BrainSelector model={model} />
 
       {/* 配置选择 + 概览 - 合并为一个卡片 */}
       <div className="border border-slate-100 rounded-lg overflow-hidden">
@@ -323,7 +397,7 @@ function ConfigView({
               </span>
               <span className="text-[11px] font-semibold text-slate-900">理解与思考</span>
             </div>
-            <div className="text-[11px] text-slate-600 truncate">{brain.model?.name ?? "暂无"}</div>
+            <div className="text-[11px] text-slate-600 truncate">{activeBrainName}</div>
             <div className="mt-2">
               <StatusBadge tone={brain.needsCloud ? "warn" : toneOf(brain.runnability)} label={brain.annotation} />
             </div>
@@ -373,7 +447,7 @@ function ConfigView({
         {/* 底部提示 */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/30 border-t border-slate-100">
           <p className="text-[10px] text-slate-600">
-            {resolved.notes[0] ?? "系统会自动检查并准备所需模型"}
+            {resolved.notes[0] ?? "模型能力受本机硬件限制，具体以「模型库」中的可运行状态为准。"}
           </p>
           <span
             className={cn(
@@ -384,8 +458,6 @@ function ConfigView({
             <CheckIcon width={10} /> {resolved.notes.length > 0 ? "可运行" : "就绪"}
           </span>
         </div>
-
-        <ApplyConfigBar model={model} onEdit={onEdit} />
       </div>
     </div>
   );
@@ -769,6 +841,8 @@ type ModelStatus =
   | { kind: "ready" }
   | { kind: "downloading"; progress: number }
   | { kind: "update"; from: string; to: string }
+  | { kind: "error"; message: string }
+  | { kind: "cancelled" }
   | { kind: "missing" };
 
 interface LibModel {
@@ -833,14 +907,23 @@ function buildLibraryGroups(
 ): LibGroup[] {
   const catalog = model.snapshot.catalog;
   const activePull = model.snapshot.activePull;
-  const pulling =
-    activePull &&
-    (activePull.phase === "resolving" || activePull.phase === "downloading" || activePull.phase === "verifying");
 
   const thinking: LibModel[] = catalog.map((m) => {
     let status: ModelStatus = m.installed ? { kind: "ready" } : { kind: "missing" };
-    if (pulling && activePull.model === m.id) {
-      status = { kind: "downloading", progress: activePull.percent };
+    if (activePull && activePull.model === m.id) {
+      if (activePull.phase === "error") {
+        status = { kind: "error", message: activePull.message || activePull.status };
+      } else if (activePull.phase === "cancelled") {
+        status = { kind: "cancelled" };
+      } else if (activePull.phase === "success") {
+        status = { kind: "ready" };
+      } else if (
+        activePull.phase === "resolving" ||
+        activePull.phase === "downloading" ||
+        activePull.phase === "verifying"
+      ) {
+        status = { kind: "downloading", progress: activePull.percent };
+      }
     }
     return {
       id: `llm-${m.id}`,
@@ -1168,6 +1251,19 @@ function StatusCell({ m }: { m: LibModel }) {
           </span>
         </span>
       );
+    case "error":
+      return (
+        <span className="flex items-start gap-1.5 text-[12px] text-rose-600" title={m.status.message}>
+          <span className="mt-0.5 h-2 w-2 rounded-full bg-rose-500" />
+          <span className="line-clamp-2">{m.status.message}</span>
+        </span>
+      );
+    case "cancelled":
+      return (
+        <span className="flex items-center gap-1.5 text-[12px] text-amber-600">
+          <span className="h-2 w-2 rounded-full bg-amber-500" /> 已取消
+        </span>
+      );
     case "missing":
       return (
         <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
@@ -1192,6 +1288,14 @@ function RowAction({
   const disabledCls = " opacity-50 cursor-not-allowed";
   const busy = model.busy;
 
+  const startDownload = () => {
+    if (m.capability === "hearing") {
+      onWarmup(m.catalogId, m.tag);
+    } else if (m.capability === "thinking") {
+      void model.pull(m.tag);
+    }
+  };
+
   switch (m.status.kind) {
     case "ready":
       if (m.capability === "thinking") {
@@ -1203,13 +1307,26 @@ function RowAction({
           );
         }
         return (
-          <button
-            onClick={() => void model.useAsBrain(m.tag)}
-            disabled={busy}
-            className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", busy && disabledCls)}
-          >
-            应用
-          </button>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => void model.useAsBrain(m.tag)}
+              disabled={busy}
+              className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", busy && disabledCls)}
+            >
+              应用
+            </button>
+            <button
+              title="删除本地模型"
+              disabled={busy}
+              onClick={() => void model.removeModel(m.tag)}
+              className={cn(
+                "rounded-lg border border-slate-200 p-1.5 text-slate-400 transition-colors hover:border-rose-300 hover:text-rose-600",
+                busy && disabledCls
+              )}
+            >
+              <TrashIcon width={14} />
+            </button>
+          </div>
         );
       }
       return (
@@ -1227,16 +1344,8 @@ function RowAction({
           取消
         </button>
       );
-    case "update":
-      return (
-        <button
-          onClick={() => void (m.capability === "thinking" ? model.pull(m.tag) : onWarmup(m.catalogId, m.tag))}
-          disabled={busy || !m.pullable}
-          className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", (busy || !m.pullable) && disabledCls)}
-        >
-          更新
-        </button>
-      );
+    case "error":
+    case "cancelled":
     case "missing":
       if (!m.pullable) {
         return (
@@ -1245,24 +1354,29 @@ function RowAction({
           </button>
         );
       }
-      if (m.capability === "hearing") {
-        return (
-          <button
-            onClick={() => onWarmup(m.catalogId, m.tag)}
-            disabled={busy}
-            className={cn(base, "border-slate-200 text-slate-600 hover:border-slate-300", busy && disabledCls)}
-          >
-            下载
-          </button>
-        );
-      }
       return (
         <button
-          onClick={() => void model.pull(m.tag)}
+          onClick={startDownload}
           disabled={busy}
-          className={cn(base, "border-slate-200 text-slate-600 hover:border-slate-300", busy && disabledCls)}
+          className={cn(
+            base,
+            m.status.kind === "error" || m.status.kind === "cancelled"
+              ? "border-amber-400 text-amber-700 hover:bg-amber-50"
+              : "border-slate-200 text-slate-600 hover:border-slate-300",
+            busy && disabledCls
+          )}
         >
-          下载
+          {m.status.kind === "error" ? "重试" : m.status.kind === "cancelled" ? "重新下载" : "下载"}
+        </button>
+      );
+    case "update":
+      return (
+        <button
+          onClick={() => void (m.capability === "thinking" ? model.pull(m.tag) : onWarmup(m.catalogId, m.tag))}
+          disabled={busy || !m.pullable}
+          className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", (busy || !m.pullable) && disabledCls)}
+        >
+          更新
         </button>
       );
   }
@@ -1409,36 +1523,24 @@ function OllamaStartPanel({ model }: { model: ReturnType<typeof useModelCenter> 
 function OllamaReadyPanel({ model }: { model: ReturnType<typeof useModelCenter> }) {
   const backend = model.snapshot.backend;
   const env = model.snapshot.environment;
-  const activePull = model.snapshot.activePull;
-  const recommended = env?.recommendedBrainModel ?? "qwen2.5:7b-instruct";
-  const brainReady =
-    model.snapshot.activeBrainModel === recommended &&
-    model.snapshot.providerConnected &&
-    model.snapshot.usingRealInference;
-  const installed = backend.installedModels.some((m) => m.name === recommended);
-
-  const handlePrepareBrain = async () => {
-    if (installed) {
-      await model.useAsBrain(recommended);
-    } else {
-      await model.pull(recommended);
-      if (model.snapshot.activePull?.phase === "success") {
-        await model.useAsBrain(recommended);
-      }
-    }
-  };
+  const hasModels = backend.installedModels.length > 0;
 
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
       <div className="flex items-start gap-3">
         <StatusDot active color="success" size="md" />
         <div className="flex-1">
-          <h3 className="text-[13px] font-semibold text-emerald-800">{brainReady ? "引擎就绪，直接可用" : "Ollama 运行中"}</h3>
+          <h3 className="text-[13px] font-semibold text-emerald-800">Ollama 运行中</h3>
           <p className="mt-0.5 text-[11.5px] text-emerald-700">{backend.message}</p>
           {env && (
             <p className="mt-2 text-[11px] text-emerald-600">
               {env.gpus.length > 0 ? `GPU: ${env.gpus[0].name} · ` : ""}
               内存: {env.totalRamGB.toFixed(1)} GB · 已安装模型 {backend.installedModels.length} 个
+            </p>
+          )}
+          {!hasModels && (
+            <p className="mt-2 text-[11px] text-emerald-700">
+              引擎已就绪，请切换到「模型库」下载语言模型。
             </p>
           )}
         </div>
@@ -1451,29 +1553,6 @@ function OllamaReadyPanel({ model }: { model: ReturnType<typeof useModelCenter> 
           </Button>
         </div>
       </div>
-
-      {!brainReady && (
-        <div className="mt-4 rounded-lg border border-emerald-200/50 bg-white p-3">
-          <p className="text-[12px] text-slate-700">
-            推荐执行大脑：<b>{recommended}</b>
-          </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            {installed ? "模型已安装，点击应用即可连接。" : "模型未下载，点击后将自动下载并连接。"}
-          </p>
-          <Button variant="primary" size="sm" className="mt-2" disabled={model.busy || !!activePull} onClick={() => void handlePrepareBrain()}>
-            {installed ? "应用为执行大脑" : "下载并应用"}
-          </Button>
-        </div>
-      )}
-
-      {activePull && (
-        <div className="mt-4">
-          <p className="text-[11.5px] text-slate-600">
-            正在准备模型 {activePull.model}：{activePull.status}
-          </p>
-          <Progress value={activePull.percent} max={100} size="sm" color={activePull.phase === "error" ? "error" : "brand"} className="mt-2" />
-        </div>
-      )}
     </div>
   );
 }
@@ -1482,23 +1561,16 @@ function OllamaInstallFlow({ model }: { model: ReturnType<typeof useModelCenter>
   const { snapshot, busy } = model;
   const rootDir = snapshot.storage.rootDir;
   const install = snapshot.ollamaInstall;
-  const recommended = snapshot.environment?.recommendedBrainModel ?? "qwen2.5:7b-instruct";
 
   const handleInstall = async () => {
     await model.installOllama();
-    if (model.snapshot.backend.status === "running") {
-      await model.pull(recommended);
-      if (model.snapshot.activePull?.phase === "success") {
-        await model.useAsBrain(recommended);
-      }
-    }
   };
 
   return (
     <div className="rounded-xl border border-rose-200 bg-rose-50/30 p-4">
       <div className="mb-3 flex items-start gap-2.5 text-rose-800">
         <InfoIcon width={16} className="mt-0.5 shrink-0" />
-        <p className="text-[12.5px]">未检测到 Ollama 引擎。选择位置后可一键安装并自动准备模型。</p>
+        <p className="text-[12.5px]">未检测到 Ollama 引擎。选择位置后安装，再去「模型库」下载模型。</p>
       </div>
       <div className="space-y-4">
         <Step number={1} title="选择安装 / 模型存储位置">
@@ -1534,8 +1606,8 @@ function OllamaInstallFlow({ model }: { model: ReturnType<typeof useModelCenter>
             <p className="mt-2 text-[11px] text-rose-600">{install.message}</p>
           )}
         </Step>
-        <Step number={3} title="自动准备所需模型并连接">
-          <p className="text-[11.5px] text-slate-500">引擎安装完成后，将自动下载推荐模型并设为执行大脑。</p>
+        <Step number={3} title="前往模型库下载模型">
+          <p className="text-[11.5px] text-slate-500">引擎安装完成后，切换到「模型库」下载并应用执行大脑。</p>
         </Step>
       </div>
     </div>
@@ -1623,55 +1695,4 @@ function CustomEndpointPanel({ model }: { model: ReturnType<typeof useModelCente
   );
 }
 
-function ApplyConfigBar({ model, onEdit }: { model: ReturnType<typeof useModelCenter>; onEdit: () => void }) {
-  const backend = model.snapshot.backend;
-  const activeBackend = model.snapshot.activeBackend;
-  const recommended = model.snapshot.environment?.recommendedBrainModel ?? "qwen2.5:7b-instruct";
-  const isReady =
-    activeBackend === "ollama" &&
-    backend.status === "running" &&
-    model.snapshot.activeBrainModel === recommended &&
-    model.snapshot.providerConnected &&
-    model.snapshot.usingRealInference;
 
-  const handleApply = async () => {
-    if (isReady) {
-      await model.useAsBrain(recommended);
-    }
-  };
-
-  return (
-    <div className="mt-6 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-5">
-      <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
-        <PencilIcon width={14} /> 重命名
-      </Button>
-      <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false} onClick={onEdit}>
-        <SlidersIcon width={14} /> 编辑配置
-      </Button>
-      <Button variant="secondary" size="sm" className="h-9 gap-1.5" animated={false}>
-        <RefreshIcon width={14} /> 恢复默认
-      </Button>
-      <div className="flex items-center gap-2">
-        {isReady ? (
-          <span className="flex items-center gap-1 text-[12px] font-medium text-emerald-600">
-            <CheckIcon width={14} /> 准备就绪
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 text-[12px] font-medium text-rose-600">
-            <span className="h-2 w-2 rounded-full bg-rose-500" /> 待引擎就绪
-          </span>
-        )}
-        <Button
-          variant={isReady ? "primary" : "secondary"}
-          size="sm"
-          className="h-9 gap-1.5"
-          animated={false}
-          disabled={!isReady || model.busy}
-          onClick={() => void handleApply()}
-        >
-          <CheckIcon width={14} /> 应用此配置
-        </Button>
-      </div>
-    </div>
-  );
-}
