@@ -1148,35 +1148,33 @@ function LibraryView({ model }: { model: ReturnType<typeof useModelCenter> }) {
 
               {!isCollapsed && (
                 <div className="px-5 pb-4">
-                  <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <Table hoverable className="table-fixed">
-                      <TableHead>
-                        <TableRow>
-                          <TableHeader className="w-2/5">模型名称</TableHeader>
-                          <TableHeader className="w-24">大小</TableHeader>
-                          <TableHeader className="w-24">版本</TableHeader>
-                          <TableHeader className="w-32">
-                            <span className="flex items-center gap-1">状态 <InfoIcon width={13} className="text-slate-300" /></span>
-                          </TableHeader>
-                          <TableHeader className="w-1/4">
-                            <span className="flex items-center gap-1">被使用于 <InfoIcon width={13} className="text-slate-300" /></span>
-                          </TableHeader>
-                          <TableHeader className="w-24 text-right">操作</TableHeader>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {g.models.map((m) => (
-                          <LibRow
-                            key={m.id}
-                            m={m}
-                            model={model}
-                            onWarmup={warmupWhisper}
-                            onCancelWarmup={cancelWarmup}
-                          />
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <Table variant="container" hoverable className="table-fixed">
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader className="w-2/5">模型名称</TableHeader>
+                        <TableHeader className="w-24">大小</TableHeader>
+                        <TableHeader className="w-24">版本</TableHeader>
+                        <TableHeader className="w-32">
+                          <span className="flex items-center gap-1">状态 <InfoIcon width={13} className="text-slate-300" /></span>
+                        </TableHeader>
+                        <TableHeader className="w-1/4">
+                          <span className="flex items-center gap-1">被使用于 <InfoIcon width={13} className="text-slate-300" /></span>
+                        </TableHeader>
+                        <TableHeader className="w-24 text-right">操作</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody empty="暂无模型" emptyColSpan={6}>
+                      {g.models.map((m) => (
+                        <LibRow
+                          key={m.id}
+                          m={m}
+                          model={model}
+                          onWarmup={warmupWhisper}
+                          onCancelWarmup={cancelWarmup}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </div>
