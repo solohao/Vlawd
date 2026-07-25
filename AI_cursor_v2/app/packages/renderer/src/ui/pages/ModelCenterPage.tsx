@@ -346,13 +346,12 @@ function ConfigView({
                 key={p.id}
                 onClick={() => onSelect(p.id)}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
+                  "px-3 py-1.5 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors shrink-0",
                   selectedPreset === p.id
                     ? "bg-brand-500 text-white"
                     : "text-slate-600 hover:bg-white hover:text-slate-900"
                 )}
               >
-                {selectedPreset === p.id && <CheckIcon width={12} />}
                 {p.name.replace(/^推荐\s*·\s*/, "")}
               </button>
             ))}
