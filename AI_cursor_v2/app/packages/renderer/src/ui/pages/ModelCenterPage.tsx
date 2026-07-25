@@ -214,6 +214,7 @@ export function ModelCenterPage() {
                 <FeatureSection id="model-center.library" title="模型库">
                   <LibraryViewNew
                     ollamaStatus={ollamaStatus}
+                    ollamaInstall={snapshot.ollamaInstall}
                     lmStudioStatus={lmStudioStatus}
                     activeBackend={snapshot.activeBackend}
                     onBackendSwitch={handleBackendSwitch}

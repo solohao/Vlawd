@@ -3,7 +3,7 @@ import { Card, Button, cn } from "../../design-system/index.js";
 import { BrainIcon, EarIcon, SpeakerIcon, PlayIcon, PauseIcon, DownloadIcon, CheckIcon, TrashIcon, RefreshIcon } from "../icons.js";
 import { OllamaInstallBanner, OllamaStartBanner } from "../components/OllamaBanner.js";
 import { StoreTab } from "../components/StoreTab.js";
-import type { ModelBackendKind, ModelBackendState, ModelPullPhase } from "@ai-cursor-v2/shared";
+import type { ModelBackendKind, ModelBackendState, ModelPullPhase, OllamaInstallState } from "@ai-cursor-v2/shared";
 
 export interface ModelItem {
   id: string;
@@ -20,6 +20,7 @@ export interface ModelItem {
 interface LibraryViewNewProps {
   // Backend state
   ollamaStatus: 'not-installed' | 'stopped' | 'running';
+  ollamaInstall: OllamaInstallState;
   lmStudioStatus: 'not-installed' | 'stopped' | 'running';
   activeBackend: ModelBackendKind;
   onBackendSwitch: (backend: ModelBackendKind) => void;
@@ -58,6 +59,7 @@ interface LibraryViewNewProps {
 
 export function LibraryViewNew({
   ollamaStatus,
+  ollamaInstall,
   lmStudioStatus,
   activeBackend,
   onBackendSwitch,
@@ -150,7 +152,11 @@ export function LibraryViewNew({
 
       {/* Ollama状态横幅 */}
       {!ollamaInstalled && (
-        <OllamaInstallBanner onInstall={onInstallOllama} />
+        <OllamaInstallBanner
+          phase={ollamaInstall.phase}
+          message={ollamaInstall.message}
+          onInstall={onInstallOllama}
+        />
       )}
       {ollamaInstalled && !ollamaRunning && (
         <OllamaStartBanner onStart={onStartOllama} />
