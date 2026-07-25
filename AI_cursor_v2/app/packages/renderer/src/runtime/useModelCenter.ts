@@ -34,7 +34,7 @@ const EMPTY_SNAPSHOT: ModelCenterSnapshot = {
   activeBackend: "ollama",
   backends: [EMPTY_BACKEND],
   customEndpoint: { baseUrl: "", model: "" },
-  storage: { rootDir: "", managedSubdir: "ai-cursor-v2-models", preferNonSystemDrive: true, source: "default" },
+  storage: { rootDir: "", managedSubdir: "models", preferNonSystemDrive: true, source: "default" },
   storageWarnings: [],
   activePull: null,
   catalog: [],

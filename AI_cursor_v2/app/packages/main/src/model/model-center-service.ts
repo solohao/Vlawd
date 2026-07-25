@@ -1,4 +1,6 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { app } from "electron";
 import type {
   CustomEndpointConfig,
   EnvironmentProbe,
@@ -75,6 +77,30 @@ export class ModelCenterService {
       lmstudio: this.emptyState("lmstudio", "尚未检测 LM Studio 本地服务器。"),
       custom: this.emptyState("custom", "尚未配置自定义端点。")
     };
+    this.initializeDefaultStorage();
+  }
+
+  private getDefaultStorageRoot(): string {
+    if (app.isPackaged) {
+      return dirname(app.getPath("exe"));
+    }
+    return app.getPath("userData");
+  }
+
+  private initializeDefaultStorage(): void {
+    if (this.storage.rootDir.trim()) {
+      return;
+    }
+    const rootDir = this.getDefaultStorageRoot();
+    this.storage = { ...this.storage, rootDir, source: "default" };
+    try {
+      const dir = this.modelsDir();
+      if (dir) {
+        mkdirSync(dir, { recursive: true });
+      }
+    } catch {
+      // 默认目录不可写时由后续选择/检测流程处理。
+    }
   }
 
   on(listener: ModelCenterListener): () => void {
@@ -435,7 +461,7 @@ export class ModelCenterService {
     if (!this.storage.rootDir.trim()) {
       return undefined;
     }
-    return join(this.storage.rootDir, this.storage.managedSubdir, "ollama");
+    return join(this.storage.rootDir, this.storage.managedSubdir);
   }
 
   private buildCatalog(): ModelCatalogItem[] {

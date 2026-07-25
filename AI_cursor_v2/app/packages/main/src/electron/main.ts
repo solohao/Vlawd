@@ -300,8 +300,10 @@ ipcMain.handle("model:snapshot", () => modelCenter.getSnapshot());
 ipcMain.handle("model:probe", () => modelCenter.probe());
 ipcMain.handle("model:refreshBackend", () => modelCenter.refreshBackend());
 ipcMain.handle("model:chooseStorageRoot", async () => {
+  const currentRoot = modelCenter.getSnapshot().storage.rootDir;
   const result = await dialog.showOpenDialog({
     title: "选择模型下载目录（将通过 OLLAMA_MODELS 生效）",
+    defaultPath: currentRoot || undefined,
     properties: ["openDirectory", "createDirectory"]
   });
   if (result.canceled || result.filePaths.length === 0) {
