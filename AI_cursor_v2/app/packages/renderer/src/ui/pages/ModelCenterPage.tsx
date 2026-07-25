@@ -773,6 +773,7 @@ type ModelStatus =
 
 interface LibModel {
   id: string;
+  catalogId: string;
   name: string;
   size: string;
   version: string;
@@ -843,6 +844,7 @@ function buildLibraryGroups(
     }
     return {
       id: `llm-${m.id}`,
+      catalogId: m.id,
       name: m.displayName,
       size: formatSize(m.approxSizeGB),
       version: "—",
@@ -862,6 +864,7 @@ function buildLibraryGroups(
       const state = whisperStates[m.id];
       return {
         id: `stt-${m.id}`,
+        catalogId: m.id,
         name: m.name,
         size: formatSize(m.sizeGB),
         version: "—",
@@ -877,6 +880,7 @@ function buildLibraryGroups(
   const speaking: LibModel[] = [
     {
       id: "tts-system",
+      catalogId: "system-tts",
       name: "系统语音合成",
       size: "—",
       version: "—",
@@ -1226,7 +1230,7 @@ function RowAction({
     case "update":
       return (
         <button
-          onClick={() => void (m.capability === "thinking" ? model.pull(m.tag) : onWarmup(m.id, m.tag))}
+          onClick={() => void (m.capability === "thinking" ? model.pull(m.tag) : onWarmup(m.catalogId, m.tag))}
           disabled={busy || !m.pullable}
           className={cn(base, "border-brand-400 text-brand-700 hover:bg-brand-50", (busy || !m.pullable) && disabledCls)}
         >
@@ -1244,7 +1248,7 @@ function RowAction({
       if (m.capability === "hearing") {
         return (
           <button
-            onClick={() => onWarmup(m.id, m.tag)}
+            onClick={() => onWarmup(m.catalogId, m.tag)}
             disabled={busy}
             className={cn(base, "border-slate-200 text-slate-600 hover:border-slate-300", busy && disabledCls)}
           >
