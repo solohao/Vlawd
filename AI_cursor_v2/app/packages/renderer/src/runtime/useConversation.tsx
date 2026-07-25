@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   DuplexConversationSnapshot,
   DuplexLatencySample,
@@ -46,7 +46,9 @@ export interface ConversationController {
   selectOutputDevice(deviceId: string): void;
 }
 
-export function useConversation(): ConversationController {
+const ConversationContext = createContext<ConversationController | null>(null);
+
+export function ConversationProvider({ children }: { children: ReactNode }): JSX.Element {
   const available = typeof window !== "undefined" && !!window.aiCursorDesktop;
   const [snapshot, setSnapshot] = useState<DuplexConversationSnapshot>(EMPTY_SNAPSHOT);
   const [micActive, setMicActive] = useState(false);
@@ -55,6 +57,8 @@ export function useConversation(): ConversationController {
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
   const [whisperLoading, setWhisperLoading] = useState<{ status: string; progress?: number } | null>(null);
   const [clientLatency, setClientLatency] = useState<Partial<Record<DuplexLatencySample["kind"], number>>>({});
+  const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
+  const [outputDeviceId, setOutputDeviceId] = useState<string | undefined>(undefined);
 
   const tts = useRef<TtsPlayer | null>(null);
   const vad = useRef<MicVad | null>(null);
@@ -66,8 +70,6 @@ export function useConversation(): ConversationController {
   const userUtteranceAtRef = useRef<number | null>(null);
   const bargeInAtRef = useRef<number | null>(null);
   const activeSpeechRef = useRef<{ stt?: string; tts?: string }>({});
-  const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
-  const [outputDeviceId, setOutputDeviceId] = useState<string | undefined>(undefined);
 
   if (!tts.current && TtsPlayer.isSupported()) {
     tts.current = new TtsPlayer({
@@ -98,7 +100,6 @@ export function useConversation(): ConversationController {
     if (event.type === "state") {
       speakingRef.current = event.state === "speaking";
       if (event.state === "thinking") {
-        // 新一轮回答开始，重置“已听到”累计，供下次 barge-in 精确上报。
         tts.current?.beginResponse();
       }
       if (event.state === "interrupted" || event.state === "paused" || event.state === "listening") {
@@ -138,16 +139,6 @@ export function useConversation(): ConversationController {
     };
   }, [available, handleEvent]);
 
-  const connect = useCallback(async () => {
-    if (!available) {
-      return EMPTY_SNAPSHOT;
-    }
-    const next = await desktopApi().conversationConnect();
-    setSnapshot(next);
-    await desktopApi().conversationCheckHealth().catch(() => undefined);
-    return next;
-  }, [available]);
-
   const submit = useCallback(
     async (text: string) => {
       if (!available || !text.trim()) {
@@ -158,6 +149,129 @@ export function useConversation(): ConversationController {
     },
     [available]
   );
+
+  const stopMic = useCallback(() => {
+    vad.current?.stop();
+    vad.current = null;
+    recognizer.current?.stop();
+    recognizer.current = null;
+    whisper.current?.stop();
+    whisper.current = null;
+    setMicActive(false);
+    setMicLevel(0);
+    setInterimTranscript("");
+    setWhisperLoading(null);
+  }, []);
+
+  const startMic = useCallback(async () => {
+    if (!MicVad.isSupported()) {
+      throw new Error("当前环境不支持麦克风");
+    }
+
+    let activeStt = activeSpeechRef.current.stt;
+    if (!activeStt) {
+      try {
+        activeStt = (await desktopApi().speechGetActive()).stt;
+        activeSpeechRef.current = { ...activeSpeechRef.current, stt: activeStt };
+      } catch {
+        activeStt = undefined;
+      }
+    }
+    const useLocalStt = !!activeStt;
+    let useWhisper = !useLocalStt && WhisperTranscriber.isSupported();
+
+    if (useWhisper) {
+      whisper.current = new WhisperTranscriber({
+        onProgress: (status, progress) => setWhisperLoading({ status, progress })
+      });
+      try {
+        await whisper.current.warmup();
+      } catch (error) {
+        console.warn("[useConversation] Whisper 加载失败，回退到浏览器语音识别：", error);
+        whisper.current?.stop();
+        whisper.current = null;
+        setWhisperLoading(null);
+        useWhisper = false;
+      }
+    }
+
+    vad.current = new MicVad({ deviceId: inputDeviceRef.current });
+    await vad.current.start({
+      onSpeechStart: () => {
+        console.log("[useConversation] VAD onSpeechStart");
+        if (speakingRef.current && available) {
+          bargeInAtRef.current = Date.now();
+          const heard = tts.current?.getSpokenText() ?? "";
+          tts.current?.cancel();
+          void desktopApi().conversationBargeIn(heard);
+        }
+      },
+      onLevel: (level) => setMicLevel(level),
+      onSpeechEnd: useLocalStt || useWhisper
+        ? (audio) => {
+            console.log("[useConversation] VAD onSpeechEnd, audio length:", audio.length);
+            setInterimTranscript("识别中…");
+            const doSubmit = (text: string) => {
+              setInterimTranscript("");
+              if (text.trim()) {
+                void submit(text);
+              }
+            };
+            if (useLocalStt) {
+              console.log("[useConversation] onSpeechEnd, calling speechTranscribe, samples:", audio.length);
+              desktopApi()
+                .speechTranscribe(audio, 16000)
+                .then((text) => { console.log("[useConversation] speechTranscribe result:", text); doSubmit(text); })
+                .catch((err) => { console.error("[useConversation] speechTranscribe error:", err); setInterimTranscript(""); });
+            } else {
+              whisper.current
+                ?.transcribe(audio, "chinese", (text) => setInterimTranscript(text))
+                .then(doSubmit)
+                .catch(() => setInterimTranscript(""));
+            }
+          }
+        : undefined
+    });
+
+    if (!useLocalStt && !useWhisper && BrowserSpeechRecognizer.isSupported()) {
+      recognizer.current = new BrowserSpeechRecognizer();
+      const started = recognizer.current.start({
+        onInterim: (text) => setInterimTranscript(text),
+        onFinal: (text) => {
+          setInterimTranscript("");
+          void submit(text);
+        },
+        onError: () => setInterimTranscript("")
+      });
+      if (!started) {
+        recognizer.current = null;
+      }
+    }
+    setMicActive(true);
+  }, [available, submit]);
+
+  const toggleMic = useCallback(async () => {
+    if (micActive) {
+      stopMic();
+    } else {
+      try {
+        await startMic();
+      } catch (err) {
+        console.error("[toggleMic] failed:", err);
+        stopMic();
+      }
+    }
+  }, [micActive, startMic, stopMic]);
+
+  const connect = useCallback(async () => {
+    if (!available) {
+      return EMPTY_SNAPSHOT;
+    }
+    const next = await desktopApi().conversationConnect();
+    setSnapshot(next);
+    await desktopApi().conversationCheckHealth().catch(() => undefined);
+    return next;
+  }, [available]);
 
   const preempt = useCallback(
     async (intent: SafetyPreemptionIntent) => {
@@ -193,110 +307,6 @@ export function useConversation(): ConversationController {
     }
   }, [available]);
 
-  const startMic = useCallback(async () => {
-    if (!MicVad.isSupported()) {
-      throw new Error("当前环境不支持麦克风");
-    }
-
-    // 如果用户在模型中心选择了本地 STT 模型，优先走主进程 sherpa-onnx；
-    // 否则回退到 renderer 内 Whisper（transformers.js）或浏览器 ASR。
-    let activeStt = activeSpeechRef.current.stt;
-    if (!activeStt) {
-      try {
-        activeStt = (await desktopApi().speechGetActive()).stt;
-        activeSpeechRef.current = { ...activeSpeechRef.current, stt: activeStt };
-      } catch {
-        activeStt = undefined;
-      }
-    }
-    const useLocalStt = !!activeStt;
-    const useWhisper = !useLocalStt && WhisperTranscriber.isSupported();
-
-    if (useWhisper) {
-      whisper.current = new WhisperTranscriber({
-        onProgress: (status, progress) => setWhisperLoading({ status, progress })
-      });
-      // 先等 Whisper 加载完成再开 VAD，避免模型加载占用资源导致 VAD 漏掉开头语音。
-      await whisper.current.warmup().catch((error) => {
-        setWhisperLoading(null);
-        throw new Error("Whisper 加载失败：" + (error instanceof Error ? error.message : String(error)));
-      });
-    }
-
-    vad.current = new MicVad({ deviceId: inputDeviceRef.current });
-    await vad.current.start({
-      onSpeechStart: () => {
-        // VAD 检测到用户开口：AI 正在说话时立即打断（barge-in），并上报“已听到文本”。
-        if (speakingRef.current && available) {
-          bargeInAtRef.current = Date.now();
-          const heard = tts.current?.getSpokenText() ?? "";
-          tts.current?.cancel();
-          void desktopApi().conversationBargeIn(heard);
-        }
-      },
-      onLevel: (level) => setMicLevel(level),
-      onSpeechEnd: useLocalStt || useWhisper
-        ? (audio) => {
-            setInterimTranscript("识别中…");
-            const doSubmit = (text: string) => {
-              setInterimTranscript("");
-              if (text.trim()) {
-                void submit(text);
-              }
-            };
-            if (useLocalStt) {
-              desktopApi()
-                .speechTranscribe(audio, 16000)
-                .then(doSubmit)
-                .catch(() => setInterimTranscript(""));
-            } else {
-              whisper.current
-                ?.transcribe(audio, "chinese", (text) => setInterimTranscript(text))
-                .then(doSubmit)
-                .catch(() => setInterimTranscript(""));
-            }
-          }
-        : undefined
-    });
-
-    if (!useLocalStt && !useWhisper && BrowserSpeechRecognizer.isSupported()) {
-      recognizer.current = new BrowserSpeechRecognizer();
-      const started = recognizer.current.start({
-        onInterim: (text) => setInterimTranscript(text),
-        onFinal: (text) => {
-          setInterimTranscript("");
-          void submit(text);
-        },
-        onError: () => setInterimTranscript("")
-      });
-      if (!started) {
-        recognizer.current = null;
-      }
-    }
-    setMicActive(true);
-  }, [available, submit]);
-
-  const stopMic = useCallback(() => {
-    vad.current?.stop();
-    vad.current = null;
-    recognizer.current?.stop();
-    recognizer.current = null;
-    whisper.current?.stop();
-    whisper.current = null;
-    setMicActive(false);
-    setMicLevel(0);
-    setInterimTranscript("");
-    setWhisperLoading(null);
-  }, []);
-
-  const toggleMic = useCallback(async () => {
-    if (micActive) {
-      stopMic();
-    } else {
-      await startMic();
-    }
-  }, [micActive, startMic, stopMic]);
-
   const selectInputDevice = useCallback((deviceId: string) => {
     inputDeviceRef.current = deviceId;
     setInputDeviceId(deviceId);
@@ -318,7 +328,7 @@ export function useConversation(): ConversationController {
     [snapshot.latency, clientLatency]
   );
 
-  return useMemo(
+  const controller = useMemo<ConversationController>(
     () => ({
       available,
       snapshot,
@@ -365,4 +375,14 @@ export function useConversation(): ConversationController {
       selectOutputDevice
     ]
   );
+
+  return <ConversationContext.Provider value={controller}>{children}</ConversationContext.Provider>;
+}
+
+export function useConversation(): ConversationController {
+  const ctx = useContext(ConversationContext);
+  if (!ctx) {
+    throw new Error("useConversation must be used within a ConversationProvider");
+  }
+  return ctx;
 }

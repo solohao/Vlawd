@@ -24,6 +24,7 @@ export type ActionName =
   | "browser.search"
   | "browser.scroll"
   | "browser.read"
+  | "browser.find"
   | "window.close"
   | "text.input"
   | "form.fill"

@@ -37,12 +37,12 @@ export function DesktopApp() {
   const [page, setPage] = useState<DesktopPage>("dashboard");
   const desktop = useDesktopRuntime();
 
-  // 当研究任务生成了动作提案时，自动跳转到任务空间
+  // 当研究任务生成了新的动作提案时，自动跳转到任务空间；用户手动切页不应被覆盖
   useEffect(() => {
     if (page !== "task" && desktop.snapshot.browser.nextAction?.actionType) {
       setPage("task");
     }
-  }, [desktop.snapshot.browser.nextAction, page]);
+  }, [desktop.snapshot.browser.nextAction]);
 
   const theme = pageThemes[page];
 

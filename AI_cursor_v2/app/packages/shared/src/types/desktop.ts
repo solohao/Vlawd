@@ -65,7 +65,9 @@ export interface SessionSummary {
   created_at: string;
   updated_at: string;
   goal?: string;
+  parent_id?: string;
   sourceCount: number;
+  hasEvidence?: boolean;
 }
 
 export interface DesktopBrowserRuntimeState {

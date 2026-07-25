@@ -62,7 +62,13 @@ export class BrowserService {
     this.loading = true;
     this.error = undefined;
     this.emit();
-    await this.view!.webContents.loadURL(normalized);
+    try {
+      await withTimeout(this.view!.webContents.loadURL(normalized), 15000, `加载 ${normalized} 超时`);
+    } catch (error) {
+      this.loading = false;
+      this.error = error instanceof Error ? error.message : String(error);
+      this.emit();
+    }
   }
 
   async search(query: string): Promise<void> {
@@ -158,6 +164,19 @@ export class BrowserService {
             virtual_state: { text, url: this.url, title: this.title, source }
           };
         }
+        case "browser.find": {
+          const query = String(action.params?.text ?? "");
+          if (!query) {
+            return { action, ok: false, message: "browser.find 缺少 text 参数" };
+          }
+          const snippet = await this.findVisibleText(query);
+          return {
+            action,
+            ok: true,
+            message: snippet ? `找到 "${query}"：${snippet.slice(0, 80)}...` : `未找到 "${query}"`,
+            virtual_state: { query, snippet, url: this.url, title: this.title }
+          };
+        }
         default:
           return {
             action,
@@ -175,7 +194,27 @@ export class BrowserService {
     this.view!.setBounds(bounds);
   }
 
+  async findVisibleText(query: string): Promise<string> {
+    if (!this.view || this.view.webContents.isDestroyed()) return "";
+    const text = await this.readVisibleText();
+    const lower = query.toLowerCase();
+    const idx = text.toLowerCase().indexOf(lower);
+    if (idx === -1) return "";
+    const start = Math.max(0, idx - 100);
+    const end = Math.min(text.length, idx + query.length + 300);
+    return text.slice(start, end).replace(/\s+/g, " ").trim();
+  }
+
   async readVisibleText(): Promise<string> {
+    if (!this.view || this.view.webContents.isDestroyed()) return "";
+    try {
+      return await withTimeout(this.readVisibleTextUnsafe(), 5000, "读取页面文本超时");
+    } catch {
+      return "";
+    }
+  }
+
+  private async readVisibleTextUnsafe(): Promise<string> {
     if (!this.view || this.view.webContents.isDestroyed()) return "";
     return this.view.webContents.executeJavaScript(`
       (() => {
@@ -249,5 +288,12 @@ export class BrowserService {
       listener(state);
     }
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+  ]);
 }
 
