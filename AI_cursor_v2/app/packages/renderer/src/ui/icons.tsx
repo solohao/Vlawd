@@ -285,6 +285,12 @@ export const DownloadIcon = (p: IconProps) => (
   </svg>
 );
 
+export const PlayIcon = (p: IconProps) => (
+  <svg {...base({ width: 16, height: 16, ...p })}>
+    <path d="M5 3l14 9-14 9V3z" fill="currentColor" />
+  </svg>
+);
+
 export const EarIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M6 8.5a6 6 0 0 1 12 0c0 3-2.2 4-3.4 5.2-1 1-1.1 2-1.1 3a2.5 2.5 0 0 1-5 0" />

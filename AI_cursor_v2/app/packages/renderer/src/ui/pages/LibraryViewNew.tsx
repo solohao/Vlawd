@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Card, Button, cn } from "../../design-system/index.js";
-import { BrainIcon, EarIcon, SpeakerIcon, DownloadIcon, CheckIcon, TrashIcon, RefreshIcon } from "../icons.js";
+import { BrainIcon, EarIcon, SpeakerIcon, PlayIcon, PauseIcon, DownloadIcon, CheckIcon, TrashIcon, RefreshIcon } from "../icons.js";
 import { OllamaInstallBanner, OllamaStartBanner } from "../components/OllamaBanner.js";
 import { StoreTab } from "../components/StoreTab.js";
-import type { ModelBackendKind, ModelBackendState } from "@ai-cursor-v2/shared";
+import type { ModelBackendKind, ModelBackendState, ModelPullPhase, OllamaInstallState } from "@ai-cursor-v2/shared";
 
 export interface ModelItem {
   id: string;
@@ -11,6 +11,8 @@ export interface ModelItem {
   size: string;
   description: string;
   installed: boolean;
+  phase?: ModelPullPhase;
+  paused?: boolean;
   downloading?: boolean;
   progress?: number;
 }
@@ -18,6 +20,7 @@ export interface ModelItem {
 interface LibraryViewNewProps {
   // Backend state
   ollamaStatus: 'not-installed' | 'stopped' | 'running';
+  ollamaInstall: OllamaInstallState;
   lmStudioStatus: 'not-installed' | 'stopped' | 'running';
   activeBackend: ModelBackendKind;
   onBackendSwitch: (backend: ModelBackendKind) => void;
@@ -35,6 +38,8 @@ interface LibraryViewNewProps {
   installedLLMs: ModelItem[];
   onDownloadLLM: (id: string) => void;
   onDeleteLLM: (id: string) => void;
+  onPauseLLM: (id: string) => void;
+  onResumeLLM: (id: string) => void;
 
   // STT models
   availableSTTs: ModelItem[];
@@ -54,6 +59,7 @@ interface LibraryViewNewProps {
 
 export function LibraryViewNew({
   ollamaStatus,
+  ollamaInstall,
   lmStudioStatus,
   activeBackend,
   onBackendSwitch,
@@ -67,6 +73,8 @@ export function LibraryViewNew({
   installedLLMs,
   onDownloadLLM,
   onDeleteLLM,
+  onPauseLLM,
+  onResumeLLM,
   availableSTTs,
   installedSTTs,
   onDownloadSTT,
@@ -84,6 +92,11 @@ export function LibraryViewNew({
 
   const storageUsedGB = storageTotalGB - storageFreeGB;
   const storagePercent = storageTotalGB > 0 ? Math.round((storageUsedGB / storageTotalGB) * 100) : 0;
+
+  const filteredLLMs = availableLLMs.filter(m =>
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
@@ -129,7 +142,7 @@ export function LibraryViewNew({
         <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] text-slate-500">存储位置</p>
-            <p className="truncate text-[11px] font-medium text-slate-700">{modelsDir || "未设置"}</p>
+            <p className="text-[11px] font-medium text-slate-700 break-all">{modelsDir || "未设置"}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onChangeStorage} className="shrink-0 text-[11px]">
             更改位置
@@ -139,7 +152,11 @@ export function LibraryViewNew({
 
       {/* Ollama状态横幅 */}
       {!ollamaInstalled && (
-        <OllamaInstallBanner onInstall={onInstallOllama} />
+        <OllamaInstallBanner
+          phase={ollamaInstall.phase}
+          message={ollamaInstall.message}
+          onInstall={onInstallOllama}
+        />
       )}
       {ollamaInstalled && !ollamaRunning && (
         <OllamaStartBanner onStart={onStartOllama} />
@@ -167,14 +184,14 @@ export function LibraryViewNew({
               name="Ollama"
               status={ollamaStatus}
               active={activeBackend === 'ollama'}
-              modelCount={installedLLMs.filter(m => m.id.startsWith('ollama:')).length}
+              modelCount={installedLLMs.length}
               onClick={() => onBackendSwitch('ollama')}
             />
             <StoreTab
               name="LM Studio"
               status={lmStudioStatus}
               active={activeBackend === 'lmstudio'}
-              modelCount={installedLLMs.filter(m => m.id.startsWith('lmstudio:')).length}
+              modelCount={0}
               onClick={() => onBackendSwitch('lmstudio')}
             />
             <Button
@@ -189,20 +206,32 @@ export function LibraryViewNew({
           </div>
         </div>
 
+        <div className="mb-3">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索模型…"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-700 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none"
+          />
+        </div>
+
         <div className="space-y-2">
-          {availableLLMs.length === 0 ? (
+          {filteredLLMs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
               <p className="text-[12px] text-slate-500">
                 {activeBackend === 'ollama' ? 'Ollama未运行' : 'LM Studio未运行'}
               </p>
             </div>
           ) : (
-            availableLLMs.map(model => (
+            filteredLLMs.map(model => (
               <ModelItemRow
                 key={model.id}
                 model={model}
                 onDownload={onDownloadLLM}
                 onDelete={onDeleteLLM}
+                onPause={onPauseLLM}
+                onResume={onResumeLLM}
               />
             ))
           )}
@@ -237,12 +266,12 @@ export function LibraryViewNew({
         <div className="space-y-2">
           {availableSTTs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-              <p className="text-[12px] text-slate-600 font-medium">🎙️ STT模型下载功能开发中</p>
+              <p className="text-[12px] text-slate-600 font-medium">STT模型下载功能开发中</p>
               <p className="text-[11px] text-slate-500 mt-1">
                 未来将支持Whisper等本地STT模型的直接下载和管理
               </p>
               <p className="text-[10px] text-slate-400 mt-2">
-                💡 当前版本使用浏览器内置的Web Speech API
+                当前版本使用浏览器内置的Web Speech API
               </p>
             </div>
           ) : (
@@ -286,12 +315,12 @@ export function LibraryViewNew({
         <div className="space-y-2">
           {availableTTSs.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-              <p className="text-[12px] text-slate-600 font-medium">🔊 TTS模型下载功能开发中</p>
+              <p className="text-[12px] text-slate-600 font-medium">TTS模型下载功能开发中</p>
               <p className="text-[11px] text-slate-500 mt-1">
                 未来将支持ChatTTS、Piper等本地TTS模型的直接下载和管理
               </p>
               <p className="text-[10px] text-slate-400 mt-2">
-                💡 当前版本使用Edge TTS云端服务
+                当前版本使用Edge TTS云端服务
               </p>
             </div>
           ) : (
@@ -313,12 +342,18 @@ export function LibraryViewNew({
 function ModelItemRow({
   model,
   onDownload,
-  onDelete
+  onDelete,
+  onPause,
+  onResume
 }: {
   model: ModelItem;
   onDownload: (id: string) => void;
   onDelete: (id: string) => void;
+  onPause?: (id: string) => void;
+  onResume?: (id: string) => void;
 }) {
+  const hasError = model.phase === "error" || model.phase === "cancelled";
+
   return (
     <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300 hover:bg-slate-50/50 transition-all">
       <div className="flex-1 min-w-0">
@@ -327,6 +362,21 @@ function ModelItemRow({
           {model.installed && (
             <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-600">
               <CheckIcon width={10} /> 已安装
+            </span>
+          )}
+          {model.paused && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
+              <PauseIcon width={10} /> 已暂停
+            </span>
+          )}
+          {model.downloading && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-brand-600">
+              下载中
+            </span>
+          )}
+          {hasError && !model.installed && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-rose-600">
+              {model.phase === "error" ? "下载失败" : "已取消"}
             </span>
           )}
         </div>
@@ -341,19 +391,55 @@ function ModelItemRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 ml-3">
-        {model.downloading ? (
+      <div className="flex items-center gap-2 ml-3 shrink-0">
+        {(model.downloading || model.paused) && (
           <div className="flex items-center gap-2">
             <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-brand-500 transition-all duration-300"
+                className={cn(
+                  "h-full transition-all duration-300",
+                  model.paused ? "bg-amber-400" : "bg-brand-500"
+                )}
                 style={{ width: `${model.progress || 0}%` }}
               />
             </div>
             <span className="text-[11px] text-slate-500 w-10 text-right">
-              {model.progress || 0}%
+              {model.progress ?? 0}%
             </span>
           </div>
+        )}
+
+        {model.downloading ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onPause?.(model.id)}
+            className="h-7 gap-1 text-[11px] text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+          >
+            <PauseIcon width={12} />
+            暂停
+          </Button>
+        ) : model.paused ? (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onResume?.(model.id)}
+              className="h-7 gap-1 text-[11px]"
+            >
+              <PlayIcon width={12} />
+              继续下载
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(model.id)}
+              className="h-7 gap-1 text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+            >
+              <TrashIcon width={12} />
+              取消
+            </Button>
+          </>
         ) : model.installed ? (
           <Button
             variant="ghost"
@@ -363,6 +449,16 @@ function ModelItemRow({
           >
             <TrashIcon width={12} />
             删除
+          </Button>
+        ) : hasError ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onDownload(model.id)}
+            className="h-7 gap-1 text-[11px]"
+          >
+            <DownloadIcon width={12} />
+            重新下载
           </Button>
         ) : (
           <Button

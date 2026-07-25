@@ -3,8 +3,8 @@ import type { GpuInfo, ModelCatalogEntry } from "@ai-cursor-v2/shared";
 /**
  * 方案 B 可通过 `ollama pull` 获取的本地文本模型目录。
  *
- * 只列 Ollama 官方库中存在的 tag（下载/运行由 Ollama 负责），执行大脑默认 Qwen2.5 7B，
- * 记录笔记本用更轻的 3B。语音/全双工原生模型不在此目录——它们走独立的 VoiceServerBackend。
+ * 只列 Ollama 官方库中存在的 tag（下载/运行由 Ollama 负责），执行大脑默认 Qwen2.5 7B；
+ * 3B 作为低配设备的执行大脑备选。语音/全双工原生模型不在此目录——它们走独立的 VoiceServerBackend。
  */
 export const ollamaModelCatalog: ModelCatalogEntry[] = [
   {
@@ -22,10 +22,10 @@ export const ollamaModelCatalog: ModelCatalogEntry[] = [
     displayName: "Qwen2.5 3B Instruct",
     badge: "可选",
     feature: "低配可跑 / 记录引擎",
-    description: "更轻量，适合作为记录笔记本或在显存/内存有限的设备上作为执行大脑。",
+    description: "更轻量，可在显存/内存有限的设备上作为执行大脑。",
     approxSizeGB: 1.9,
     recommendedRamGB: 6,
-    role: "session_record_engine"
+    role: "duplex_execution_brain"
   },
   {
     id: "llama3.1:8b",

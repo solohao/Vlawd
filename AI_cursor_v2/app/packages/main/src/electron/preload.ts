@@ -64,6 +64,8 @@ export interface AiCursorDesktopApi {
   modelRefreshBackend(): Promise<ModelCenterSnapshot>;
   modelChooseStorageRoot(): Promise<ModelCenterSnapshot>;
   modelPull(model: string): Promise<ModelCenterSnapshot>;
+  modelPausePull(model: string): Promise<ModelCenterSnapshot>;
+  modelResumePull(model: string): Promise<ModelCenterSnapshot>;
   modelCancelPull(): Promise<ModelCenterSnapshot>;
   modelRemove(model: string): Promise<ModelCenterSnapshot>;
   modelUseAsBrain(model: string): Promise<ModelCenterSnapshot>;
@@ -136,6 +138,8 @@ const api: AiCursorDesktopApi = {
   modelRefreshBackend: () => ipcRenderer.invoke("model:refreshBackend") as Promise<ModelCenterSnapshot>,
   modelChooseStorageRoot: () => ipcRenderer.invoke("model:chooseStorageRoot") as Promise<ModelCenterSnapshot>,
   modelPull: (model) => ipcRenderer.invoke("model:pull", model) as Promise<ModelCenterSnapshot>,
+  modelPausePull: (model) => ipcRenderer.invoke("model:pausePull", model) as Promise<ModelCenterSnapshot>,
+  modelResumePull: (model) => ipcRenderer.invoke("model:resumePull", model) as Promise<ModelCenterSnapshot>,
   modelCancelPull: () => ipcRenderer.invoke("model:cancelPull") as Promise<ModelCenterSnapshot>,
   modelRemove: (model) => ipcRenderer.invoke("model:remove", model) as Promise<ModelCenterSnapshot>,
   modelUseAsBrain: (model) => ipcRenderer.invoke("model:useAsBrain", model) as Promise<ModelCenterSnapshot>,

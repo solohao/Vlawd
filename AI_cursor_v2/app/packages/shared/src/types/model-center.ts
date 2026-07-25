@@ -95,7 +95,8 @@ export type ModelPullPhase =
   | "verifying"
   | "success"
   | "error"
-  | "cancelled";
+  | "cancelled"
+  | "paused";
 
 export interface ModelPullProgress {
   model: string;
