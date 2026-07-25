@@ -13,6 +13,11 @@ class CapturingLlmAdapter implements LlmAdapter {
     this.lastMessages = messages;
     return;
   }
+  async complete(messages: LlmMessage[]): Promise<string> {
+    this.lastMessages = messages;
+    return "";
+  }
+
   async healthCheck(): Promise<boolean> {
     return true;
   }

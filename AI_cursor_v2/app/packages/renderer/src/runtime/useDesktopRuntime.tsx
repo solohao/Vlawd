@@ -52,6 +52,7 @@ export interface DesktopRuntimeController {
   connectAudio(): Promise<void>;
   pauseSession(): Promise<void>;
   cancelSession(): Promise<void>;
+  startResearch(goal: string): Promise<void>;
   executeRuntimeAction(): Promise<void>;
   browserOpen(url: string): Promise<void>;
   browserSearch(query: string): Promise<void>;
@@ -111,6 +112,7 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
   const connectAudio = useCallback(() => run(() => desktopApi().connectAudio()), [run]);
   const pauseSession = useCallback(() => run(() => desktopApi().pauseSession()), [run]);
   const cancelSession = useCallback(() => run(() => desktopApi().cancelSession()), [run]);
+  const startResearch = useCallback((goal: string) => run(() => desktopApi().startResearch(goal)), [run]);
   const executeRuntimeAction = useCallback(() => run(() => desktopApi().executeRuntimeAction()), [run]);
   const browserOpen = useCallback((url: string) => run(() => desktopApi().browserOpen(url)), [run]);
   const browserSearch = useCallback((query: string) => run(() => desktopApi().browserSearch(query)), [run]);
@@ -134,6 +136,7 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       connectAudio,
       pauseSession,
       cancelSession,
+      startResearch,
       executeRuntimeAction,
       browserOpen,
       browserSearch,
@@ -152,6 +155,7 @@ export function DesktopRuntimeProvider({ children }: { children: ReactNode }): J
       connectAudio,
       pauseSession,
       cancelSession,
+      startResearch,
       executeRuntimeAction,
       browserOpen,
       browserSearch,

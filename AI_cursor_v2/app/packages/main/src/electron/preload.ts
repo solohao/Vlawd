@@ -24,6 +24,8 @@ export interface AiCursorDesktopApi {
   connectAudio(): Promise<DesktopUiSnapshot>;
   pauseSession(): Promise<DesktopUiSnapshot>;
   cancelSession(): Promise<DesktopUiSnapshot>;
+  /** 根据研究目标生成只读动作提案。 */
+  startResearch(goal: string): Promise<DesktopUiSnapshot>;
   executeRuntimeAction(): Promise<DesktopUiSnapshot>;
   /** 在 Task Workspace 的浏览器容器里打开指定 URL。 */
   browserOpen(url: string): Promise<DesktopUiSnapshot>;
@@ -120,6 +122,7 @@ const api: AiCursorDesktopApi = {
   connectAudio: () => ipcRenderer.invoke("desktop:connectAudio") as Promise<DesktopUiSnapshot>,
   pauseSession: () => ipcRenderer.invoke("desktop:pauseSession") as Promise<DesktopUiSnapshot>,
   cancelSession: () => ipcRenderer.invoke("desktop:cancelSession") as Promise<DesktopUiSnapshot>,
+  startResearch: (goal: string) => ipcRenderer.invoke("desktop:startResearch", goal) as Promise<DesktopUiSnapshot>,
   executeRuntimeAction: () => ipcRenderer.invoke("desktop:executeRuntimeAction") as Promise<DesktopUiSnapshot>,
   browserOpen: (url: string) => ipcRenderer.invoke("browser:open", url) as Promise<DesktopUiSnapshot>,
   browserSearch: (query: string) => ipcRenderer.invoke("browser:search", query) as Promise<DesktopUiSnapshot>,
