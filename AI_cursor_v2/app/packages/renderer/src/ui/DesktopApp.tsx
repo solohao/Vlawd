@@ -44,6 +44,13 @@ export function DesktopApp() {
     }
   }, [desktop.snapshot.browser.nextAction]);
 
+  // 离开任务空间时关闭 BrowserView，避免悬浮窗遮挡其他页面。
+  useEffect(() => {
+    if (page !== "task") {
+      void desktop.browserClose().catch(() => undefined);
+    }
+  }, [page]);
+
   const theme = pageThemes[page];
 
   return (

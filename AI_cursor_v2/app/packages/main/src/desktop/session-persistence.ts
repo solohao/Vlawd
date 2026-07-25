@@ -106,7 +106,9 @@ export function listSessions(): SessionSummary[] {
         updated_at: persisted.updated_at,
         sourceCount: persisted.sources.length,
         parent_id: persisted.parent_id,
-        hasEvidence: !!persisted.evidenceSummary
+        hasEvidence: !!persisted.evidenceSummary,
+        plan: persisted.plan,
+        evidence: persisted.evidenceSummary
       };
       if (persisted.goal) {
         summary.goal = persisted.goal;

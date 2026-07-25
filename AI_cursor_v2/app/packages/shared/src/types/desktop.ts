@@ -5,7 +5,7 @@ import type {
 } from "./audio.js";
 import type { ModelRole, ModelRuntimeState, WorkflowModelBinding } from "./model.js";
 import type { ActionResult, SafetyLevel } from "./action.js";
-import type { SessionGraphSnapshot, SessionRun } from "./session.js";
+import type { EvidenceSummary, SessionGraphSnapshot, SessionRun, TaskPlan } from "./session.js";
 
 export type DesktopModelDownloadStatus =
   | "not_selected"
@@ -68,6 +68,8 @@ export interface SessionSummary {
   parent_id?: string;
   sourceCount: number;
   hasEvidence?: boolean;
+  plan?: TaskPlan;
+  evidence?: EvidenceSummary;
 }
 
 export interface DesktopBrowserRuntimeState {
