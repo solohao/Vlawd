@@ -6,7 +6,7 @@ import type {
 } from "@ai-cursor-v2/shared";
 import { EchoLlmAdapter, type LlmAdapter, type LlmMessage } from "./llm-adapter.js";
 
-const DEFAULT_SYSTEM_PROMPT = [
+export const DEFAULT_SYSTEM_PROMPT = [
   "你是 Vlawd 的本地全双工桌面助手。",
   "用简洁自然的中文口语回答，适合语音朗读，不要输出 Markdown 符号或代码块。",
   "回答尽量分点、简短；用户随时可能插话改需求，你要立刻按新的约束回答。",

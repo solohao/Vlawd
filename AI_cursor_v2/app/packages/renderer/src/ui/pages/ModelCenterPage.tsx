@@ -121,6 +121,10 @@ export function ModelCenterPage() {
     if (snapshot.customEndpoint?.baseUrl) {
       setCustomEndpoints(prev => {
         const existing = prev[0] ?? { id: 'endpoint-1', enabled: false, type: 'openai-compatible' as const };
+        const isPreset =
+          (snapshot.customEndpoint!.baseUrl === 'https://api.openai.com/v1' && snapshot.customEndpoint!.protocol === 'openai') ||
+          (snapshot.customEndpoint!.baseUrl === 'https://api.anthropic.com/v1' && snapshot.customEndpoint!.protocol === 'anthropic');
+        const endpointType: 'openai-compatible' | 'custom' = isPreset ? 'openai-compatible' : 'custom';
         return [{
           ...existing,
           id: 'endpoint-1',
@@ -129,6 +133,7 @@ export function ModelCenterPage() {
           model: snapshot.customEndpoint!.model,
           apiKey: snapshot.customEndpoint!.apiKey,
           protocol: snapshot.customEndpoint!.protocol,
+          type: endpointType,
           enabled: isRemote
         }];
       });

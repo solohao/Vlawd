@@ -70,7 +70,14 @@ export function RemoteProviderTable({
   const matches = useMemo(() => {
     const map = new Map<Preset['id'], CustomEndpoint | undefined>();
     for (const preset of PRESETS) {
-      map.set(preset.id, endpoints.find((ep) => ep.url === preset.url || (preset.id === 'custom' && ep.type === 'custom')));
+      map.set(
+        preset.id,
+        endpoints.find((ep) =>
+          preset.id === 'custom'
+            ? ep.type === 'custom' || !PRESETS.some((p) => p.url === ep.url && p.protocol === ep.protocol)
+            : ep.url === preset.url && ep.protocol === preset.protocol
+        )
+      );
     }
     return map;
   }, [endpoints]);
@@ -87,7 +94,11 @@ export function RemoteProviderTable({
   useEffect(() => {
     const active = endpoints.find((e) => e.enabled) ?? endpoints[0];
     if (active) {
-      const preset = PRESETS.find((p) => active.url === p.url || (p.id === 'custom' && active.type === 'custom'));
+      const preset = PRESETS.find((p) =>
+        p.id === 'custom'
+          ? active.type === 'custom' || !PRESETS.some((pre) => pre.url === active.url && pre.protocol === active.protocol)
+          : active.url === p.url && active.protocol === p.protocol
+      );
       if (preset) setSelected(preset.id);
     }
   }, [endpoints]);
