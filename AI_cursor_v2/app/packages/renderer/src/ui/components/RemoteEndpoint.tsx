@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Button, StatusDot, ListRow, List } from "../../design-system/index.js";
-import { PlusIcon, PencilIcon, TrashIcon } from "../icons.js";
+import { useMemo, useState, useEffect } from "react";
+import { Button, StatusDot } from "../../design-system/index.js";
 
 export interface CustomEndpoint {
   id: string;
@@ -8,199 +7,253 @@ export interface CustomEndpoint {
   url: string;
   model: string;
   apiKey?: string;
+  protocol?: 'openai' | 'anthropic';
   type: 'openai-compatible' | 'custom';
   enabled: boolean;
 }
 
-interface RemoteEndpointListProps {
-  endpoints: CustomEndpoint[];
-  onEdit: (endpoint: CustomEndpoint) => void;
-  onDelete: (id: string) => void;
-  onToggle: (id: string) => void;
+interface Preset {
+  id: 'openai' | 'claude' | 'custom';
+  name: string;
+  description: string;
+  url: string;
+  protocol: 'openai' | 'anthropic';
+  type: 'openai-compatible' | 'custom';
+  modelOptions: string[];
+  defaultModel: string;
 }
 
-export function RemoteEndpointList({ endpoints, onEdit, onDelete, onToggle }: RemoteEndpointListProps) {
-  if (endpoints.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/30 px-4 py-8 text-center">
-        <p className="text-[12px] text-slate-500">
-          尚未配置远程API端点
-        </p>
-        <p className="text-[11px] text-slate-400 mt-1">
-          可以连接到OpenAI、Anthropic或自建服务器
-        </p>
-      </div>
-    );
+const PRESETS: Preset[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI Cloud',
+    description: '官方 OpenAI API（gpt-4o / gpt-4o-mini 等）',
+    url: 'https://api.openai.com/v1',
+    protocol: 'openai',
+    type: 'openai-compatible',
+    modelOptions: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    defaultModel: 'gpt-4o-mini'
+  },
+  {
+    id: 'claude',
+    name: 'Claude Cloud',
+    description: 'Anthropic Claude API（claude-3-5-sonnet 等）',
+    url: 'https://api.anthropic.com/v1',
+    protocol: 'anthropic',
+    type: 'openai-compatible',
+    modelOptions: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
+    defaultModel: 'claude-3-5-sonnet-20241022'
+  },
+  {
+    id: 'custom',
+    name: '自定义 OpenAI 兼容端点',
+    description: 'vLLM、llama.cpp server、one-api、litellm 等',
+    url: '',
+    protocol: 'openai',
+    type: 'custom',
+    modelOptions: [],
+    defaultModel: ''
   }
+];
 
-  return (
-    <List>
-      {endpoints.map(ep => (
-        <ListRow
-          key={ep.id}
-          leading={
-            <button
-              onClick={() => onToggle(ep.id)}
-              className="shrink-0"
-              title={ep.enabled ? '点击禁用' : '点击启用'}
-            >
-              <StatusDot active={ep.enabled} color={ep.enabled ? 'success' : 'neutral'} size="md" />
-            </button>
-          }
-          title={ep.name}
-          description={ep.url}
-          trailing={
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onEdit(ep)}
-                className="h-7 w-7 p-0"
-                title="编辑"
-              >
-                <PencilIcon width={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(ep.id)}
-                className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-600"
-                title="删除"
-              >
-                <TrashIcon width={14} />
-              </Button>
-            </div>
-          }
-        />
-      ))}
-    </List>
-  );
+interface RemoteProviderTableProps {
+  endpoints: CustomEndpoint[];
+  onAddEndpoint: (endpoint: Omit<CustomEndpoint, 'id'>) => void;
+  onDeleteEndpoint: (id: string) => void;
 }
 
-interface AddEndpointButtonProps {
-  onClick: () => void;
-}
+export function RemoteProviderTable({
+  endpoints,
+  onAddEndpoint,
+  onDeleteEndpoint
+}: RemoteProviderTableProps) {
+  const matches = useMemo(() => {
+    const map = new Map<Preset['id'], CustomEndpoint | undefined>();
+    for (const preset of PRESETS) {
+      map.set(preset.id, endpoints.find((ep) => ep.url === preset.url || (preset.id === 'custom' && ep.type === 'custom')));
+    }
+    return map;
+  }, [endpoints]);
 
-export function AddEndpointButton({ onClick }: AddEndpointButtonProps) {
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={onClick}
-      className="w-full border-2 border-dashed border-slate-200 hover:border-slate-300"
-    >
-      <PlusIcon width={14} className="mr-1" />
-      添加自定义端点
-    </Button>
-  );
-}
+  const initialSelected = useMemo(() => {
+    for (const preset of PRESETS) {
+      if (matches.get(preset.id)) return preset.id;
+    }
+    return 'openai' as const;
+  }, [matches]);
 
-interface EndpointFormProps {
-  endpoint?: CustomEndpoint;
-  onSave: (endpoint: Omit<CustomEndpoint, 'id'>) => void;
-  onCancel: () => void;
-}
+  const [selected, setSelected] = useState<Preset['id']>(initialSelected);
 
-export function EndpointForm({ endpoint, onSave, onCancel }: EndpointFormProps) {
-  const [name, setName] = useState(endpoint?.name || '');
-  const [url, setUrl] = useState(endpoint?.url || '');
-  const [model, setModel] = useState(endpoint?.model || '');
-  const [apiKey, setApiKey] = useState(endpoint?.apiKey || '');
-  const [type, setType] = useState<'openai-compatible' | 'custom'>(
-    endpoint?.type || 'openai-compatible'
-  );
+  useEffect(() => {
+    const active = endpoints.find((e) => e.enabled) ?? endpoints[0];
+    if (active) {
+      const preset = PRESETS.find((p) => active.url === p.url || (p.id === 'custom' && active.type === 'custom'));
+      if (preset) setSelected(preset.id);
+    }
+  }, [endpoints]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave({
-      name,
-      url,
-      model,
-      apiKey: apiKey || undefined,
-      type,
+  const [form, setForm] = useState<Record<Preset['id'], { apiKey: string; model: string; url: string; protocol: 'openai' | 'anthropic' }>>(() => ({
+    openai: { apiKey: '', model: PRESETS[0].defaultModel, url: PRESETS[0].url, protocol: 'openai' },
+    claude: { apiKey: '', model: PRESETS[1].defaultModel, url: PRESETS[1].url, protocol: 'anthropic' },
+    custom: { apiKey: '', model: '', url: '', protocol: 'openai' }
+  }));
+
+  useEffect(() => {
+    const next = { ...form };
+    for (const preset of PRESETS) {
+      const ep = matches.get(preset.id);
+      if (ep) {
+        next[preset.id] = {
+          apiKey: ep.apiKey ?? '',
+          model: ep.model || preset.defaultModel,
+          url: ep.url || preset.url,
+          protocol: ep.protocol || preset.protocol
+        };
+      } else {
+        next[preset.id] = {
+          apiKey: '',
+          model: preset.defaultModel,
+          url: preset.url,
+          protocol: preset.protocol
+        };
+      }
+    }
+    setForm(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches]);
+
+  const handleApply = (preset: Preset) => {
+    const state = form[preset.id];
+    onAddEndpoint({
+      name: preset.name,
+      url: state.url.trim() || preset.url,
+      model: state.model.trim(),
+      apiKey: state.apiKey.trim() || undefined,
+      protocol: preset.id === 'custom' ? state.protocol : preset.protocol,
+      type: preset.type,
       enabled: true
     });
   };
 
+  const handleDelete = (preset: Preset) => {
+    const ep = matches.get(preset.id);
+    if (ep) {
+      onDeleteEndpoint(ep.id);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-[12px] font-medium text-slate-700 mb-1.5">
-          名称
-        </label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="例如：我的API服务器"
-          required
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        />
-      </div>
+    <div className="space-y-2">
+      {PRESETS.map((preset) => {
+        const ep = matches.get(preset.id);
+        const isSelected = selected === preset.id;
+        const isConfigured = !!ep;
+        const state = form[preset.id];
 
-      <div>
-        <label className="block text-[12px] font-medium text-slate-700 mb-1.5">
-          地址
-        </label>
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="http://localhost:8000"
-          required
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        />
-      </div>
+        return (
+          <div
+            key={preset.id}
+            className={`rounded-lg border transition-all ${
+              isSelected ? 'border-brand-500 bg-brand-50/30' : 'border-slate-200 bg-white'
+            }`}
+          >
+            <button
+              onClick={() => setSelected(preset.id)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <StatusDot active={isConfigured} color={isConfigured ? 'success' : 'neutral'} size="md" />
+                <div>
+                  <div className="text-[13px] font-medium text-slate-900">{preset.name}</div>
+                  <div className="text-[11px] text-slate-500">{preset.description}</div>
+                </div>
+              </div>
+              <div className="text-[11px] font-medium text-slate-500">
+                {isConfigured ? '已配置' : '未配置'}
+              </div>
+            </button>
 
-      <div>
-        <label className="block text-[12px] font-medium text-slate-700 mb-1.5">
-          模型名称
-        </label>
-        <input
-          type="text"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder="例如：qwen2.5:3b-instruct"
-          required
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        />
-      </div>
+            {isSelected && (
+              <div className="border-t border-slate-100 px-4 py-3">
+                <div className="space-y-3">
+                  {preset.id === 'custom' && (
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-700 mb-1">Base URL</label>
+                      <input
+                        type="url"
+                        value={state.url}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [preset.id]: { ...prev[preset.id], url: e.target.value } }))}
+                        placeholder="https://api.example.com/v1"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                      />
+                    </div>
+                  )}
 
-      <div>
-        <label className="block text-[12px] font-medium text-slate-700 mb-1.5">
-          API密钥（可选）
-        </label>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="sk-..."
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        />
-      </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-1">API Key</label>
+                    <input
+                      type="password"
+                      value={state.apiKey}
+                      onChange={(e) => setForm((prev) => ({ ...prev, [preset.id]: { ...prev[preset.id], apiKey: e.target.value } }))}
+                      placeholder={preset.id === 'openai' ? 'sk-...' : preset.id === 'claude' ? 'sk-ant-...' : 'API Key'}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                    />
+                  </div>
 
-      <div>
-        <label className="block text-[12px] font-medium text-slate-700 mb-1.5">
-          类型
-        </label>
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as 'openai-compatible' | 'custom')}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        >
-          <option value="openai-compatible">OpenAI兼容</option>
-          <option value="custom">自定义协议</option>
-        </select>
-      </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-1">模型</label>
+                    <input
+                      type="text"
+                      list={`models-${preset.id}`}
+                      value={state.model}
+                      onChange={(e) => setForm((prev) => ({ ...prev, [preset.id]: { ...prev[preset.id], model: e.target.value } }))}
+                      placeholder={preset.defaultModel}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                    />
+                    {preset.modelOptions.length > 0 && (
+                      <datalist id={`models-${preset.id}`}>
+                        {preset.modelOptions.map((m) => (
+                          <option key={m} value={m} />
+                        ))}
+                      </datalist>
+                    )}
+                  </div>
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          取消
-        </Button>
-        <Button type="submit" variant="primary" size="sm">
-          {endpoint ? '保存' : '添加'}
-        </Button>
-      </div>
-    </form>
+                  {preset.id === 'custom' && (
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-700 mb-1">协议</label>
+                      <select
+                        value={state.protocol}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [preset.id]: { ...prev[preset.id], protocol: e.target.value as 'openai' | 'anthropic' } }))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                      >
+                        <option value="openai">OpenAI 兼容</option>
+                        <option value="anthropic">Anthropic (Claude) 原生</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleApply(preset)}
+                      disabled={!state.model.trim() || (preset.id === 'custom' && !state.url.trim())}
+                    >
+                      应用
+                    </Button>
+                    {isConfigured && (
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(preset)}>
+                        删除
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

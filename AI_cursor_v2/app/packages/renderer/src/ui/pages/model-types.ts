@@ -34,6 +34,7 @@ export interface CustomEndpoint {
   url: string;
   model: string;
   apiKey?: string;
+  protocol?: 'openai' | 'anthropic';
   type: 'openai-compatible' | 'custom';
   enabled: boolean;
 }

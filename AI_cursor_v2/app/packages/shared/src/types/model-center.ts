@@ -34,6 +34,8 @@ export interface CustomEndpointConfig {
   name?: string;
   /** API 密钥，连接需要鉴权的端点时使用（当前由前端保存，后端透传）。 */
   apiKey?: string;
+  /** API 协议类型：openai（OpenAI 兼容）或 anthropic（Claude 原生）。 */
+  protocol?: "openai" | "anthropic";
 }
 
 export interface GpuInfo {

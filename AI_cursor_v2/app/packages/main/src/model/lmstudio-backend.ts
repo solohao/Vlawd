@@ -39,7 +39,7 @@ export class LMStudioBackend implements ModelBackend {
   }
 
   async listModels(signal?: AbortSignal): Promise<OllamaModelInfo[]> {
-    return fetchOpenAiModels(this.openaiEndpoint, signal);
+    return fetchOpenAiModels(this.openaiEndpoint, undefined, "openai", signal);
   }
 
   async health(signal?: AbortSignal): Promise<boolean> {

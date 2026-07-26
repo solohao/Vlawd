@@ -1,7 +1,7 @@
 import type { DuplexModelEvent, DuplexModelInput, DuplexModelProvider, ProviderConfig } from "@ai-cursor-v2/shared";
 import { MockDuplexModelProvider } from "./mock-duplex-provider.js";
 import { executionBrainCatalog } from "./dual-role-config.js";
-import { OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
+import { AnthropicLlmAdapter, OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
 import { PipelineDuplexModelProvider } from "./pipeline-duplex-provider.js";
 
 export class StubDuplexModelProvider implements DuplexModelProvider {
@@ -39,11 +39,11 @@ export function createLlmAdapter(config: ProviderConfig): LlmAdapter {
   const baseUrl = pipeline?.llmBaseUrl ?? config.endpoint;
   const model = pipeline?.llmModel;
   if (baseUrl && model) {
-    return new OpenAICompatibleLlmAdapter({
-      baseUrl,
-      model,
-      apiKey: pipeline?.llmApiKey
-    });
+    const apiKey = pipeline?.llmApiKey;
+    if (pipeline?.llmProtocol === "anthropic") {
+      return new AnthropicLlmAdapter({ baseUrl, model, apiKey });
+    }
+    return new OpenAICompatibleLlmAdapter({ baseUrl, model, apiKey });
   }
   throw new Error(`Provider ${config.kind} 未配置本地 OpenAI 兼容端点（baseUrl + model）。`);
 }
