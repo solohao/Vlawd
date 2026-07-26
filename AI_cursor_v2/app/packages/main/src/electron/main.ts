@@ -56,6 +56,14 @@ function broadcastConversationEvent(event: DuplexRuntimeEvent): void {
 }
 duplexRuntime.on(broadcastConversationEvent);
 
+function broadcastMicLevel(level: number): void {
+  for (const window of [mainWindow, overlayWindow]) {
+    if (window && !window.isDestroyed()) {
+      window.webContents.send("mic:level", level);
+    }
+  }
+}
+
 // ── 模型中心：包装版 Ollama 后端 + 环境探测 + 存储配置 ─────────────────
 const managedBinaryDir = join(userDataDir, "ollama-bin");
 const modelCenter = new ModelCenterService({ runtime: duplexRuntime, managedBinaryDir });
@@ -358,6 +366,9 @@ ipcMain.handle("conversation:setProvider", (_event, kind: DuplexProviderKind) =>
   duplexRuntime.setActiveProvider(kind)
 );
 ipcMain.handle("conversation:checkHealth", () => duplexRuntime.checkProviderHealth());
+ipcMain.handle("mic:level", (_event, level: number) => {
+  broadcastMicLevel(level);
+});
 
 // ── 模型中心通道 ────────────────────────────────────────────────────
 ipcMain.handle("model:snapshot", () => modelCenter.getSnapshot());

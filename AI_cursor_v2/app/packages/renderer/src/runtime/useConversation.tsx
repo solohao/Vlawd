@@ -70,6 +70,7 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
   const userUtteranceAtRef = useRef<number | null>(null);
   const bargeInAtRef = useRef<number | null>(null);
   const activeSpeechRef = useRef<{ stt?: string; tts?: string }>({});
+  const micBroadcastRef = useRef<{ lastTime: number; lastLevel: number }>({ lastTime: 0, lastLevel: 0 });
 
   if (!tts.current && TtsPlayer.isSupported()) {
     tts.current = new TtsPlayer({
@@ -161,6 +162,8 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
     setMicLevel(0);
     setInterimTranscript("");
     setWhisperLoading(null);
+    micBroadcastRef.current = { lastTime: 0, lastLevel: 0 };
+    void desktopApi().setMicLevel(0).catch(() => undefined);
   }, []);
 
   const startMic = useCallback(async () => {
@@ -206,7 +209,16 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
           void desktopApi().conversationBargeIn(heard);
         }
       },
-      onLevel: (level) => setMicLevel(level),
+      onLevel: (level) => {
+        setMicLevel(level);
+        const now = Date.now();
+        const { lastTime, lastLevel } = micBroadcastRef.current;
+        // 80ms 节流，且只有当变化超过 0.05 时才广播，避免 IPC 过于频繁。
+        if (now - lastTime > 80 || Math.abs(level - lastLevel) > 0.08) {
+          micBroadcastRef.current = { lastTime: now, lastLevel: level };
+          void desktopApi().setMicLevel(level).catch(() => undefined);
+        }
+      },
       onSpeechEnd: useLocalStt || useWhisper
         ? (audio) => {
             console.log("[useConversation] VAD onSpeechEnd, audio length:", audio.length);

@@ -75,6 +75,11 @@ export interface AiCursorDesktopApi {
   /** 订阅实时 Runtime 事件；返回取消订阅函数。 */
   onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
 
+  /** 报告当前麦克风输入强度（VAD 语音概率）到主进程，由主进程广播给悬浮窗。 */
+  setMicLevel(level: number): Promise<void>;
+  /** 订阅麦克风输入强度；返回取消订阅函数。 */
+  onMicLevel(listener: (level: number) => void): () => void;
+
   /** 订阅桌面运行时快照；返回取消订阅函数。 */
   onDesktopSnapshot(listener: (snapshot: DesktopUiSnapshot) => void): () => void;
 
@@ -168,6 +173,13 @@ const api: AiCursorDesktopApi = {
   onConversationEvent: (listener) => {
     const channel = "conversation:event";
     const handler = (_event: unknown, payload: DuplexRuntimeEvent): void => listener(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  setMicLevel: (level) => ipcRenderer.invoke("mic:level", level) as Promise<void>,
+  onMicLevel: (listener) => {
+    const channel = "mic:level";
+    const handler = (_event: unknown, level: number): void => listener(level);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },

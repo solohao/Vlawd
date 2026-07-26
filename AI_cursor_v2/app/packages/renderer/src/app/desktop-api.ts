@@ -56,6 +56,9 @@ export interface AiCursorDesktopApi {
   conversationCheckHealth(): Promise<boolean>;
   onConversationEvent(listener: (event: DuplexRuntimeEvent) => void): () => void;
 
+  setMicLevel(level: number): Promise<void>;
+  onMicLevel(listener: (level: number) => void): () => void;
+
   onDesktopSnapshot(listener: (snapshot: DesktopUiSnapshot) => void): () => void;
 
   modelSnapshot(): Promise<ModelCenterSnapshot>;
