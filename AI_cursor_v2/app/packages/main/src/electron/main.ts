@@ -378,7 +378,7 @@ ipcMain.handle("model:rescanStorage", () => modelCenter.rescanStorage());
 ipcMain.handle("model:chooseStorageRoot", async () => {
   const currentRoot = modelCenter.getSnapshot().storage.rootDir;
   const result = await dialog.showOpenDialog({
-    title: "选择模型存储父目录（将在其下自动创建 models 文件夹）",
+    title: "选择模型存储目录（将直接在该目录下存放 manifests 和 blobs）",
     defaultPath: currentRoot || undefined,
     properties: ["openDirectory", "createDirectory"]
   });
