@@ -29,7 +29,6 @@ export class TtsPlayer {
   /** 已朗读完（onend 触发）的句子拼接，用作 barge-in 时上报的“用户实际听到的文本”。 */
   private spokenText = "";
   private sinkId: string | undefined;
-  private pending = 0;
   private speaking = false;
   private voice: SpeechSynthesisVoice | undefined;
   private readonly options: Required<Omit<TtsPlayerOptions, "sinkId" | "onSpeakingStart" | "onSpeakingEnd">>;
@@ -37,6 +36,8 @@ export class TtsPlayer {
   private readonly onSpeakingEnd?: () => void;
   private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
+  private queue: string[] = [];
+  private processing = false;
 
   constructor(options: TtsPlayerOptions = {}) {
     this.options = {
@@ -57,8 +58,9 @@ export class TtsPlayer {
     this.sinkId = sinkId;
   }
 
-  /** 新一轮助手回答开始：清空上一轮的缓冲与“已听到”累计。 */
+  /** 新一轮助手回答开始：清空上一轮的缓冲、队列与“已听到”累计。 */
   beginResponse(): void {
+    this.cancel();
     this.buffer = "";
     this.spokenText = "";
   }
@@ -96,9 +98,10 @@ export class TtsPlayer {
 
   cancel(): void {
     this.buffer = "";
-    this.pending = 0;
+    this.queue = [];
     const wasSpeaking = this.speaking;
     this.speaking = false;
+    this.processing = false;
     this.currentSource?.stop();
     this.currentSource = null;
     if ("speechSynthesis" in window) {
@@ -119,9 +122,39 @@ export class TtsPlayer {
   }
 
   private enqueue(text: string): void {
-    this.pending += 1;
-    // 优先本地 TTS；失败则回退系统语音。
-    void this.tryLocal(text).catch(() => this.speakSpeechSynthesis(text));
+    this.queue.push(text);
+    if (!this.processing) {
+      void this.processQueue();
+    }
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.processing || this.queue.length === 0) {
+      return;
+    }
+    this.processing = true;
+    if (!this.speaking) {
+      this.speaking = true;
+      this.onSpeakingStart?.();
+    }
+    while (this.queue.length > 0) {
+      const text = this.queue.shift()!;
+      try {
+        await this.tryLocal(text);
+      } catch (err) {
+        console.warn("[TtsPlayer] local TTS failed, fallback to speechSynthesis:", err);
+        try {
+          await this.speakSpeechSynthesis(text);
+        } catch (fallbackErr) {
+          console.warn("[TtsPlayer] speechSynthesis also failed:", fallbackErr);
+        }
+      }
+    }
+    this.processing = false;
+    if (this.speaking) {
+      this.speaking = false;
+      this.onSpeakingEnd?.();
+    }
   }
 
   private async tryLocal(text: string): Promise<void> {
@@ -141,8 +174,11 @@ export class TtsPlayer {
         console.warn("[TtsPlayer] AudioContext resume failed:", err);
       }
     }
+    if (ctx.state !== "running") {
+      throw new Error(`AudioContext state is ${ctx.state}, cannot play audio`);
+    }
     const buffer = ctx.createBuffer(1, samples.length, sampleRate);
-    buffer.copyToChannel(new Float32Array(Array.from(samples)), 0);
+    buffer.copyToChannel(new Float32Array(samples), 0);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
@@ -152,61 +188,38 @@ export class TtsPlayer {
           this.currentSource = null;
         }
         this.spokenText += text;
-        this.pending -= 1;
-        if (this.pending <= 0) {
-          this.pending = 0;
-          this.speaking = false;
-          this.onSpeakingEnd?.();
-        }
         resolve();
       };
       this.currentSource = source;
-      if (!this.speaking) {
-        this.speaking = true;
-        this.onSpeakingStart?.();
-      }
       source.start(0);
     });
   }
 
-  private speakSpeechSynthesis(text: string): void {
+  private speakSpeechSynthesis(text: string): Promise<void> {
     if (!("speechSynthesis" in window)) {
-      this.pending = Math.max(0, this.pending - 1);
-      return;
+      return Promise.reject(new Error("speechSynthesis not supported"));
     }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = this.options.lang;
-    utterance.rate = this.options.rate;
-    utterance.pitch = this.options.pitch;
-    if (!this.voice) {
-      this.voice = this.pickVoice();
-    }
-    if (this.voice) {
-      utterance.voice = this.voice;
-    }
-    utterance.onstart = () => {
-      if (!this.speaking) {
-        this.speaking = true;
-        this.onSpeakingStart?.();
+    return new Promise<void>((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = this.options.lang;
+      utterance.rate = this.options.rate;
+      utterance.pitch = this.options.pitch;
+      if (!this.voice) {
+        this.voice = this.pickVoice();
       }
-    };
-    utterance.onend = () => {
-      this.spokenText += text;
-      this.pending -= 1;
-      if (this.pending <= 0) {
-        this.pending = 0;
-        this.speaking = false;
-        this.onSpeakingEnd?.();
+      if (this.voice) {
+        utterance.voice = this.voice;
       }
-    };
-    utterance.onerror = () => {
-      this.pending = Math.max(0, this.pending - 1);
-      if (this.pending <= 0) {
-        this.speaking = false;
-        this.onSpeakingEnd?.();
-      }
-    };
-    window.speechSynthesis.speak(utterance);
+      utterance.onend = () => {
+        this.spokenText += text;
+        resolve();
+      };
+      utterance.onerror = (event) => {
+        console.warn("[TtsPlayer] speechSynthesis error:", event.error);
+        reject(new Error(`speechSynthesis error: ${event.error}`));
+      };
+      window.speechSynthesis.speak(utterance);
+    });
   }
 }
 
@@ -362,6 +375,8 @@ export class BrowserSpeechRecognizer {
       return false;
     }
     const recognition = new Ctor();
+    // 800ms 内重复的相同 final 结果不再提交，避免语音识别 API 重复回调造成同一句话出现两次。
+    let lastFinal = { text: "", at: 0 };
     recognition.lang = "zh-CN";
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -370,6 +385,11 @@ export class BrowserSpeechRecognizer {
         const result = event.results[i];
         const transcript = result[0].transcript;
         if (result.isFinal) {
+          const now = Date.now();
+          if (transcript === lastFinal.text && now - lastFinal.at < 800) {
+            continue;
+          }
+          lastFinal = { text: transcript, at: now };
           handlers.onFinal(transcript);
         } else {
           handlers.onInterim?.(transcript);
