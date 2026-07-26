@@ -589,8 +589,9 @@ export class ModelCenterService {
   getActiveBrainLlm(): LlmAdapter | undefined {
     const backend = this.backends[this.activeBackend];
     const model = this.activeBrainModel;
+    // 不依赖 backendStates 的实时状态做硬阻断，避免 refreshBackend 并发检测导致的状态抖动。
+    // 如果后端实际不可用，LlmAdapter.complete 会失败，TaskPlanner 会回退到默认计划。
     if (!backend || !model) return undefined;
-    if (this.backendStates[this.activeBackend].status !== "running") return undefined;
     return new OpenAICompatibleLlmAdapter({
       baseUrl: backend.openaiEndpoint,
       model,
