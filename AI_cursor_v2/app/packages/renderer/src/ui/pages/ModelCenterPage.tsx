@@ -244,7 +244,7 @@ export function ModelCenterPage() {
   };
 
   const handleRefresh = () => {
-    void model.refreshBackend();
+    void model.rescanStorage();
   };
 
   const handleInstallOllama = () => {

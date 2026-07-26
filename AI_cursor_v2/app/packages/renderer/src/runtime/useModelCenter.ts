@@ -51,6 +51,8 @@ export interface ModelCenterController {
   busy: boolean;
   probe(): Promise<void>;
   refreshBackend(): Promise<void>;
+  /** 重新扫描当前存储目录；App 托管的 Ollama 会重启以重新读取模型。 */
+  rescanStorage(): Promise<void>;
   chooseStorageRoot(): Promise<void>;
   pull(model: string): Promise<void>;
   pausePull(model: string): Promise<void>;
@@ -113,6 +115,7 @@ export function useModelCenter(): ModelCenterController {
 
   const probe = useCallback(() => run(() => desktopApi().modelProbeEnvironment()), [run]);
   const refreshBackend = useCallback(() => run(() => desktopApi().modelRefreshBackend()), [run]);
+  const rescanStorage = useCallback(() => run(() => desktopApi().modelRescanStorage()), [run]);
   const chooseStorageRoot = useCallback(() => run(() => desktopApi().modelChooseStorageRoot()), [run]);
   const pull = useCallback((model: string) => run(() => desktopApi().modelPull(model)), [run]);
   const pausePull = useCallback((model: string) => run(() => desktopApi().modelPausePull(model)), [run]);
@@ -159,6 +162,7 @@ export function useModelCenter(): ModelCenterController {
       busy,
       probe,
       refreshBackend,
+      rescanStorage,
       chooseStorageRoot,
       pull,
       pausePull,
@@ -182,6 +186,7 @@ export function useModelCenter(): ModelCenterController {
       busy,
       probe,
       refreshBackend,
+      rescanStorage,
       chooseStorageRoot,
       pull,
       pausePull,

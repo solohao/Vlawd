@@ -1,5 +1,5 @@
 import { dirname, join } from "node:path";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { app } from "electron";
 import type {
   CustomEndpointConfig,
@@ -248,20 +248,62 @@ export class ModelCenterService {
   }
 
   async setStorageRoot(rootDir: string): Promise<ModelCenterSnapshot> {
-    this.storage = { ...this.storage, rootDir, source: "user-selected" };
+    const normalizedRoot = rootDir.trim();
+    const hasCache = (dir: string) =>
+      existsSync(join(dir, "manifests")) && existsSync(join(dir, "blobs"));
+    let managedSubdir = this.storage.managedSubdir;
+    // 如果用户直接选了一个已有 Ollama 缓存的目录（models/manifests + models/blobs），
+    // 或者选的是该目录的父目录且下面有 models 子目录，就按现有结构使用，避免多套一层 models。
+    if (hasCache(normalizedRoot)) {
+      managedSubdir = ".";
+    } else if (hasCache(join(normalizedRoot, "models"))) {
+      managedSubdir = "models";
+    } else if (managedSubdir === ".") {
+      managedSubdir = "models";
+    }
+
+    this.storage = { ...this.storage, rootDir: normalizedRoot, managedSubdir, source: "user-selected" };
     const modelsDir = this.modelsDir();
     if (modelsDir) {
       mkdirSync(modelsDir, { recursive: true });
     }
     this.persistModelSettings();
-    // 选目录后若 Ollama 已安装但未运行，尝试用该目录启动，使 OLLAMA_MODELS 生效。
-    if (this.backendStates.ollama.status !== "running") {
+
+    // 如果 Ollama 正在跑且是由 App 托管的，杀掉后重启，让 OLLAMA_MODELS 指向新目录。
+    if (this.backendStates.ollama.status === "running" && this.ollamaManagedByApp) {
+      await this.ollama.restart(this.modelsDir());
+    } else if (this.backendStates.ollama.status !== "running") {
       const started = await this.ollama.ensureServing(this.modelsDir());
       if (started) {
         this.ollamaManagedByApp = true;
       }
     }
+
     await this.probe();
+    return this.refreshBackend();
+  }
+
+  /**
+   * 重新扫描当前存储目录，并在 Ollama 由 App 托管时重启，使模型缓存变更生效。
+   */
+  async rescanStorage(): Promise<ModelCenterSnapshot> {
+    await this.probe();
+    if (this.backendStates.ollama.status === "running") {
+      if (this.ollamaManagedByApp) {
+        await this.ollama.restart(this.modelsDir());
+      } else {
+        // 外部 Ollama：给出提示，但仍刷新一次状态。
+        this.backendStates.ollama = {
+          ...this.backendStates.ollama,
+          message: "检测到 Ollama 由外部启动；如已迁移模型，请手动重启 Ollama 以读取新目录。"
+        };
+      }
+    } else {
+      const started = await this.ollama.ensureServing(this.modelsDir());
+      if (started) {
+        this.ollamaManagedByApp = true;
+      }
+    }
     return this.refreshBackend();
   }
 
