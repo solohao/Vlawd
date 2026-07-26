@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { DuplexLatencySample, ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { AiEmployeeMascot } from "../Brand.js";
@@ -49,19 +49,32 @@ function providerLabel(kind: string): string {
   return PROVIDER_LABELS[kind] ?? kind;
 }
 
-function Waveform({ reverse = false, muted = false }: { reverse?: boolean; muted?: boolean }) {
-  const bars = [0.4, 0.7, 0.35, 0.9, 0.55, 0.3, 0.75, 0.45];
-  const seq = reverse ? [...bars].reverse() : bars;
+function Waveform({
+  reverse = false,
+  muted = false,
+  level = 0
+}: {
+  reverse?: boolean;
+  muted?: boolean;
+  level?: number;
+}) {
+  const bars = useMemo(() => {
+    const base = [0.4, 0.7, 0.35, 0.9, 0.55, 0.3, 0.75, 0.45];
+    const seq = reverse ? [...base].reverse() : base;
+    return seq.map((h, i) => {
+      if (muted) return h * 0.45;
+      const wave = Math.sin(i * 0.9 + level * 10) * 0.25 + 0.85;
+      const value = Math.max(0.15, Math.min(1, level * h * wave * 1.2));
+      return value;
+    });
+  }, [reverse, muted, level]);
   return (
-    <div className="flex h-5 items-center gap-[3px]">
-      {seq.map((h, i) => (
+    <div className="flex h-5 items-end gap-[3px]">
+      {bars.map((h, i) => (
         <span
           key={i}
           className={`w-[3px] rounded-full ${muted ? "bg-slate-300" : "bg-brand-500"}`}
-          style={{
-            height: `${h * 100}%`,
-            animation: muted ? undefined : `ai-pulse 1s ease-in-out ${i * 0.1}s infinite`
-          }}
+          style={{ height: `${h * 100}%` }}
         />
       ))}
     </div>
@@ -216,7 +229,7 @@ export function LiveConversationPage({
             <div className="relative flex flex-col items-center">
               <AiEmployeeMascot size={128} />
               <div className="mt-1 flex items-center gap-3">
-                <Waveform muted={!active && !convo.ttsSpeaking} />
+                <Waveform muted={!active && !convo.ttsSpeaking} level={convo.micActive ? convo.micLevel : 0} />
                 <span className="text-[16px] font-medium text-slate-700">
                   {convo.whisperLoading
                     ? `加载模型：${convo.whisperLoading.status}${convo.whisperLoading.progress != null ? ` ${Math.round(convo.whisperLoading.progress * 100)}%` : ""}`
@@ -224,7 +237,11 @@ export function LiveConversationPage({
                       ? `${STATE_LABELS[snapshot.runtimeState]}…`
                       : "待命中"}
                 </span>
-                <Waveform reverse muted={!active && !convo.ttsSpeaking} />
+                <Waveform
+                  reverse
+                  muted={!active && !convo.ttsSpeaking}
+                  level={convo.ttsSpeaking ? 0.7 : 0}
+                />
               </div>
               <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-[12px] font-medium text-brand-700">
                 <ShieldIcon width={13} height={13} /> 安全抢占已启用

@@ -1,21 +1,26 @@
+import { useMemo } from "react";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { runtimeStateToken } from "../../brand/ai-employee.js";
 import { AiEmployeeMascot } from "../Brand.js";
 import { ChevronDown, CloseIcon, GearIcon, HandIcon, HeadphonesIcon, PauseIcon, ShieldIcon } from "../icons.js";
 
-function Waveform({ side }: { side: "left" | "right" }) {
-  const bars = [0.5, 0.85, 0.4, 1, 0.65, 0.3];
-  const seq = side === "left" ? bars : [...bars].reverse();
+function Waveform({ side, level = 0 }: { side: "left" | "right"; level?: number }) {
+  const bars = useMemo(() => {
+    const base = [0.5, 0.85, 0.4, 1, 0.65, 0.3];
+    const seq = side === "left" ? base : [...base].reverse();
+    return seq.map((b, i) => {
+      const wave = Math.sin(i * 1.2 + level * 10) * 0.3 + 0.85;
+      const h = Math.max(0.15, Math.min(1, level > 0 ? b * wave : b * 0.45));
+      return h;
+    });
+  }, [side, level]);
   return (
-    <div className="flex h-5 items-center gap-[3px]">
-      {seq.map((h, i) => (
+    <div className="flex h-5 items-end gap-[3px]">
+      {bars.map((h, i) => (
         <span
           key={i}
           className="w-[3px] rounded-full bg-brand-400"
-          style={{
-            height: `${h * 100}%`,
-            animation: `ai-pulse 1s ease-in-out ${i * 0.12}s infinite`
-          }}
+          style={{ height: `${h * 100}%` }}
         />
       ))}
     </div>
@@ -24,6 +29,7 @@ function Waveform({ side }: { side: "left" | "right" }) {
 
 interface VoiceControllerProps {
   runtimeState?: ModelRuntimeState;
+  micLevel?: number;
   device?: string;
   draggable?: boolean;
   onCollapse?: () => void;
@@ -35,6 +41,7 @@ interface VoiceControllerProps {
 
 export function VoiceController({
   runtimeState = "listening",
+  micLevel = 0,
   device = "Bose QC Ultra",
   draggable = false,
   onCollapse,
@@ -70,10 +77,10 @@ export function VoiceController({
         {/* state row */}
         <div className="flex items-center gap-3">
           <AiEmployeeMascot size={52} variant="runtime" />
-          <Waveform side="left" />
+          <Waveform side="left" level={micLevel} />
           <span className="text-[18px] font-medium text-slate-900">{token.label}…</span>
           <div className="ml-auto flex items-center gap-3">
-            <Waveform side="right" />
+            <Waveform side="right" level={micLevel} />
             <button
               onClick={onOpenSettings}
               className={`${noDrag} text-slate-400 hover:text-slate-700`}
@@ -124,7 +131,7 @@ export function VoiceController({
       <div className="mt-2 ml-6 w-[300px] rounded-2xl rounded-tl-md border border-slate-200 bg-slate-50/95 p-3.5 shadow-[0_14px_36px_rgba(15,23,42,0.14)] backdrop-blur-xl">
         <div className="flex items-center justify-between">
           <p className="text-[13px] text-slate-700">我在听，请说出你的指令…</p>
-          <Waveform side="right" />
+          <Waveform side="right" level={micLevel} />
         </div>
         <p className="mt-1.5 text-[11.5px] text-slate-400">例如：「帮我整理这份文档」、「查找上周的邮件」</p>
       </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type {
   DesktopRuntimeActionState,
@@ -122,6 +122,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const [paused, setPaused] = useState(false);
   const [context, setContext] = useState<BubbleContext>({});
   const [message, setMessage] = useState<BubbleMessage>(() => getStateMessage(runtimeState, false, {}));
+  const [micLevel, setMicLevel] = useState(0);
   const [demoIndex, setDemoIndex] = useState(0);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -207,6 +208,15 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
       .catch(() => undefined);
     return desktop.onDesktopSnapshot(applyDesktopSnapshot);
   }, [applyDesktopSnapshot]);
+
+  // 订阅主进程广播的实时麦克风音量/语音概率，用于在吉祥物上反馈“正在听”。
+  useEffect(() => {
+    const desktop = api();
+    if (!desktop) {
+      return;
+    }
+    return desktop.onMicLevel(setMicLevel);
+  }, []);
 
   // 根据运行状态 + 上下文更新气泡文案。
   useEffect(() => {
@@ -380,6 +390,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
         <div ref={panelRef}>
           <VoiceController
             runtimeState={liveState}
+            micLevel={micLevel}
             onCollapse={() => setExpanded(false)}
             onOpenSettings={() => api()?.openMainWindow()}
             onPause={togglePause}
@@ -389,7 +400,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
         </div>
       )}
       <div className="flex flex-shrink-0 items-center">
-        <StatusBubble message={message} />
+        <StatusBubble state={liveState} message={message} micLevel={micLevel} />
         <div
           ref={spriteRef}
           className="relative flex-shrink-0 select-none"
@@ -415,9 +426,40 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   );
 }
 
-function StatusBubble({ message }: { message: BubbleMessage }) {
+function VolumeBars({ level }: { level: number }) {
+  const bars = useMemo(() => {
+    const base = [0.25, 0.45, 0.65, 0.45, 0.25];
+    return base.map((b, i) => {
+      const wave = Math.sin(i * 1.2 + level * 10) * 0.25 + 0.75;
+      const h = Math.max(0.15, Math.min(1, level * 1.2 * b * wave));
+      return h;
+    });
+  }, [level]);
+  return (
+    <div className="absolute bottom-2 left-0 right-0 flex items-end justify-center gap-[2px]">
+      {bars.map((h, i) => (
+        <span
+          key={i}
+          className="w-[3px] rounded-full bg-brand-500"
+          style={{ height: `${Math.max(2, h * 12)}px` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function StatusBubble({
+  state,
+  message,
+  micLevel
+}: {
+  state: ModelRuntimeState;
+  message: BubbleMessage;
+  micLevel: number;
+}) {
   const visible = Boolean(message.text);
   const textColor = message.type === "template" ? "text-brand-600" : "text-ink-950";
+  const showVolume = state === "listening" && micLevel > 0.05;
   return (
     <AnimatePresence>
       {visible && (
@@ -442,7 +484,7 @@ function StatusBubble({ message }: { message: BubbleMessage }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25, ease: [0.34, 1.56, 0.64, 1] }}
-              className={`w-full text-center text-[13px] leading-tight ${textColor}`}
+              className={`w-full pb-3 text-center text-[13px] leading-tight ${textColor}`}
               style={{
                 display: "-webkit-box",
                 WebkitLineClamp: 2,
@@ -453,6 +495,7 @@ function StatusBubble({ message }: { message: BubbleMessage }) {
               {message.text}
             </motion.p>
           </AnimatePresence>
+          {showVolume && <VolumeBars level={micLevel} />}
         </motion.div>
       )}
     </AnimatePresence>
