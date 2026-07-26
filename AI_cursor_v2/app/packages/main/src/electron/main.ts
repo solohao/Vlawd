@@ -27,6 +27,9 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 // 打包后 currentDir 位于 resources/app.asar 内，同样的向上层级指向 asar 根，
 // 渲染层与图标资源仍能从 asar 内读取；仅可写的用户数据目录需要改用系统标准位置。
 const appRoot = resolve(currentDir, "../../../../../../..");
+// 允许渲染层 AudioContext / 音频播放无需每次用户手势，避免 TTS 首句被浏览器 autoplay 策略吞掉。
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 const browserService = new BrowserService();
 const runtime = new DesktopRuntime({ browserService });
 

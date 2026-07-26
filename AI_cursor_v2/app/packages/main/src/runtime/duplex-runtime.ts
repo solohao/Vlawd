@@ -55,6 +55,8 @@ export class DuplexConversationRuntime {
   private speakingStartedAt = 0;
   /** barge-in 时渲染层上报的“已听到文本”，用于把被打断回合裁剪到实际听到的部分。 */
   private pendingHeardText: string | null = null;
+  /** 800ms 内相同文本的用户提交去重，避免同一句话被语音/按键重复提交两次。 */
+  private lastUserSubmit: { text: string; at: number } | null = null;
 
   constructor(options: DuplexRuntimeOptions) {
     this.now = options.now ?? (() => Date.now());
@@ -114,6 +116,12 @@ export class DuplexConversationRuntime {
     if (!trimmed) {
       return;
     }
+
+    const now = this.now();
+    if (this.lastUserSubmit && this.lastUserSubmit.text === trimmed && now - this.lastUserSubmit.at < 800) {
+      return;
+    }
+    this.lastUserSubmit = { text: trimmed, at: now };
 
     const preemption = detectSafetyPreemption(trimmed);
     if (preemption) {

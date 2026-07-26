@@ -71,6 +71,7 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
   const bargeInAtRef = useRef<number | null>(null);
   const activeSpeechRef = useRef<{ stt?: string; tts?: string }>({});
   const micBroadcastRef = useRef<{ lastTime: number; lastLevel: number }>({ lastTime: 0, lastLevel: 0 });
+  const lastSubmitRef = useRef<{ text: string; at: number } | null>(null);
 
   if (!tts.current && TtsPlayer.isSupported()) {
     tts.current = new TtsPlayer({
@@ -142,11 +143,18 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
 
   const submit = useCallback(
     async (text: string) => {
-      if (!available || !text.trim()) {
+      const trimmed = text.trim();
+      if (!available || !trimmed) {
         return;
       }
-      userUtteranceAtRef.current = Date.now();
-      await desktopApi().conversationUtterance(text.trim());
+      // 800ms 内相同文本去重，避免语音识别 / 按键连击导致同一句话被提交两次。
+      const now = Date.now();
+      if (lastSubmitRef.current && lastSubmitRef.current.text === trimmed && now - lastSubmitRef.current.at < 800) {
+        return;
+      }
+      lastSubmitRef.current = { text: trimmed, at: now };
+      userUtteranceAtRef.current = now;
+      await desktopApi().conversationUtterance(trimmed);
     },
     [available]
   );
