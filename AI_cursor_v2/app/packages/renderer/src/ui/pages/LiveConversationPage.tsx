@@ -194,7 +194,7 @@ export function LiveConversationPage({
   }, [onBack]);
 
   const send = async () => {
-    const text = (draft || inputRef.current?.value || "").trim();
+    const text = (inputRef.current?.value || draft || "").trim();
     if (!text) {
       inputRef.current?.focus();
       return;
