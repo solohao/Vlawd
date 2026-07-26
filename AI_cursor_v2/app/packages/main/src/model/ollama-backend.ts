@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type {
@@ -182,12 +182,15 @@ export class OllamaBackend implements ModelBackend {
   readonly installGuidanceUrl = INSTALL_GUIDANCE_URL;
 
   private readonly managedBinaryDir: string;
+  private readonly serveLogPath: string;
   private ensureServingPromise: Promise<boolean> | null = null;
   private serveChild: ReturnType<typeof spawn> | null = null;
+  private lastErrorMessage?: string;
 
   constructor(options?: OllamaBackendOptions) {
     this.managedBinaryDir =
       options?.managedBinaryDir ?? join(homedir(), ".vlawd", "ollama-bin");
+    this.serveLogPath = join(this.managedBinaryDir, "ollama-serve.log");
   }
 
   /** Ollama 可执行文件的绝对路径。 */
@@ -210,12 +213,15 @@ export class OllamaBackend implements ModelBackend {
       };
     }
     const binaryPresent = await this.binaryInstalled();
+    const message = this.lastErrorMessage
+      ? `Ollama 未就绪：${this.lastErrorMessage}`
+      : binaryPresent
+        ? "Ollama 核心服务已就绪但未运行，选择下载目录后可由本 App 启动。"
+        : "未检测到 Ollama，请点击下载核心服务。";
     return {
       status: binaryPresent ? "installed_not_running" : "not_installed",
       installedModels: [],
-      message: binaryPresent
-        ? "Ollama 核心服务已就绪但未运行，选择下载目录后可由本 App 启动。"
-        : "未检测到 Ollama，请点击下载核心服务。"
+      message
     };
   }
 
@@ -377,18 +383,36 @@ export class OllamaBackend implements ModelBackend {
     if (modelsDir && modelsDir.trim()) {
       env.OLLAMA_MODELS = modelsDir;
     }
+    mkdirSync(this.managedBinaryDir, { recursive: true });
+    const logFd = openSync(this.serveLogPath, "a");
     const executable = hasManaged ? managed : "ollama";
+    this.lastErrorMessage = undefined;
     const child = spawn(executable, ["serve"], {
       env,
-      detached: true,
-      stdio: "ignore",
+      detached: false,
+      stdio: ["ignore", logFd, logFd],
       windowsHide: true,
       cwd: this.managedBinaryDir
     });
     this.serveChild = child;
-    child.on("exit", () => {
+    const readLogTail = (lines = 3): string => {
+      try {
+        const content = readFileSync(this.serveLogPath, "utf-8");
+        return content.split(/\r?\n/).filter(Boolean).slice(-lines).join("; ");
+      } catch {
+        return "";
+      }
+    };
+    child.on("error", (err: Error) => {
+      this.lastErrorMessage = `启动 Ollama 失败：${err.message}`;
+    });
+    child.on("exit", (code) => {
       if (this.serveChild === child) {
         this.serveChild = null;
+      }
+      if (code !== 0 && code !== null) {
+        const tail = readLogTail();
+        this.lastErrorMessage = `Ollama serve 进程退出（code ${String(code)}）${tail ? `：${tail}` : ""}`;
       }
     });
     child.unref();
@@ -400,6 +424,10 @@ export class OllamaBackend implements ModelBackend {
       if ((await this.version(signal)) !== null) {
         return true;
       }
+    }
+    if (!this.lastErrorMessage) {
+      const tail = readLogTail();
+      this.lastErrorMessage = `Ollama 在 6 秒内未能就绪${tail ? `：${tail}` : ""}`;
     }
     return false;
   }

@@ -260,6 +260,7 @@ export const modelCenterData = {
 
 export const navItems = [
   { id: "dashboard", label: "首页 / 工作台", icon: "home", badge: null },
+  { id: "conversation", label: "实时对话", icon: "conversation", badge: null },
   { id: "workflows", label: "工作流", icon: "workflow", badge: null },
   { id: "sessions", label: "Session 记录", icon: "list", badge: null },
   { id: "task", label: "知识库", icon: "grid", badge: "Demo" },

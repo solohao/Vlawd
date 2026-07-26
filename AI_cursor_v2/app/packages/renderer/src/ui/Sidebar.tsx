@@ -5,6 +5,7 @@ import {
   HeadphonesIcon,
   HomeIcon,
   ListIcon,
+  MicIcon,
   MonitorIcon,
   NodesIcon,
   SettingsIcon,
@@ -15,6 +16,7 @@ import { navItems } from "./demo-data.js";
 const iconMap = {
   home: HomeIcon,
   workflow: WorkflowIcon,
+  conversation: MicIcon,
   list: ListIcon,
   grid: GridIcon,
   nodes: NodesIcon,

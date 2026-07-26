@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { DuplexLatencySample, ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { AiEmployeeMascot } from "../Brand.js";
 import {
@@ -30,11 +30,44 @@ const STATE_LABELS: Record<ModelRuntimeState, string> = {
   complete: "Ready"
 };
 
-const LATENCY_LABELS: Record<DuplexLatencySample["kind"], { label: string; target: string }> = {
-  utterance_to_first_speech: { label: "首包延迟（说完→AI 开口）", target: "越低越好" },
-  barge_in_to_output_stop: { label: "插话→AI 停止", target: "目标 < 200ms" },
-  stop_signal_to_paused: { label: "本地停止→暂停", target: "目标 < 50ms" }
+const LATENCY_LABELS: Record<
+  DuplexLatencySample["kind"],
+  { label: string; target: string; warn: number; bad: number; hint: string }
+> = {
+  utterance_to_first_speech: {
+    label: "首包延迟（说完→AI 开口）",
+    target: "目标 < 1500 ms",
+    warn: 1500,
+    bad: 3000,
+    hint: "首包偏慢，可切换远程 LLM 或检查网络"
+  },
+  barge_in_to_output_stop: {
+    label: "插话→AI 停止",
+    target: "目标 < 200 ms",
+    warn: 200,
+    bad: 500,
+    hint: "本地抢占链路延迟高，建议关闭占 CPU 的后台进程"
+  },
+  stop_signal_to_paused: {
+    label: "本地停止→暂停",
+    target: "目标 < 50 ms",
+    warn: 50,
+    bad: 150,
+    hint: "规则引擎响应慢"
+  }
 };
+
+function latencyTone(ms: number, warn: number, bad: number): "good" | "warn" | "bad" {
+  if (ms >= bad) return "bad";
+  if (ms >= warn) return "warn";
+  return "good";
+}
+
+function latencyColor(tone: "good" | "warn" | "bad"): string {
+  if (tone === "bad") return "text-rose-500";
+  if (tone === "warn") return "text-amber-500";
+  return "text-brand-500";
+}
 
 const PROVIDER_LABELS: Record<string, string> = {
   pipeline: "方案 B · Qwen2.5 流式管线",
@@ -96,6 +129,9 @@ export function LiveConversationPage({
   const [selectedInput, setSelectedInput] = useState<string | undefined>(undefined);
   const [selectedOutput, setSelectedOutput] = useState<string | undefined>(undefined);
   const [entered, setEntered] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const audioInputs = useMemo(() => devices.filter((d) => d.kind === "audioinput"), [devices]);
 
   // 从首页按 Space 触发 mic 后进入对话页，应自动显示对话界面
   useEffect(() => {
@@ -105,7 +141,7 @@ export function LiveConversationPage({
   }, [convo.micActive, entered]);
 
   const connected = entered && convo.available && !!snapshot.sessionId;
-  const active = connected && (snapshot.runtimeState === "speaking" || snapshot.runtimeState === "listening" || snapshot.runtimeState === "thinking");
+  const active = connected && (convo.runtimeState === "speaking" || convo.runtimeState === "listening" || convo.runtimeState === "thinking");
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
@@ -133,7 +169,11 @@ export function LiveConversationPage({
   const startVoice = async () => {
     setEntered(true);
     await convo.connect();
-    if (convo.micSupported && !convo.micActive) {
+    if (audioInputs.length === 0 || !convo.micSupported) {
+      // 没有麦克风时仍进入实时对话面板，使用键盘输入
+      return;
+    }
+    if (!convo.micActive) {
       if (selectedInput) convo.selectInputDevice(selectedInput);
       if (selectedOutput) convo.selectOutputDevice(selectedOutput);
       await convo.toggleMic();
@@ -154,9 +194,15 @@ export function LiveConversationPage({
   }, [onBack]);
 
   const send = async () => {
-    const text = draft.trim();
-    if (!text) return;
+    const text = (draft || inputRef.current?.value || "").trim();
+    if (!text) {
+      inputRef.current?.focus();
+      return;
+    }
     setDraft("");
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
     setEntered(true);
     if (!connected) await convo.connect();
     await convo.submit(text);
@@ -224,8 +270,10 @@ export function LiveConversationPage({
                   {convo.whisperLoading
                     ? `加载模型：${convo.whisperLoading.status}${convo.whisperLoading.progress != null ? ` ${Math.round(convo.whisperLoading.progress * 100)}%` : ""}`
                     : connected
-                      ? `${STATE_LABELS[snapshot.runtimeState]}…`
-                      : "待命中"}
+                      ? `${STATE_LABELS[convo.runtimeState]}…`
+                      : audioInputs.length === 0
+                        ? "未检测到麦克风"
+                        : "待命中"}
                 </span>
                 <Waveform
                   reverse
@@ -237,13 +285,15 @@ export function LiveConversationPage({
                 <ShieldIcon width={13} height={13} /> 安全抢占已启用
               </span>
               <p className="mt-2 text-center text-[12.5px] text-slate-500">
-                你可以随时说：「暂停」、「取消」、「停止」，AI 将立即响应。
+                {audioInputs.length === 0 && !convo.micActive
+                  ? "未检测到麦克风，已为你启用键盘输入。你可以直接打字与 AI 对话。"
+                  : "你可以随时说：「暂停」、「取消」、「停止」，AI 将立即响应。"}
               </p>
             </div>
           </section>
 
           {connected ? (
-            <LiveConversationPanel convo={convo} draft={draft} setDraft={setDraft} send={send} latestByKind={latestByKind} />
+            <LiveConversationPanel convo={convo} draft={draft} setDraft={setDraft} send={send} latestByKind={latestByKind} inputRef={inputRef} />
           ) : (
             <>
               {/* 推荐配置 */}
@@ -446,16 +496,19 @@ function LiveConversationPanel({
   draft,
   setDraft,
   send,
-  latestByKind
+  latestByKind,
+  inputRef
 }: {
   convo: ReturnType<typeof useConversation>;
   draft: string;
   setDraft: (v: string) => void;
   send: () => Promise<void>;
   latestByKind: Map<string, DuplexLatencySample>;
+  inputRef: RefObject<HTMLInputElement>;
 }) {
-  const { snapshot } = convo;
+  const { snapshot, streamingAssistant } = convo;
   const realInference = snapshot.providerConnected && snapshot.usingRealInference;
+  const showThinking = convo.runtimeState === "thinking" && !streamingAssistant;
   return (
     <div className="space-y-4">
       <section className={`${card} flex min-h-[360px] flex-col p-4`}>
@@ -496,23 +549,44 @@ function LiveConversationPanel({
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto rounded-xl bg-slate-50/70 p-4">
-          {snapshot.turns.length === 0 && (
+          {snapshot.turns.length === 0 && !streamingAssistant && !showThinking && (
             <p className="text-[12.5px] text-slate-500">
               用麦克风或文字说出你的目标。AI 说话时你可以随时插话改需求，或说「停」。
             </p>
           )}
-          {snapshot.turns.map((turn) => (
-            <div key={turn.id} className={`flex ${turn.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
-                  turn.role === "user" ? "bg-brand-400 text-ink-900" : "border border-slate-200 bg-white text-slate-700"
-                }`}
-              >
-                {turn.text || <span className="text-slate-400">…</span>}
-                {turn.interrupted && <span className="mt-1 block text-[10.5px] text-rose-500">（已被打断）</span>}
+          {snapshot.turns.map((turn) => {
+            const isStreaming = streamingAssistant && streamingAssistant.turnId === turn.id;
+            return (
+              <div key={turn.id} className={`flex ${turn.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                    turn.role === "user" ? "bg-brand-400 text-ink-900" : "border border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  {turn.text || (isStreaming ? streamingAssistant.text : <span className="text-slate-400">…</span>)}
+                  {isStreaming && <span className="ml-0.5 inline-block h-2 w-2 animate-pulse rounded-full bg-brand-400 align-middle" />}
+                  {turn.interrupted && <span className="mt-1 block text-[10.5px] text-rose-500">（已被打断）</span>}
+                </div>
+              </div>
+            );
+          })}
+          {streamingAssistant && !snapshot.turns.some((t) => t.id === streamingAssistant.turnId) && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] leading-relaxed text-slate-700">
+                {streamingAssistant.text}
+                <span className="ml-0.5 inline-block h-2 w-2 animate-pulse rounded-full bg-brand-400 align-middle" />
+                {streamingAssistant.interrupted && <span className="mt-1 block text-[10.5px] text-rose-500">（已被打断）</span>}
               </div>
             </div>
-          ))}
+          )}
+          {showThinking && (
+            <div className="flex justify-start">
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-[13px] text-slate-500">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-brand-400" />
+                AI 正在思考…
+              </div>
+            </div>
+          )}
           {convo.interimTranscript && (
             <div className="flex justify-end">
               <div className="max-w-[80%] rounded-2xl border border-dashed border-brand-400/50 px-3.5 py-2.5 text-[13px] text-slate-400">
@@ -534,6 +608,7 @@ function LiveConversationPanel({
             <MicIcon width={15} height={15} /> {convo.micActive ? "停止麦克风" : "麦克风"}
           </button>
           <input
+            ref={inputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -559,15 +634,28 @@ function LiveConversationPanel({
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(LATENCY_LABELS) as Array<DuplexLatencySample["kind"]>).map((kind) => {
             const sample = latestByKind.get(kind);
+            const meta = LATENCY_LABELS[kind];
+            const tone = sample ? latencyTone(sample.ms, meta.warn, meta.bad) : ("good" as const);
             return (
               <div key={kind} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                <div className="text-[16px] font-semibold text-slate-900">{sample ? `${sample.ms}ms` : "—"}</div>
-                <div className="mt-1 text-[10.5px] leading-tight text-slate-500">{LATENCY_LABELS[kind].label}</div>
-                <div className="mt-0.5 text-[10px] text-slate-400">{LATENCY_LABELS[kind].target}</div>
+                <div className={`text-[16px] font-semibold ${latencyColor(tone)}`}>{sample ? `${sample.ms}ms` : "—"}</div>
+                <div className="mt-1 text-[10.5px] leading-tight text-slate-500">{meta.label}</div>
+                <div className="mt-0.5 text-[10px] text-slate-400">{meta.target}</div>
               </div>
             );
           })}
         </div>
+        {(() => {
+          const slow = (Object.keys(LATENCY_LABELS) as Array<DuplexLatencySample["kind"]>)
+            .map((kind) => ({ kind, sample: latestByKind.get(kind), meta: LATENCY_LABELS[kind] }))
+            .find(({ sample, meta }) => sample && latencyTone(sample.ms, meta.warn, meta.bad) !== "good");
+          if (!slow) return null;
+          return (
+            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">
+              {slow.meta.hint}
+            </div>
+          );
+        })()}
       </section>
     </div>
   );
