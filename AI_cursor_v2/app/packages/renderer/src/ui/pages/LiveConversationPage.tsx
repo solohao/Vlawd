@@ -84,11 +84,9 @@ function Waveform({
 const card = "rounded-2xl border border-slate-200 bg-white";
 
 export function LiveConversationPage({
-  onBack,
-  onOpenModels
+  onBack
 }: {
   onBack?: () => void;
-  onOpenModels?: () => void;
 }) {
   const convo = useConversation();
   const { snapshot } = convo;
@@ -134,11 +132,7 @@ export function LiveConversationPage({
 
   const startVoice = async () => {
     setEntered(true);
-    const afterConnect = await convo.connect();
-    if (convo.available && !readyForConversation(afterConnect)) {
-      onOpenModels?.();
-      return;
-    }
+    await convo.connect();
     if (convo.micSupported && !convo.micActive) {
       if (selectedInput) convo.selectInputDevice(selectedInput);
       if (selectedOutput) convo.selectOutputDevice(selectedOutput);
@@ -147,11 +141,7 @@ export function LiveConversationPage({
   };
 
   const startManual = async () => {
-    const afterConnect = await convo.connect();
-    if (convo.available && !readyForConversation(afterConnect)) {
-      onOpenModels?.();
-      return;
-    }
+    await convo.connect();
     setEntered(true);
   };
 

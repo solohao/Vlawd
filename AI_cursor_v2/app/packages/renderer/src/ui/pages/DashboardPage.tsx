@@ -31,26 +31,19 @@ export function DashboardPage({ onStartTask, onOpenSessions, onOpenModels }: Das
   const convo = useConversation();
   const desktop = useDesktopRuntime();
 
-  const readyForConversation = (snapshot: typeof convo.snapshot) =>
-    snapshot.providerConnected && snapshot.usingRealInference;
-
   const startVoice = async () => {
-    const afterConnect = await convo.connect();
-    if (convo.available && !readyForConversation(afterConnect)) {
-      onOpenModels();
-      return;
-    }
     if (convo.available) {
-      void convo.toggleMic();
+      await convo.connect();
+      if (convo.micSupported) {
+        void convo.toggleMic();
+      }
     }
     onStartTask();
   };
 
   const startTask = async () => {
-    const afterConnect = await convo.connect();
-    if (convo.available && !readyForConversation(afterConnect)) {
-      onOpenModels();
-      return;
+    if (convo.available) {
+      await convo.connect();
     }
     onStartTask();
   };
