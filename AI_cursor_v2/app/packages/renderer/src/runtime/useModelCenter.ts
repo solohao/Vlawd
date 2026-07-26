@@ -83,10 +83,9 @@ export function useModelCenter(): ModelCenterController {
     const api = desktopApi();
     const unsubscribe = api.onModelSnapshot(setSnapshot);
     void api.modelSnapshot().then(setSnapshot).catch(() => undefined);
-    // 首次进入即做一次环境探测与后端检测。
+    // 首次进入做一次环境探测；后端状态由用户点击“刷新”触发，避免反复激活执行大脑导致吉祥物状态跳变。
     void api.modelProbeEnvironment().then(setSnapshot).catch(() => undefined);
-    void api.modelRefreshBackend().then(setSnapshot).catch(() => undefined);
-    // 首次进入即检测代管安装 Ollama 的状态（是否已安装 / 本机是否已有安装器）。
+    // 首次进入检测 Ollama 核心安装器状态。
     void api.modelDetectOllamaInstaller().then(setSnapshot).catch(() => undefined);
     return () => unsubscribe();
   }, [available]);

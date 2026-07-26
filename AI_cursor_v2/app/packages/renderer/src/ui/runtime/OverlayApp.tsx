@@ -68,10 +68,7 @@ function deriveConclusion(snapshot: DesktopUiSnapshot): string | undefined {
   return chunk?.summary;
 }
 
-function getStateMessage(state: ModelRuntimeState, isPaused: boolean, ctx: BubbleContext): BubbleMessage {
-  if (isPaused) {
-    return { text: "已暂停", type: "template" };
-  }
+function getStateMessage(state: ModelRuntimeState, ctx: BubbleContext): BubbleMessage {
   switch (state) {
     case "listening":
       return ctx.userText
@@ -121,7 +118,7 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const [liveState, setLiveState] = useState<ModelRuntimeState>(runtimeState);
   const [paused, setPaused] = useState(false);
   const [context, setContext] = useState<BubbleContext>({});
-  const [message, setMessage] = useState<BubbleMessage>(() => getStateMessage(runtimeState, false, {}));
+  const [message, setMessage] = useState<BubbleMessage>(() => getStateMessage(runtimeState, {}));
   const [micLevel, setMicLevel] = useState(0);
   const [demoIndex, setDemoIndex] = useState(0);
 
@@ -157,15 +154,34 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   }, []);
 
   // 从 DesktopUiSnapshot 提取 Cycle 2/3 任务上下文。
+  // 仅在有活跃任务（goal / nextAction / conclusion）时才用桌面状态覆盖会话状态，
+  // 避免切页时收到 browserClose 等广播把吉祥物从“正在听”跳到“已暂停”。
   const applyDesktopSnapshot = useCallback((snapshot: DesktopUiSnapshot) => {
-    setLiveState(snapshot.runtimeState);
-    setPaused(snapshot.runtimeState === "paused" || snapshot.session.status === "paused");
+    const conclusion = deriveConclusion(snapshot);
+    const hasTask =
+      !!snapshot.session.payload?.goal ||
+      !!snapshot.browser.nextAction?.actionType ||
+      !!conclusion;
+    let nextState: ModelRuntimeState | undefined;
+    if (hasTask) {
+      if (snapshot.runtimeState === "paused" && conclusion) {
+        nextState = "complete";
+      } else if (
+        ["thinking", "acting", "waiting_confirm", "complete", "interrupted", "paused"].includes(
+          snapshot.runtimeState
+        )
+      ) {
+        nextState = snapshot.runtimeState;
+      }
+    }
+    setLiveState((prev) => nextState ?? prev);
+    setPaused((prev) => (nextState === "paused" ? true : nextState ? false : prev));
     setContext((prev) => ({
       ...prev,
       goal: snapshot.session.payload?.goal || prev.goal,
       plan: snapshot.session.payload?.plan || prev.plan,
       nextAction: snapshot.browser.nextAction,
-      conclusion: deriveConclusion(snapshot)
+      conclusion
     }));
   }, []);
 
@@ -220,8 +236,8 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
 
   // 根据运行状态 + 上下文更新气泡文案。
   useEffect(() => {
-    setMessage(getStateMessage(liveState, paused, context));
-  }, [liveState, paused, context]);
+    setMessage(getStateMessage(liveState, context));
+  }, [liveState, context]);
 
   // 无后端连接时循环演示文案（先一行，再两行）。
   useEffect(() => {

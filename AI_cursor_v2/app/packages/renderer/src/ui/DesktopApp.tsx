@@ -71,7 +71,7 @@ export function DesktopApp() {
               />
             )}
             {page === "conversation" && (
-              <LiveConversationPage onBack={() => setPage("dashboard")} onOpenModels={() => setPage("models")} />
+              <LiveConversationPage onBack={() => setPage("dashboard")} />
             )}
             {page === "task" && <TaskWorkspacePage />}
             {page === "sessions" && <SessionsPage onOpenTask={() => setPage("task")} />}
