@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
 import { aiEmployeeMascotBody } from "../../app/assets.js";
 import { AiEmployeeSprite } from "./AiEmployeeSprite.js";
 import { VoiceController } from "./VoiceController.js";
+
+type BubbleMessageType = "template" | "content";
+
+interface BubbleMessage {
+  text: string;
+  type: BubbleMessageType;
+}
 
 function api() {
   return typeof window !== "undefined" ? window.aiCursorDesktop : undefined;
@@ -12,6 +20,32 @@ const SPRITE = 76;
 const DRAG_THRESHOLD = 4; // px：小于此位移视为点击，否则视为拖拽
 const ALPHA_HIT = 24; // 命中吉祥物本体的最小 alpha（过滤透明区域）
 
+function getStateMessage(state: ModelRuntimeState, isPaused: boolean): BubbleMessage {
+  if (isPaused) {
+    return { text: "已暂停", type: "template" };
+  }
+  switch (state) {
+    case "listening":
+      return { text: "正在听…", type: "template" };
+    case "thinking":
+      return { text: "正在思考…", type: "template" };
+    case "waiting_confirm":
+      return { text: "请确认…", type: "template" };
+    case "acting":
+      return { text: "正在执行…", type: "template" };
+    case "speaking":
+      return { text: "正在说：太阳系有八颗行星", type: "content" };
+    case "interrupted":
+      return { text: "被打断", type: "template" };
+    case "complete":
+      return { text: "任务完成", type: "template" };
+    case "paused":
+      return { text: "已暂停", type: "template" };
+    default:
+      return { text: "", type: "template" };
+  }
+}
+
 interface OverlayAppProps {
   runtimeState?: ModelRuntimeState;
 }
@@ -20,6 +54,8 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const [expanded, setExpanded] = useState(false);
   const [liveState, setLiveState] = useState<ModelRuntimeState>(runtimeState);
   const [paused, setPaused] = useState(false);
+  const [message, setMessage] = useState<BubbleMessage>(() => getStateMessage(runtimeState, false));
+  const [demoIndex, setDemoIndex] = useState(0);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const spriteRef = useRef<HTMLDivElement>(null);
@@ -62,6 +98,34 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
         setPaused(event.intent !== "resume");
       }
     });
+  }, []);
+
+  // 根据运行状态更新气泡文案。
+  useEffect(() => {
+    setMessage(getStateMessage(liveState, paused));
+  }, [liveState, paused]);
+
+  // 无后端连接时循环演示文案（先一行，再两行）。
+  useEffect(() => {
+    const desktop = api();
+    if (desktop) {
+      return;
+    }
+    const demos: BubbleMessage[] = [
+      { text: "正在听…", type: "template" },
+      { text: "正在搜索：太阳系行星", type: "content" },
+      { text: "正在说：太阳系有八颗行星", type: "content" },
+      { text: "任务完成", type: "template" }
+    ];
+    setMessage(demos[0]);
+    const timer = setInterval(() => {
+      setDemoIndex((i) => {
+        const next = (i + 1) % demos.length;
+        setMessage(demos[next]);
+        return next;
+      });
+    }, 2500);
+    return () => clearInterval(timer);
   }, []);
 
   // 悬浮窗尺寸跟随内容（吉祥物或展开面板）。
@@ -216,26 +280,72 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
           />
         </div>
       )}
-      <div
-        ref={spriteRef}
-        className="relative select-none"
-        style={{ width: SPRITE, height: SPRITE, cursor: "grab" }}
-        data-sprite-state={paused ? "paused" : liveState}
-        onPointerDown={onSpritePointerDown}
-        onPointerMove={onSpritePointerMove}
-        onPointerUp={onSpritePointerUp}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setExpanded((v) => !v);
-        }}
-        title={paused ? "点击继续" : "点击暂停 · 右键更多 · 拖动移动"}
-      >
-        <AiEmployeeSprite state={liveState} paused={paused} size={SPRITE} />
-        <span
-          className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white"
-          style={{ background: paused ? "#94a3b8" : "var(--brand-400, #a4d100)" }}
-        />
+      <div className="flex items-center">
+        <StatusBubble message={message} />
+        <div
+          ref={spriteRef}
+          className="relative select-none"
+          style={{ width: SPRITE, height: SPRITE, cursor: "grab" }}
+          data-sprite-state={paused ? "paused" : liveState}
+          onPointerDown={onSpritePointerDown}
+          onPointerMove={onSpritePointerMove}
+          onPointerUp={onSpritePointerUp}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }}
+          title={paused ? "点击继续" : "点击暂停 · 右键更多 · 拖动移动"}
+        >
+          <AiEmployeeSprite state={liveState} paused={paused} size={SPRITE} />
+          <span
+            className="pointer-events-none absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white"
+            style={{ background: paused ? "#94a3b8" : "var(--brand-400, #a4d100)" }}
+          />
+        </div>
       </div>
     </div>
+  );
+}
+
+function StatusBubble({ message }: { message: BubbleMessage }) {
+  const visible = Boolean(message.text);
+  const textColor = message.type === "template" ? "text-brand-600" : "text-ink-950";
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          layout
+          initial={{ opacity: 0, scale: 0.75, x: 18 }}
+          animate={{ opacity: 1, scale: 1, x: 0 }}
+          exit={{ opacity: 0, scale: 0.75, x: 18 }}
+          transition={{ type: "spring", stiffness: 420, damping: 24 }}
+          className="relative mr-3 flex h-[76px] min-w-[100px] max-w-[200px] items-center rounded-full border-2 border-brand-400 bg-white px-4 py-2 pr-5 shadow-[2px_2px_0_rgba(0,0,0,0.45)]"
+        >
+          {/* 右侧小尾巴 */}
+          <div className="absolute -right-[9px] top-1/2 -translate-y-1/2">
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 border-y-[7px] border-l-[9px] border-y-transparent border-l-brand-400" />
+            <div className="absolute -right-[1px] top-1/2 -translate-y-1/2 border-y-[6px] border-l-[8px] border-y-transparent border-l-white" />
+          </div>
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={message.text}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25, ease: [0.34, 1.56, 0.64, 1] }}
+              className={`w-full text-center text-[13px] leading-tight ${textColor}`}
+              style={{
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden"
+              }}
+            >
+              {message.text}
+            </motion.p>
+          </AnimatePresence>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
