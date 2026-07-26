@@ -252,14 +252,14 @@ export class ModelCenterService {
     const hasCache = (dir: string) =>
       existsSync(join(dir, "manifests")) && existsSync(join(dir, "blobs"));
     let managedSubdir = this.storage.managedSubdir;
-    // 如果用户直接选了一个已有 Ollama 缓存的目录（models/manifests + models/blobs），
-    // 或者选的是该目录的父目录且下面有 models 子目录，就按现有结构使用，避免多套一层 models。
+    // 用户选中的目录本身就被当作模型目录，不再自动创建 models/ 子目录。
+    // 仅当旧数据在 models/ 子目录里时才兼容使用，避免迁移后检测不到。
     if (hasCache(normalizedRoot)) {
-      managedSubdir = ".";
+      managedSubdir = "";
     } else if (hasCache(join(normalizedRoot, "models"))) {
       managedSubdir = "models";
-    } else if (managedSubdir === ".") {
-      managedSubdir = "models";
+    } else {
+      managedSubdir = "";
     }
 
     this.storage = { ...this.storage, rootDir: normalizedRoot, managedSubdir, source: "user-selected" };
