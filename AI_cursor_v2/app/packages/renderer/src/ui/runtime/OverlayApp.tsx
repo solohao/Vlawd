@@ -319,7 +319,7 @@ function StatusBubble({ message }: { message: BubbleMessage }) {
           animate={{ opacity: 1, scale: 1, x: 0 }}
           exit={{ opacity: 0, scale: 0.75, x: 18 }}
           transition={{ type: "spring", stiffness: 420, damping: 24 }}
-          className="relative mr-3 flex h-[76px] min-w-[120px] max-w-[220px] flex-shrink-0 items-center px-5 py-2 pr-7"
+          className="pointer-events-none relative mr-3 flex h-[76px] w-[168px] flex-shrink-0 items-center px-5 py-2 pr-7"
           style={{
             backgroundImage: `url(${aiEmployeeBubble})`,
             backgroundSize: "100% 100%",
