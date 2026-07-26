@@ -4,6 +4,7 @@ import type {
   DuplexLatencySample,
   DuplexProviderKind,
   DuplexRuntimeEvent,
+  ModelRuntimeState,
   SafetyPreemptionIntent
 } from "@ai-cursor-v2/shared";
 import { desktopApi } from "../app/desktop-api.js";
@@ -24,6 +25,7 @@ const EMPTY_SNAPSHOT: DuplexConversationSnapshot = {
 export interface ConversationController {
   available: boolean;
   snapshot: DuplexConversationSnapshot;
+  runtimeState: ModelRuntimeState;
   latency: DuplexLatencySample[];
   micActive: boolean;
   micSupported: boolean;
@@ -33,6 +35,7 @@ export interface ConversationController {
   micLevel: number;
   interimTranscript: string;
   whisperLoading: { status: string; progress?: number } | null;
+  streamingAssistant: { turnId: string; text: string; interrupted?: boolean } | null;
   inputDeviceId?: string;
   outputDeviceId?: string;
   connect(): Promise<DuplexConversationSnapshot>;
@@ -51,6 +54,7 @@ const ConversationContext = createContext<ConversationController | null>(null);
 export function ConversationProvider({ children }: { children: ReactNode }): JSX.Element {
   const available = typeof window !== "undefined" && !!window.aiCursorDesktop;
   const [snapshot, setSnapshot] = useState<DuplexConversationSnapshot>(EMPTY_SNAPSHOT);
+  const [runtimeState, setRuntimeState] = useState<ModelRuntimeState>(EMPTY_SNAPSHOT.runtimeState);
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [interimTranscript, setInterimTranscript] = useState("");
@@ -59,6 +63,7 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
   const [clientLatency, setClientLatency] = useState<Partial<Record<DuplexLatencySample["kind"], number>>>({});
   const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
   const [outputDeviceId, setOutputDeviceId] = useState<string | undefined>(undefined);
+  const [streamingAssistant, setStreamingAssistant] = useState<{ turnId: string; text: string; interrupted?: boolean } | null>(null);
 
   const tts = useRef<TtsPlayer | null>(null);
   const vad = useRef<MicVad | null>(null);
@@ -97,19 +102,33 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
   const handleEvent = useCallback((event: DuplexRuntimeEvent) => {
     if (event.type === "snapshot") {
       setSnapshot(event.snapshot);
+      setRuntimeState(event.snapshot.runtimeState);
+      setStreamingAssistant(null);
       return;
     }
     if (event.type === "state") {
       speakingRef.current = event.state === "speaking";
+      setRuntimeState(event.state);
       if (event.state === "thinking") {
         tts.current?.beginResponse();
       }
       if (event.state === "interrupted" || event.state === "paused" || event.state === "listening") {
         tts.current?.cancel();
       }
+    } else if (event.type === "user_utterance") {
+      setInterimTranscript("");
+      setStreamingAssistant(null);
     } else if (event.type === "assistant_delta") {
+      setRuntimeState((prev) => (prev === "thinking" ? "speaking" : prev));
+      setStreamingAssistant((prev) => {
+        if (prev && prev.turnId === event.turnId) {
+          return { ...prev, text: prev.text + event.text };
+        }
+        return { turnId: event.turnId, text: event.text };
+      });
       tts.current?.feed(event.text);
     } else if (event.type === "assistant_end") {
+      setStreamingAssistant((prev) => (prev ? { ...prev, interrupted: event.interrupted } : null));
       if (event.interrupted) {
         tts.current?.cancel();
       } else {
@@ -118,6 +137,7 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
     } else if (event.type === "preemption") {
       if (event.intent !== "resume") {
         tts.current?.cancel();
+        setStreamingAssistant(null);
       }
     }
   }, []);
@@ -352,6 +372,7 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
     () => ({
       available,
       snapshot,
+      runtimeState,
       latency,
       micActive,
       micSupported: MicVad.isSupported(),
@@ -361,6 +382,7 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
       micLevel,
       interimTranscript,
       whisperLoading,
+      streamingAssistant,
       inputDeviceId,
       outputDeviceId,
       connect,
@@ -376,12 +398,14 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
     [
       available,
       snapshot,
+      runtimeState,
       latency,
       micActive,
       ttsSpeaking,
       micLevel,
       interimTranscript,
       whisperLoading,
+      streamingAssistant,
       inputDeviceId,
       outputDeviceId,
       connect,
