@@ -138,8 +138,10 @@ export class ModelCenterService {
   }
 
   private persistModelSettings(): void {
+    const settings = loadSettings();
     saveSettings({
       model: {
+        ...settings.model,
         storage: this.storage,
         activeBackend: this.activeBackend,
         activeBrainModel: this.activeBrainModel,
