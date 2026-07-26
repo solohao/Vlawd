@@ -374,6 +374,7 @@ ipcMain.handle("mic:level", (_event, level: number) => {
 ipcMain.handle("model:snapshot", () => modelCenter.getSnapshot());
 ipcMain.handle("model:probe", () => modelCenter.probe());
 ipcMain.handle("model:refreshBackend", () => modelCenter.refreshBackend());
+ipcMain.handle("model:rescanStorage", () => modelCenter.rescanStorage());
 ipcMain.handle("model:chooseStorageRoot", async () => {
   const currentRoot = modelCenter.getSnapshot().storage.rootDir;
   const result = await dialog.showOpenDialog({

@@ -87,6 +87,8 @@ export interface AiCursorDesktopApi {
   modelSnapshot(): Promise<ModelCenterSnapshot>;
   modelProbeEnvironment(): Promise<ModelCenterSnapshot>;
   modelRefreshBackend(): Promise<ModelCenterSnapshot>;
+  /** 重新扫描当前模型存储目录，App 托管的 Ollama 会重启以读取新位置。 */
+  modelRescanStorage(): Promise<ModelCenterSnapshot>;
   modelChooseStorageRoot(): Promise<ModelCenterSnapshot>;
   modelPull(model: string): Promise<ModelCenterSnapshot>;
   modelPausePull(model: string): Promise<ModelCenterSnapshot>;
@@ -193,6 +195,7 @@ const api: AiCursorDesktopApi = {
   modelSnapshot: () => ipcRenderer.invoke("model:snapshot") as Promise<ModelCenterSnapshot>,
   modelProbeEnvironment: () => ipcRenderer.invoke("model:probe") as Promise<ModelCenterSnapshot>,
   modelRefreshBackend: () => ipcRenderer.invoke("model:refreshBackend") as Promise<ModelCenterSnapshot>,
+  modelRescanStorage: () => ipcRenderer.invoke("model:rescanStorage") as Promise<ModelCenterSnapshot>,
   modelChooseStorageRoot: () => ipcRenderer.invoke("model:chooseStorageRoot") as Promise<ModelCenterSnapshot>,
   modelPull: (model) => ipcRenderer.invoke("model:pull", model) as Promise<ModelCenterSnapshot>,
   modelPausePull: (model) => ipcRenderer.invoke("model:pausePull", model) as Promise<ModelCenterSnapshot>,

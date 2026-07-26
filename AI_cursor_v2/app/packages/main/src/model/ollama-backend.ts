@@ -183,6 +183,7 @@ export class OllamaBackend implements ModelBackend {
 
   private readonly managedBinaryDir: string;
   private ensureServingPromise: Promise<boolean> | null = null;
+  private serveChild: ReturnType<typeof spawn> | null = null;
 
   constructor(options?: OllamaBackendOptions) {
     this.managedBinaryDir =
@@ -384,6 +385,12 @@ export class OllamaBackend implements ModelBackend {
       windowsHide: true,
       cwd: this.managedBinaryDir
     });
+    this.serveChild = child;
+    child.on("exit", () => {
+      if (this.serveChild === child) {
+        this.serveChild = null;
+      }
+    });
     child.unref();
 
     // 轮询等待 API 就绪（最多约 6 秒）。
@@ -395,6 +402,40 @@ export class OllamaBackend implements ModelBackend {
       }
     }
     return false;
+  }
+
+  /**
+   * 停止由 App 启动的 Ollama 后台进程。仅作用于我们 spawned 的子进程；
+   * 若 Ollama 由用户/系统单独启动，调用此方法无效。
+   */
+  async stop(signal?: AbortSignal): Promise<boolean> {
+    if (!this.serveChild) {
+      return false;
+    }
+    const child = this.serveChild;
+    this.serveChild = null;
+    if (signal?.aborted) {
+      return false;
+    }
+    child.kill("SIGTERM");
+    // 轮询等待端口释放（最多约 3 秒）。
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (signal?.aborted) break;
+      await delay(300);
+      if ((await this.version(signal)) === null) {
+        return true;
+      }
+    }
+    child.kill("SIGKILL");
+    return (await this.version(signal)) === null;
+  }
+
+  /**
+   * 用新的 modelsDir 重启 Ollama：先停止 App 托管的进程，再 ensureServing。
+   */
+  async restart(modelsDir: string | undefined, signal?: AbortSignal): Promise<boolean> {
+    await this.stop(signal);
+    return this.ensureServing(modelsDir, signal);
   }
 
   /**

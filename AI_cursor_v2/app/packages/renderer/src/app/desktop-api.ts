@@ -64,6 +64,8 @@ export interface AiCursorDesktopApi {
   modelSnapshot(): Promise<ModelCenterSnapshot>;
   modelProbeEnvironment(): Promise<ModelCenterSnapshot>;
   modelRefreshBackend(): Promise<ModelCenterSnapshot>;
+  /** 重新扫描当前模型存储目录，App 托管的 Ollama 会重启以读取新位置。 */
+  modelRescanStorage(): Promise<ModelCenterSnapshot>;
   modelChooseStorageRoot(): Promise<ModelCenterSnapshot>;
   modelPull(model: string): Promise<ModelCenterSnapshot>;
   modelPausePull(model: string): Promise<ModelCenterSnapshot>;
