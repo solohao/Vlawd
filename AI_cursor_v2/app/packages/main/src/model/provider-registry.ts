@@ -2,7 +2,7 @@ import type { DuplexModelEvent, DuplexModelInput, DuplexModelProvider, ProviderC
 import { MockDuplexModelProvider } from "./mock-duplex-provider.js";
 import { executionBrainCatalog } from "./dual-role-config.js";
 import { AnthropicLlmAdapter, OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
-import { PipelineDuplexModelProvider } from "./pipeline-duplex-provider.js";
+import { DEFAULT_SYSTEM_PROMPT, PipelineDuplexModelProvider } from "./pipeline-duplex-provider.js";
 
 export class StubDuplexModelProvider implements DuplexModelProvider {
   readonly kind: ProviderConfig["kind"];
@@ -53,7 +53,18 @@ export function createProvider(config: ProviderConfig): DuplexModelProvider {
     return new MockDuplexModelProvider();
   }
   if (config.kind === "pipeline") {
-    return new PipelineDuplexModelProvider(createLlmAdapter(config), config.pipeline?.systemPrompt, [], null);
+    const model = config.pipeline?.llmModel ?? "未知模型";
+    const protocol = config.pipeline?.llmProtocol === "anthropic" ? "Anthropic (Claude)" : "OpenAI 兼容";
+    const baseUrl = config.pipeline?.llmBaseUrl ?? "";
+    const modelIntro = `当前由 ${protocol} 模型 ${model}（${baseUrl}）驱动。`;
+    const systemPrompt =
+      config.pipeline?.systemPrompt ??
+      [
+        modelIntro,
+        "在每次回复开头，先用一句话说明你当前使用的模型名称和来源，例如：“我是 gpt-4o-mini，由 OpenAI 官方接口提供。”",
+        DEFAULT_SYSTEM_PROMPT
+      ].join("\n");
+    return new PipelineDuplexModelProvider(createLlmAdapter(config), systemPrompt, [], null);
   }
   return new StubDuplexModelProvider(config);
 }
