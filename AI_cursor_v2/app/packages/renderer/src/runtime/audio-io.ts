@@ -271,26 +271,15 @@ export class MicVad {
     }
 
     const getStream = async (): Promise<MediaStream> => {
-      let selectedDeviceId = this.deviceId;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const fifo = devices.find((d) => d.kind === "audioinput" && /fifo|pipe-source|pipe/i.test(d.label));
-        if (fifo) {
-          selectedDeviceId = fifo.deviceId;
-        }
-      } catch {
-        // enumerate may fail if permission denied; fall through to requested deviceId
-      }
       const audioConstraints: MediaTrackConstraints = {
         channelCount: 1,
+        sampleRate: { ideal: 16000 },
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true
       };
-      if (selectedDeviceId) {
-        audioConstraints.deviceId = { exact: selectedDeviceId };
+      if (this.deviceId) {
+        audioConstraints.deviceId = { exact: this.deviceId };
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       return stream;
@@ -303,6 +292,11 @@ export class MicVad {
         model: "v5",
         startOnLoad: false,
         processorType: "auto",
+        positiveSpeechThreshold: 0.55,
+        negativeSpeechThreshold: 0.35,
+        minSpeechMs: 800,
+        redemptionMs: 1600,
+        preSpeechPadMs: 600,
         getStream,
         onSpeechStart: () => handlers.onSpeechStart(),
         onSpeechEnd: (audio) => handlers.onSpeechEnd?.(audio),
