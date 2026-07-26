@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
-import { aiEmployeeMascotBody } from "../../app/assets.js";
+import { aiEmployeeMascotBody, aiEmployeeBubble } from "../../app/assets.js";
 import { AiEmployeeSprite } from "./AiEmployeeSprite.js";
 import { VoiceController } from "./VoiceController.js";
 
@@ -280,12 +280,12 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
           />
         </div>
       )}
-      <div className="flex items-center">
+      <div className="flex flex-shrink-0 items-center">
         <StatusBubble message={message} />
         <div
           ref={spriteRef}
-          className="relative select-none"
-          style={{ width: SPRITE, height: SPRITE, cursor: "grab" }}
+          className="relative flex-shrink-0 select-none"
+          style={{ width: SPRITE, height: SPRITE, minWidth: SPRITE, minHeight: SPRITE, cursor: "grab" }}
           data-sprite-state={paused ? "paused" : liveState}
           onPointerDown={onSpritePointerDown}
           onPointerMove={onSpritePointerMove}
@@ -319,13 +319,14 @@ function StatusBubble({ message }: { message: BubbleMessage }) {
           animate={{ opacity: 1, scale: 1, x: 0 }}
           exit={{ opacity: 0, scale: 0.75, x: 18 }}
           transition={{ type: "spring", stiffness: 420, damping: 24 }}
-          className="relative mr-3 flex h-[76px] min-w-[100px] max-w-[200px] items-center rounded-full border-2 border-brand-400 bg-white px-4 py-2 pr-5 shadow-[2px_2px_0_rgba(0,0,0,0.45)]"
+          className="relative mr-3 flex h-[76px] min-w-[120px] max-w-[220px] flex-shrink-0 items-center px-5 py-2 pr-7"
+          style={{
+            backgroundImage: `url(${aiEmployeeBubble})`,
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+            filter: "drop-shadow(2px 2px 0 rgba(0,0,0,0.45))"
+          }}
         >
-          {/* 右侧小尾巴 */}
-          <div className="absolute -right-[9px] top-1/2 -translate-y-1/2">
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 border-y-[7px] border-l-[9px] border-y-transparent border-l-brand-400" />
-            <div className="absolute -right-[1px] top-1/2 -translate-y-1/2 border-y-[6px] border-l-[8px] border-y-transparent border-l-white" />
-          </div>
           <AnimatePresence mode="wait">
             <motion.p
               key={message.text}
