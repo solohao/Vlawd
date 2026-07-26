@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { ModelRuntimeState } from "@ai-cursor-v2/shared";
+import type {
+  DesktopRuntimeActionState,
+  DesktopUiSnapshot,
+  DuplexConversationSnapshot,
+  DuplexRuntimeEvent,
+  ModelRuntimeState,
+  TaskPlan
+} from "@ai-cursor-v2/shared";
 import { aiEmployeeMascotBody, aiEmployeeBubble } from "../../app/assets.js";
 import { AiEmployeeSprite } from "./AiEmployeeSprite.js";
 import { VoiceController } from "./VoiceController.js";
@@ -12,6 +19,15 @@ interface BubbleMessage {
   type: BubbleMessageType;
 }
 
+interface BubbleContext {
+  goal?: string;
+  plan?: TaskPlan;
+  nextAction?: DesktopRuntimeActionState;
+  conclusion?: string;
+  userText?: string;
+  assistantText?: string;
+}
+
 function api() {
   return typeof window !== "undefined" ? window.aiCursorDesktop : undefined;
 }
@@ -20,25 +36,75 @@ const SPRITE = 76;
 const DRAG_THRESHOLD = 4; // px：小于此位移视为点击，否则视为拖拽
 const ALPHA_HIT = 24; // 命中吉祥物本体的最小 alpha（过滤透明区域）
 
-function getStateMessage(state: ModelRuntimeState, isPaused: boolean): BubbleMessage {
+function truncate(str: string, max: number): string {
+  if (str.length <= max) return str;
+  return str.slice(0, Math.max(0, max - 1)) + "…";
+}
+
+function actionDescription(action: DesktopRuntimeActionState | undefined, mode: "doing" | "confirm" = "doing"): string {
+  if (!action || !action.actionType) return "执行";
+  const verbMap: Record<string, string> = {
+    "browser.search": "搜索",
+    "browser.open": "打开",
+    "browser.read": "阅读",
+    "browser.scroll": "滚动",
+    "browser.find": "查找",
+    "form.fill": "填写"
+  };
+  const verb = verbMap[action.actionType] || "执行";
+  const value = action.value ? truncate(action.value, 12) : "";
+  const target = action.targetLabel ? truncate(action.targetLabel, 12) : "";
+  const obj = value || target || action.actionType;
+  if (mode === "confirm") return `${verb}${obj}`;
+  return `${verb}：${obj}`;
+}
+
+function deriveConclusion(snapshot: DesktopUiSnapshot): string | undefined {
+  const evidence = snapshot.session.payload?.evidence;
+  if (evidence && Array.isArray(evidence.conclusions) && evidence.conclusions.length > 0) {
+    return String(evidence.conclusions[0]);
+  }
+  const chunk = [...snapshot.session.chunks].reverse().find((c) => c.type === "conclusion");
+  return chunk?.summary;
+}
+
+function getStateMessage(state: ModelRuntimeState, isPaused: boolean, ctx: BubbleContext): BubbleMessage {
   if (isPaused) {
     return { text: "已暂停", type: "template" };
   }
   switch (state) {
     case "listening":
-      return { text: "正在听…", type: "template" };
-    case "thinking":
-      return { text: "正在思考…", type: "template" };
+      return ctx.userText
+        ? { text: `你说：${truncate(ctx.userText, 12)}`, type: "content" }
+        : { text: "正在听…", type: "template" };
+    case "thinking": {
+      const subject = ctx.goal || ctx.userText;
+      return subject
+        ? { text: `正在规划：${truncate(subject, 12)}`, type: "content" }
+        : { text: "正在思考…", type: "template" };
+    }
     case "waiting_confirm":
-      return { text: "请确认…", type: "template" };
+      return ctx.nextAction?.actionType
+        ? { text: `请确认：${actionDescription(ctx.nextAction, "confirm")}`, type: "content" }
+        : { text: "请确认…", type: "template" };
     case "acting":
-      return { text: "正在执行…", type: "template" };
+      return ctx.nextAction?.actionType
+        ? { text: `正在${actionDescription(ctx.nextAction)}`, type: "content" }
+        : ctx.goal
+          ? { text: `正在执行：${truncate(ctx.goal, 12)}`, type: "content" }
+          : { text: "正在执行…", type: "template" };
     case "speaking":
-      return { text: "正在说：太阳系有八颗行星", type: "content" };
+      return ctx.assistantText
+        ? { text: `正在说：${truncate(ctx.assistantText, 12)}`, type: "content" }
+        : { text: "正在说…", type: "template" };
     case "interrupted":
-      return { text: "被打断", type: "template" };
-    case "complete":
-      return { text: "任务完成", type: "template" };
+      return { text: "已中断", type: "template" };
+    case "complete": {
+      const text = ctx.conclusion || ctx.goal;
+      return text
+        ? { text: `任务完成：${truncate(text, 12)}`, type: "content" }
+        : { text: "任务完成", type: "template" };
+    }
     case "paused":
       return { text: "已暂停", type: "template" };
     default:
@@ -54,7 +120,8 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
   const [expanded, setExpanded] = useState(false);
   const [liveState, setLiveState] = useState<ModelRuntimeState>(runtimeState);
   const [paused, setPaused] = useState(false);
-  const [message, setMessage] = useState<BubbleMessage>(() => getStateMessage(runtimeState, false));
+  const [context, setContext] = useState<BubbleContext>({});
+  const [message, setMessage] = useState<BubbleMessage>(() => getStateMessage(runtimeState, false, {}));
   const [demoIndex, setDemoIndex] = useState(0);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -75,7 +142,33 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     pausedRef.current = paused;
   }, [paused]);
 
-  // Cycle 1：订阅主进程 Runtime 事件，实时投影运行状态与暂停标志。
+  // 从 DuplexConversationSnapshot / DuplexRuntimeEvent 提取 Cycle 1 语音文案。
+  const applyConversationSnapshot = useCallback((snapshot: DuplexConversationSnapshot) => {
+    setLiveState(snapshot.runtimeState);
+    setPaused(snapshot.paused);
+    const lastUser = [...snapshot.turns].reverse().find((t) => t.role === "user");
+    const lastAssistant = [...snapshot.turns].reverse().find((t) => t.role === "assistant");
+    setContext((prev) => ({
+      ...prev,
+      userText: lastUser?.text || prev.userText,
+      assistantText: lastAssistant?.text || prev.assistantText
+    }));
+  }, []);
+
+  // 从 DesktopUiSnapshot 提取 Cycle 2/3 任务上下文。
+  const applyDesktopSnapshot = useCallback((snapshot: DesktopUiSnapshot) => {
+    setLiveState(snapshot.runtimeState);
+    setPaused(snapshot.runtimeState === "paused" || snapshot.session.status === "paused");
+    setContext((prev) => ({
+      ...prev,
+      goal: snapshot.session.payload?.goal || prev.goal,
+      plan: snapshot.session.payload?.plan || prev.plan,
+      nextAction: snapshot.browser.nextAction,
+      conclusion: deriveConclusion(snapshot)
+    }));
+  }, []);
+
+  // Cycle 1：订阅全双工会话事件。
   useEffect(() => {
     const desktop = api();
     if (!desktop) {
@@ -83,27 +176,42 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     }
     void desktop
       .conversationSnapshot()
-      .then((snapshot) => {
-        setLiveState(snapshot.runtimeState);
-        setPaused(snapshot.paused);
-      })
+      .then(applyConversationSnapshot)
       .catch(() => undefined);
-    return desktop.onConversationEvent((event) => {
+    return desktop.onConversationEvent((event: DuplexRuntimeEvent) => {
       if (event.type === "state") {
         setLiveState(event.state);
       } else if (event.type === "snapshot") {
-        setLiveState(event.snapshot.runtimeState);
-        setPaused(event.snapshot.paused);
+        applyConversationSnapshot(event.snapshot);
       } else if (event.type === "preemption") {
         setPaused(event.intent !== "resume");
+      } else if (event.type === "user_utterance") {
+        setContext((prev) => ({ ...prev, userText: event.text, assistantText: "" }));
+      } else if (event.type === "assistant_delta") {
+        setContext((prev) => ({ ...prev, assistantText: (prev.assistantText || "") + event.text }));
+      } else if (event.type === "assistant_end") {
+        // 当前助手回合结束，保留最终文本；下一轮 user_utterance 会重置
       }
     });
-  }, []);
+  }, [applyConversationSnapshot]);
 
-  // 根据运行状态更新气泡文案。
+  // Cycle 2/3：订阅桌面运行时快照。
   useEffect(() => {
-    setMessage(getStateMessage(liveState, paused));
-  }, [liveState, paused]);
+    const desktop = api();
+    if (!desktop) {
+      return;
+    }
+    void desktop
+      .getSnapshot()
+      .then(applyDesktopSnapshot)
+      .catch(() => undefined);
+    return desktop.onDesktopSnapshot(applyDesktopSnapshot);
+  }, [applyDesktopSnapshot]);
+
+  // 根据运行状态 + 上下文更新气泡文案。
+  useEffect(() => {
+    setMessage(getStateMessage(liveState, paused, context));
+  }, [liveState, paused, context]);
 
   // 无后端连接时循环演示文案（先一行，再两行）。
   useEffect(() => {
@@ -113,9 +221,9 @@ export function OverlayApp({ runtimeState = "listening" }: OverlayAppProps) {
     }
     const demos: BubbleMessage[] = [
       { text: "正在听…", type: "template" },
+      { text: "正在规划：太阳系有几颗行星", type: "content" },
       { text: "正在搜索：太阳系行星", type: "content" },
-      { text: "正在说：太阳系有八颗行星", type: "content" },
-      { text: "任务完成", type: "template" }
+      { text: "任务完成：太阳系有八颗行星", type: "content" }
     ];
     setMessage(demos[0]);
     const timer = setInterval(() => {
