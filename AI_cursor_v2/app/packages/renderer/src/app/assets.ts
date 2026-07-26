@@ -10,3 +10,4 @@ export const aiEmployeeAvatarCompact = `${base}ai-employee-avatar-compact.png`;
 export const aiEmployeeSpriteTransparent = `${base}ai-employee-sprite-transparent.png`;
 export const aiEmployeeMascotBody = `${base}ai-employee-mascot-body.png`;
 export const aiEmployeeMascotJelly = `${base}ai-employee-mascot-jelly.png`;
+export const aiEmployeeBubble = `${base}ai-employee-bubble.png`;
