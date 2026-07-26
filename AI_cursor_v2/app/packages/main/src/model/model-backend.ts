@@ -51,10 +51,30 @@ export function parseOpenAiModels(body: OpenAiModelsResponse): OllamaModelInfo[]
   return models;
 }
 
-/** 请求任意 OpenAI 兼容端点的 `/models`，返回模型列表；不可达则抛错。 */
-export async function fetchOpenAiModels(openaiEndpoint: string, signal?: AbortSignal): Promise<OllamaModelInfo[]> {
+function authHeaders(apiKey?: string, protocol?: "openai" | "anthropic"): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!apiKey) return headers;
+  if (protocol === "anthropic") {
+    headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  } else {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+  return headers;
+}
+
+/** 请求 OpenAI 兼容或 Anthropic 端点的 `/models`，返回模型列表；不可达则抛错。 */
+export async function fetchOpenAiModels(
+  openaiEndpoint: string,
+  apiKey?: string,
+  protocol: "openai" | "anthropic" = "openai",
+  signal?: AbortSignal
+): Promise<OllamaModelInfo[]> {
   const url = `${openaiEndpoint.replace(/\/$/, "")}/models`;
-  const response = await fetch(url, { signal });
+  const response = await fetch(url, {
+    signal,
+    headers: { ...authHeaders(apiKey, protocol) }
+  });
   if (!response.ok) {
     throw new Error(`${url} responded ${response.status}`);
   }

@@ -128,13 +128,14 @@ export function ModelCenterPage() {
           url: snapshot.customEndpoint!.baseUrl,
           model: snapshot.customEndpoint!.model,
           apiKey: snapshot.customEndpoint!.apiKey,
+          protocol: snapshot.customEndpoint!.protocol,
           enabled: isRemote
         }];
       });
     } else {
       setCustomEndpoints([]);
     }
-  }, [snapshot.activeBackend, snapshot.activeBrainModel, snapshot.customEndpoint?.baseUrl, snapshot.customEndpoint?.model, snapshot.customEndpoint?.name, snapshot.customEndpoint?.apiKey]);
+  }, [snapshot.activeBackend, snapshot.activeBrainModel, snapshot.customEndpoint?.baseUrl, snapshot.customEndpoint?.model, snapshot.customEndpoint?.name, snapshot.customEndpoint?.apiKey, snapshot.customEndpoint?.protocol]);
 
   // 同步本地语音模型（STT/TTS）的选择态
   useEffect(() => {
@@ -268,7 +269,7 @@ export function ModelCenterPage() {
     const newEndpoint: CustomEndpoint = {
       ...endpoint,
       id: `endpoint-${Date.now()}`,
-      enabled: false
+      enabled: true
     };
     setCustomEndpoints([newEndpoint]);
     // 保存端点配置并尝试切换为远程大脑
@@ -276,7 +277,8 @@ export function ModelCenterPage() {
       baseUrl: newEndpoint.url,
       model: newEndpoint.model,
       name: newEndpoint.name,
-      apiKey: newEndpoint.apiKey
+      apiKey: newEndpoint.apiKey,
+      protocol: newEndpoint.protocol
     });
     void model.setBackend('custom');
     void model.useAsBrain(newEndpoint.model);
@@ -284,20 +286,6 @@ export function ModelCenterPage() {
       ...prev,
       brain: { type: 'remote' as const, modelId: newEndpoint.model, endpointId: newEndpoint.id }
     }));
-  };
-
-  const handleEditEndpoint = (endpoint: CustomEndpoint) => {
-    setCustomEndpoints([endpoint]);
-    void model.setCustomEndpoint({
-      baseUrl: endpoint.url,
-      model: endpoint.model,
-      name: endpoint.name,
-      apiKey: endpoint.apiKey
-    });
-    if (selectedConfig.brain.type === 'remote' && selectedConfig.brain.endpointId === endpoint.id) {
-      void model.setBackend('custom');
-      void model.useAsBrain(endpoint.model);
-    }
   };
 
   const handleDeleteEndpoint = (id: string) => {
@@ -309,25 +297,6 @@ export function ModelCenterPage() {
     // 删除后端保存的自定义端点，切回 Ollama 本地
     void model.setCustomEndpoint({ baseUrl: '', model: '' });
     void model.setBackend('ollama');
-  };
-
-  const handleToggleEndpoint = (id: string) => {
-    const ep = customEndpoints.find(e => e.id === id);
-    if (!ep) return;
-    const next = customEndpoints.map(e => ({ ...e, enabled: e.id === id }));
-    setCustomEndpoints(next);
-    setSelectedConfig(prev => ({
-      ...prev,
-      brain: { type: 'remote' as const, modelId: ep.model, endpointId: id }
-    }));
-    void model.setCustomEndpoint({
-      baseUrl: ep.url,
-      model: ep.model,
-      name: ep.name,
-      apiKey: ep.apiKey
-    });
-    void model.setBackend('custom');
-    void model.useAsBrain(ep.model);
   };
 
   const handleChangeStorage = () => {
@@ -382,9 +351,7 @@ export function ModelCenterPage() {
                     onConfigChange={handleConfigChange}
                     onNavigateToLibrary={() => setTab("library")}
                     onAddEndpoint={handleAddEndpoint}
-                    onEditEndpoint={handleEditEndpoint}
                     onDeleteEndpoint={handleDeleteEndpoint}
-                    onToggleEndpoint={handleToggleEndpoint}
                   />
                 </FeatureSection>
               ) : (

@@ -145,6 +145,132 @@ function extractDelta(payload: string): string {
   }
 }
 
+interface AnthropicStreamEvent {
+  type: string;
+  delta?: { type: string; text?: string } | { type: string; partial_json?: string };
+  content_block?: { type: string; text?: string };
+}
+
+interface AnthropicModelsResponse {
+  data?: Array<{ id?: string }>;
+}
+
+/**
+ * Anthropic Messages API 适配器（Claude 原生协议）。
+ * 仅支持流式 /v1/messages，认证头为 x-api-key + anthropic-version。
+ */
+export class AnthropicLlmAdapter implements LlmAdapter {
+  readonly label: string;
+  readonly usingRealInference = true;
+  private readonly baseUrl: string;
+
+  constructor(private readonly options: OpenAICompatibleOptions) {
+    this.baseUrl = normalizeBaseUrl(options.baseUrl);
+    this.label = `${options.model} @ ${this.baseUrl}`;
+  }
+
+  private get headers(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01"
+    };
+    if (this.options.apiKey) {
+      headers["x-api-key"] = this.options.apiKey;
+    }
+    return headers;
+  }
+
+  private toAnthropicBody(messages: LlmMessage[]): { system?: string; messages: Array<{ role: "user" | "assistant"; content: string }> } {
+    const systemParts: string[] = [];
+    const chat: Array<{ role: "user" | "assistant"; content: string }> = [];
+    for (const message of messages) {
+      if (message.role === "system") {
+        systemParts.push(message.content);
+      } else {
+        chat.push({ role: message.role, content: message.content });
+      }
+    }
+    return { system: systemParts.join("\n\n") || undefined, messages: chat };
+  }
+
+  async *stream(messages: LlmMessage[], signal?: AbortSignal): AsyncIterable<string> {
+    const body = this.toAnthropicBody(messages);
+    const response = await fetch(`${this.baseUrl}/messages`, {
+      method: "POST",
+      signal,
+      headers: this.headers,
+      body: JSON.stringify({
+        model: this.options.model,
+        max_tokens: 1024,
+        stream: true,
+        ...body
+      })
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Anthropic responded ${response.status} ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice("data:".length).trim();
+          if (payload === "[DONE]") return;
+          const text = extractAnthropicDelta(payload);
+          if (text) yield text;
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+  }
+
+  async complete(messages: LlmMessage[], signal?: AbortSignal): Promise<string> {
+    const chunks: string[] = [];
+    for await (const delta of this.stream(messages, signal)) {
+      chunks.push(delta);
+    }
+    return chunks.join("");
+  }
+
+  async healthCheck(signal?: AbortSignal): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/models`, {
+        signal,
+        headers: this.headers
+      });
+      if (!response.ok) return false;
+      const body = (await response.json()) as AnthropicModelsResponse;
+      return Array.isArray(body.data) && body.data.some((entry) => entry.id === this.options.model);
+    } catch {
+      return false;
+    }
+  }
+}
+
+function extractAnthropicDelta(payload: string): string {
+  try {
+    const event = JSON.parse(payload) as AnthropicStreamEvent;
+    if (event.type === "content_block_delta" && event.delta && "text" in event.delta) {
+      return event.delta.text ?? "";
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 /**
  * 离线确定性回退：无需任何模型即可跑通整条 Cycle 1 状态机（插话/抢占/取消/恢复/延迟），
  * 供开发、CI 与单测使用。真实体验必须切到 OpenAICompatibleLlmAdapter。

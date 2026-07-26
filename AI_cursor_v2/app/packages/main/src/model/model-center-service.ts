@@ -22,7 +22,7 @@ import type { BackendDetectResult, ModelBackend } from "./model-backend.js";
 import { OllamaBackend } from "./ollama-backend.js";
 import { ollamaModelCatalog } from "./ollama-catalog.js";
 import { createProvider } from "./provider-registry.js";
-import { OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
+import { AnthropicLlmAdapter, OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
 import { loadSettings, saveSettings } from "../settings.js";
 
 export type ModelCenterListener = (snapshot: ModelCenterSnapshot) => void;
@@ -634,22 +634,31 @@ export class ModelCenterService {
     // 不依赖 backendStates 的实时状态做硬阻断，避免 refreshBackend 并发检测导致的状态抖动。
     // 如果后端实际不可用，LlmAdapter.complete 会失败，TaskPlanner 会回退到默认计划。
     if (!backend || !model) return undefined;
-    return new OpenAICompatibleLlmAdapter({
-      baseUrl: backend.openaiEndpoint,
-      model,
-      temperature: 0.3
-    });
+    return this.createBrainLlmAdapter(backend.openaiEndpoint, model);
+  }
+
+  private createBrainLlmAdapter(baseUrl: string, model: string): LlmAdapter {
+    const apiKey = this.activeBackend === "custom" ? this.customEndpoint.apiKey : undefined;
+    const protocol = this.activeBackend === "custom" ? this.customEndpoint.protocol : "openai";
+    if (protocol === "anthropic") {
+      return new AnthropicLlmAdapter({ baseUrl, model, apiKey, temperature: 0.3 });
+    }
+    return new OpenAICompatibleLlmAdapter({ baseUrl, model, apiKey, temperature: 0.3 });
   }
 
   async useModelAsBrain(model: string): Promise<ModelCenterSnapshot> {
     const backend = this.backends[this.activeBackend];
+    const apiKey = this.activeBackend === "custom" ? this.customEndpoint.apiKey : undefined;
+    const protocol = this.activeBackend === "custom" ? this.customEndpoint.protocol : "openai";
     const provider = createProvider({
       kind: "pipeline",
       endpoint: backend.openaiEndpoint,
       device: this.environment?.gpus.length ? "cuda" : "cpu",
       pipeline: {
         llmBaseUrl: backend.openaiEndpoint,
-        llmModel: model
+        llmModel: model,
+        llmApiKey: apiKey,
+        llmProtocol: protocol
       }
     });
     this.runtime.registerProvider(provider);

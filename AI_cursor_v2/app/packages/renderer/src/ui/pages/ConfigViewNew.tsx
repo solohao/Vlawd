@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Card, Button, cn, StatusDot, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "../../design-system/index.js";
 import { BrainIcon, EarIcon, SpeakerIcon, CheckIcon, ArrowRight } from "../icons.js";
-import { RemoteEndpointList, AddEndpointButton, EndpointForm, type CustomEndpoint } from "../components/RemoteEndpoint.js";
+import { RemoteProviderTable, type CustomEndpoint } from "../components/RemoteEndpoint.js";
 import type { LLMModel, STTModel, TTSModel } from "./model-types.js";
 import { intentTemplates } from "./model-catalog.js";
 
@@ -18,9 +18,7 @@ interface ConfigViewNewProps {
   onConfigChange: (config: any) => void;
   onNavigateToLibrary: () => void;
   onAddEndpoint: (endpoint: Omit<CustomEndpoint, 'id'>) => void;
-  onEditEndpoint: (endpoint: CustomEndpoint) => void;
   onDeleteEndpoint: (id: string) => void;
-  onToggleEndpoint: (id: string) => void;
 }
 
 export function ConfigViewNew({
@@ -32,33 +30,9 @@ export function ConfigViewNew({
   onConfigChange,
   onNavigateToLibrary,
   onAddEndpoint,
-  onEditEndpoint,
-  onDeleteEndpoint,
-  onToggleEndpoint
+  onDeleteEndpoint
 }: ConfigViewNewProps) {
-  const [showEndpointForm, setShowEndpointForm] = useState(false);
-  const [editingEndpoint, setEditingEndpoint] = useState<CustomEndpoint | undefined>();
   const [currentPreset, setCurrentPreset] = useState('balanced');
-
-  const handleEditEndpoint = (endpoint: CustomEndpoint) => {
-    setEditingEndpoint(endpoint);
-    setShowEndpointForm(true);
-  };
-
-  const handleSaveEndpoint = (endpoint: Omit<CustomEndpoint, 'id'>) => {
-    if (editingEndpoint) {
-      onEditEndpoint({ ...endpoint, id: editingEndpoint.id });
-    } else {
-      onAddEndpoint(endpoint);
-    }
-    setShowEndpointForm(false);
-    setEditingEndpoint(undefined);
-  };
-
-  const handleCancelEndpoint = () => {
-    setShowEndpointForm(false);
-    setEditingEndpoint(undefined);
-  };
 
   const presetTemplate = useMemo(
     () => intentTemplates.find(t => t.id === currentPreset) ?? intentTemplates[0],
@@ -257,13 +231,10 @@ export function ConfigViewNew({
                         本地模型
                       </button>
                       <button
-                        onClick={() => {
-                          if (customEndpoints.length > 0) {
-                            onToggleEndpoint(customEndpoints[0].id);
-                          } else {
-                            setShowEndpointForm(true);
-                          }
-                        }}
+                        onClick={() => onConfigChange({
+                          ...selectedConfig,
+                          brain: { type: 'remote' }
+                        })}
                         className={cn(
                           "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
                           selectedConfig.brain.type === 'remote'
@@ -305,27 +276,11 @@ export function ConfigViewNew({
                         )}
                       </>
                     ) : (
-                      <div className="space-y-2">
-                        {showEndpointForm ? (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-3">
-                            <EndpointForm
-                              endpoint={editingEndpoint}
-                              onSave={handleSaveEndpoint}
-                              onCancel={handleCancelEndpoint}
-                            />
-                          </div>
-                        ) : (
-                          <>
-                            <RemoteEndpointList
-                              endpoints={customEndpoints}
-                              onEdit={handleEditEndpoint}
-                              onDelete={onDeleteEndpoint}
-                              onToggle={onToggleEndpoint}
-                            />
-                            <AddEndpointButton onClick={() => setShowEndpointForm(true)} />
-                          </>
-                        )}
-                      </div>
+                      <RemoteProviderTable
+                        endpoints={customEndpoints}
+                        onAddEndpoint={onAddEndpoint}
+                        onDeleteEndpoint={onDeleteEndpoint}
+                      />
                     )}
                   </div>
                 )}

@@ -40,6 +40,14 @@ export class CustomEndpointBackend implements ModelBackend {
     return normalizeCustomEndpoint(this.config.baseUrl);
   }
 
+  get protocol(): "openai" | "anthropic" {
+    return this.config.protocol ?? "openai";
+  }
+
+  get apiKey(): string | undefined {
+    return this.config.apiKey;
+  }
+
   async detect(signal?: AbortSignal): Promise<BackendDetectResult> {
     if (!this.openaiEndpoint) {
       return {
@@ -68,7 +76,7 @@ export class CustomEndpointBackend implements ModelBackend {
     if (!this.openaiEndpoint) {
       return [];
     }
-    return fetchOpenAiModels(this.openaiEndpoint, signal);
+    return fetchOpenAiModels(this.openaiEndpoint, this.apiKey, this.protocol, signal);
   }
 
   async health(signal?: AbortSignal): Promise<boolean> {

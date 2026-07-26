@@ -77,6 +77,8 @@ export interface PipelineProviderConfig {
   llmBaseUrl?: string;
   llmModel?: string;
   llmApiKey?: string;
+  /** LLM API 协议类型，默认 openai。 */
+  llmProtocol?: "openai" | "anthropic";
   systemPrompt?: string;
   /** 可选：本地流式 ASR（whisper 服务）地址，Cycle 1 未配置时 mic 走浏览器识别或文字。 */
   asrEndpoint?: string;
