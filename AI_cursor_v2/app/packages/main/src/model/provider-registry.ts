@@ -2,7 +2,7 @@ import type { DuplexModelEvent, DuplexModelInput, DuplexModelProvider, ProviderC
 import { MockDuplexModelProvider } from "./mock-duplex-provider.js";
 import { executionBrainCatalog } from "./dual-role-config.js";
 import { AnthropicLlmAdapter, OpenAICompatibleLlmAdapter, type LlmAdapter } from "./llm-adapter.js";
-import { DEFAULT_SYSTEM_PROMPT, PipelineDuplexModelProvider } from "./pipeline-duplex-provider.js";
+import { DEFAULT_SYSTEM_PROMPT, LOCAL_SYSTEM_PROMPT, PipelineDuplexModelProvider } from "./pipeline-duplex-provider.js";
 
 export class StubDuplexModelProvider implements DuplexModelProvider {
   readonly kind: ProviderConfig["kind"];
@@ -40,10 +40,11 @@ export function createLlmAdapter(config: ProviderConfig): LlmAdapter {
   const model = pipeline?.llmModel;
   if (baseUrl && model) {
     const apiKey = pipeline?.llmApiKey;
+    const isLocal = /^(https?:\/\/)(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//i.test(baseUrl);
     if (pipeline?.llmProtocol === "anthropic") {
       return new AnthropicLlmAdapter({ baseUrl, model, apiKey });
     }
-    return new OpenAICompatibleLlmAdapter({ baseUrl, model, apiKey });
+    return new OpenAICompatibleLlmAdapter({ baseUrl, model, apiKey, temperature: isLocal ? 0.3 : 0.6, maxTokens: isLocal ? 80 : undefined });
   }
   throw new Error(`Provider ${config.kind} 未配置本地 OpenAI 兼容端点（baseUrl + model）。`);
 }
@@ -57,13 +58,16 @@ export function createProvider(config: ProviderConfig): DuplexModelProvider {
     const protocol = config.pipeline?.llmProtocol === "anthropic" ? "Anthropic (Claude)" : "OpenAI 兼容";
     const baseUrl = config.pipeline?.llmBaseUrl ?? "";
     const modelIntro = `当前由 ${protocol} 模型 ${model}（${baseUrl}）驱动。`;
+    const isLocal = /^(https?:\/\/)(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//i.test(baseUrl);
     const systemPrompt =
       config.pipeline?.systemPrompt ??
-      [
-        modelIntro,
-        "在每次回复开头，先用一句话说明你当前使用的模型名称和来源，例如：“我是 gpt-4o-mini，由 OpenAI 官方接口提供。”",
-        DEFAULT_SYSTEM_PROMPT
-      ].join("\n");
+      (isLocal
+        ? [LOCAL_SYSTEM_PROMPT, `模型：${model}。`].join("\n")
+        : [
+            modelIntro,
+            "在每次回复开头，先用一句话说明你当前使用的模型名称和来源，例如：“我是 gpt-4o-mini，由 OpenAI 官方接口提供。”",
+            DEFAULT_SYSTEM_PROMPT
+          ].join("\n"));
     return new PipelineDuplexModelProvider(createLlmAdapter(config), systemPrompt, [], null);
   }
   return new StubDuplexModelProvider(config);

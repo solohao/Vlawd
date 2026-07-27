@@ -13,6 +13,10 @@ export const DEFAULT_SYSTEM_PROMPT = [
   "当前处于 Cycle 1（只做语音对话），不要声称你能操作浏览器或电脑。"
 ].join("");
 
+export const LOCAL_SYSTEM_PROMPT = [
+  "你是 Vlawd，用简短自然的中文口语回答，适合语音朗读，不要输出 Markdown、代码块或列表符号。"
+].join("");
+
 /**
  * 方案 B：流式管线 Provider。
  *

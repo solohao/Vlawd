@@ -447,7 +447,13 @@ export class SpeechModelService {
     const modelDir = this.getTtsModelDir();
     if (!modelDir) throw new Error("未选择或未安装本地 TTS 模型");
     const tts = this.loadTts(modelDir);
-    return tts.generate({ text, sid: 0, speed: 1.0, enableExternalBuffer: false });
+    // vits-zh-ll 只能稳定朗读中文，连续英文字母会导致 sherpa-onnx 崩溃；
+    // 先过滤拉丁字母，至少保留中/数/标点，避免整段音频中断。
+    const safeText = text.replace(/[a-zA-Z]+/g, " ").trim();
+    if (!safeText) {
+      throw new Error("text contains only unsupported characters for local TTS");
+    }
+    return tts.generate({ text: safeText, sid: 0, speed: 1.0, enableExternalBuffer: false });
   }
 
   private resample(input: Float32Array, fromRate: number, toRate: number): Float32Array {

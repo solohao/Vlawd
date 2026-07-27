@@ -31,6 +31,7 @@ export interface OpenAICompatibleOptions {
   model: string;
   apiKey?: string;
   temperature?: number;
+  maxTokens?: number;
 }
 
 interface OpenAiStreamChunk {
@@ -70,6 +71,7 @@ export class OpenAICompatibleLlmAdapter implements LlmAdapter {
         model: this.options.model,
         stream: true,
         temperature: this.options.temperature ?? 0.6,
+        ...(this.options.maxTokens ? { max_tokens: this.options.maxTokens } : {}),
         messages
       })
     });
