@@ -83,16 +83,18 @@ export function ConversationProvider({ children }: { children: ReactNode }): JSX
       onSpeakingStart: () => {
         setTtsSpeaking(true);
         const now = Date.now();
-        if (userUtteranceAtRef.current != null) {
-          setClientLatency((prev) => ({ ...prev, utterance_to_first_speech: now - userUtteranceAtRef.current! }));
+        const start = userUtteranceAtRef.current;
+        if (start != null) {
+          setClientLatency((prev) => ({ ...prev, utterance_to_first_speech: now - start }));
           userUtteranceAtRef.current = null;
         }
       },
       onSpeakingEnd: () => {
         setTtsSpeaking(false);
         const now = Date.now();
-        if (bargeInAtRef.current != null) {
-          setClientLatency((prev) => ({ ...prev, barge_in_to_output_stop: now - bargeInAtRef.current! }));
+        const start = bargeInAtRef.current;
+        if (start != null) {
+          setClientLatency((prev) => ({ ...prev, barge_in_to_output_stop: now - start }));
           bargeInAtRef.current = null;
         }
       }
