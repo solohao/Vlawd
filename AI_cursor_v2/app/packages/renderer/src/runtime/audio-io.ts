@@ -38,6 +38,8 @@ export class TtsPlayer {
   private currentSource: AudioBufferSourceNode | null = null;
   private queue: string[] = [];
   private processing = false;
+  private firstFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly maxLatencyMs = 300;
 
   constructor(options: TtsPlayerOptions = {}) {
     this.options = {
@@ -65,6 +67,16 @@ export class TtsPlayer {
     this.spokenText = "";
   }
 
+  private startFirstFlushTimer(): void {
+    if (this.firstFlushTimer || !this.buffer.trim()) {
+      return;
+    }
+    this.firstFlushTimer = setTimeout(() => {
+      this.firstFlushTimer = null;
+      this.flush();
+    }, this.maxLatencyMs);
+  }
+
   /** 返回本轮已朗读完的文本（不含正在朗读、尚未结束的当前句，保守偏“确实听到”）。 */
   getSpokenText(): string {
     return this.spokenText;
@@ -86,9 +98,14 @@ export class TtsPlayer {
       }
       match = boundary.exec(this.buffer);
     }
+    this.startFirstFlushTimer();
   }
 
   flush(): void {
+    if (this.firstFlushTimer) {
+      clearTimeout(this.firstFlushTimer);
+      this.firstFlushTimer = null;
+    }
     const remaining = this.buffer.trim();
     this.buffer = "";
     if (remaining) {
@@ -97,6 +114,10 @@ export class TtsPlayer {
   }
 
   cancel(): void {
+    if (this.firstFlushTimer) {
+      clearTimeout(this.firstFlushTimer);
+      this.firstFlushTimer = null;
+    }
     this.buffer = "";
     this.queue = [];
     const wasSpeaking = this.speaking;
