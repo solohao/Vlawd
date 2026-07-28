@@ -123,15 +123,37 @@ export class OpenAICompatibleLlmAdapter implements LlmAdapter {
 
   async healthCheck(signal?: AbortSignal): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/models`, {
+      const headers: Record<string, string> = {
+        "content-type": "application/json"
+      };
+      if (this.options.apiKey) {
+        headers.authorization = `Bearer ${this.options.apiKey}`;
+      }
+
+      // 优先通过 /models 列表确认模型存在；若端点未实现或列表不包含该模型，
+      // 回落到一次极小的 /chat/completions 探测，兼容只开放聊天接口的代理端点。
+      const modelsResponse = await fetch(`${this.baseUrl}/models`, {
         signal,
         headers: this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : undefined
       });
-      if (!response.ok) {
-        return false;
+      if (modelsResponse.ok) {
+        const body = (await modelsResponse.json()) as OpenAiModelsResponse;
+        if (Array.isArray(body.data) && body.data.some((entry) => entry.id === this.options.model)) {
+          return true;
+        }
       }
-      const body = (await response.json()) as OpenAiModelsResponse;
-      return Array.isArray(body.data) && body.data.some((entry) => entry.id === this.options.model);
+
+      const probeResponse = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        signal,
+        headers,
+        body: JSON.stringify({
+          model: this.options.model,
+          messages: [{ role: "user", content: "hi" }],
+          max_tokens: 1
+        })
+      });
+      return probeResponse.ok;
     } catch {
       return false;
     }
