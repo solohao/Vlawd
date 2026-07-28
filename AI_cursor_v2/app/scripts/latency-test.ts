@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SpeechModelService } from "../packages/main/src/model/speech-model-service.js";
-import { OpenAICompatibleLlmAdapter, EchoLlmAdapter, type LlmAdapter } from "../packages/main/src/model/llm-adapter.js";
+import { OpenAICompatibleLlmAdapter, EchoLlmAdapter, FastEchoLlmAdapter, type LlmAdapter } from "../packages/main/src/model/llm-adapter.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +37,7 @@ interface Arguments {
   genAudioText?: string;
   benchmark: boolean;
   streamingTts: boolean;
+  fastLlm: boolean;
   minTtsLength: number;
   maxTtsLength: number;
 }
@@ -60,7 +61,9 @@ function parseArgs(): Arguments {
     genAudioText: get("--gen-audio-text"),
     benchmark: has("--benchmark"),
     streamingTts: has("--streaming-tts"),
-    minTtsLength: Number(get("--min-tts-length") ?? 8),
+    fastLlm: has("--fast-llm"),
+    // 中文里 4-6 个字即可构成一个可朗读短句，越短触发 TTS 越早（去气泡）。
+    minTtsLength: Number(get("--min-tts-length") ?? 4),
     maxTtsLength: Number(get("--max-tts-length") ?? 120)
   };
 }
@@ -231,6 +234,9 @@ function createLlm(args: Arguments): LlmAdapter {
       maxTokens: 80
     });
   }
+  if (args.fastLlm) {
+    return new FastEchoLlmAdapter(10);
+  }
   return new EchoLlmAdapter(20);
 }
 
@@ -256,6 +262,10 @@ interface LatencyResult {
 async function runOnce(args: Arguments): Promise<LatencyResult> {
   const speech = new SpeechModelService();
   await ensureModels(speech, args);
+
+  // 预热：把模型加载时间排除在延迟测量之外（真实运行时模型通常在启动时就已加载）。
+  speech.warmUp();
+  speech.synthesize("啊"); // 强制 TTS 后端完成首次初始化
 
   const audioPath = args.audioPath ?? (await generateTestAudio(speech, args));
 
@@ -287,20 +297,31 @@ async function runOnce(args: Arguments): Promise<LatencyResult> {
 
   console.log("[latency-test] 开始 LLM 流式生成 ...");
   const llmStart = performance.now();
+  const BREAK_PUNCTUATION = /[。！？!?？.．，,；;：:\n]/;
   let firstTokenAt: number | undefined;
   let sentenceEndAt: number | undefined;
+  let sentenceEndIndex = 0;
   let reply = "";
   for await (const delta of llm.stream(messages)) {
     if (firstTokenAt === undefined) {
       firstTokenAt = performance.now();
     }
     reply += delta;
-    // 拿到第一句就准备 TTS，模拟真实系统的分段朗读（去气泡：不等后续句子）。
-    if (sentenceEndAt === undefined && /[。！？!?.?\n]/.test(reply) && reply.length >= args.minTtsLength) {
-      sentenceEndAt = performance.now();
-      // 流式 TTS 模式下，每拿到一句就合成并继续；非流式只取首句。
-      if (!args.streamingTts) {
-        break;
+    // 拿到第一个可朗读短句就准备 TTS（去气泡：不等后续句子）。
+    // 强句末标点（。！？）立刻切；逗号/分号等软停顿只在长度足够时切，避免只拿到"收到"这类语气词。
+    if (sentenceEndAt === undefined) {
+      const hasStrongEnding = /[。！？!?？.．\n]/.test(reply);
+      const hasSoftPause = /[，,；;：:]/.test(reply);
+      const ready = hasStrongEnding
+        ? reply.length >= args.minTtsLength
+        : hasSoftPause && reply.length >= args.minTtsLength;
+      if (ready) {
+        const match = BREAK_PUNCTUATION.exec(reply);
+        sentenceEndIndex = match ? match.index : reply.length;
+        sentenceEndAt = performance.now();
+        if (!args.streamingTts) {
+          break;
+        }
       }
     }
     // 流式模式下限制单句最大长度，避免过度聚合。
@@ -311,16 +332,33 @@ async function runOnce(args: Arguments): Promise<LatencyResult> {
   const llmEnd = performance.now();
   console.log(`[latency-test] LLM 首 token：${firstTokenAt ? (firstTokenAt - llmStart).toFixed(1) : "N/A"}ms, 已收集文本："${reply.trim()}"`);
 
-  const firstSentence = reply.split(/[。！？!?.?\n]/)[0]?.trim() ?? reply.trim();
+  const firstSentence = reply.slice(0, sentenceEndIndex || reply.length).trim() || reply.trim();
+  console.log(`[latency-test] 选中的首句："${firstSentence}"`);
   if (!firstSentence) {
     throw new Error("LLM 未返回可朗读文本");
   }
 
-  console.log("[latency-test] 开始 TTS ...");
-  const ttsStart = performance.now();
-  const audio = speech.synthesize(firstSentence);
-  const ttsEnd = performance.now();
-  console.log(`[latency-test] TTS 首句合成完成（${audio.samples.length} samples @ ${audio.sampleRate}Hz, ${(ttsEnd - ttsStart).toFixed(1)}ms）`);
+  console.log(`[latency-test] 开始 TTS（${args.streamingTts ? "流式首块" : "整句"}） ...`);
+  let ttsEnd: number;
+  let firstTtsChunkAt: number | undefined;
+  let audioResult: { samples: Float32Array; sampleRate: number } | undefined;
+  if (args.streamingTts) {
+    const ttsStart = performance.now();
+    audioResult = await speech.synthesizeStreaming(firstSentence, (chunk) => {
+      if (firstTtsChunkAt === undefined) {
+        firstTtsChunkAt = performance.now();
+        console.log(`[latency-test] TTS 首块到达（${chunk.samples.length} samples @ ${chunk.sampleRate}Hz, progress ${(chunk.progress * 100).toFixed(0)}%）`);
+      }
+    });
+    ttsEnd = firstTtsChunkAt ?? performance.now();
+  } else {
+    const ttsStart = performance.now();
+    audioResult = speech.synthesize(firstSentence);
+    ttsEnd = performance.now();
+    console.log(`[latency-test] TTS 首句合成完成（${audioResult.samples.length} samples @ ${audioResult.sampleRate}Hz, ${(ttsEnd - ttsStart).toFixed(1)}ms）`);
+  }
+
+  const playableAt = args.streamingTts ? (firstTtsChunkAt ?? ttsEnd) : ttsEnd;
 
   console.log("\n--- 延迟报告 ---");
   console.log(`音频结束基准 (audioEnd)：        ${(sttStart - audioEndAt).toFixed(1)}ms`);
@@ -331,16 +369,19 @@ async function runOnce(args: Arguments): Promise<LatencyResult> {
   if (sentenceEndAt) {
     console.log(`LLM 首句完成：                   +${(sentenceEndAt - audioEndAt).toFixed(1)}ms`);
   }
-  console.log(`TTS 首句可播放：                 +${(ttsEnd - audioEndAt).toFixed(1)}ms`);
-  console.log(`全程（音频结束 → 可播放）：      ${(ttsEnd - audioEndAt).toFixed(1)}ms`);
+  if (args.streamingTts && firstTtsChunkAt) {
+    console.log(`TTS 首块可播放：                 +${(firstTtsChunkAt - audioEndAt).toFixed(1)}ms`);
+  }
+  console.log(`TTS 首句可播放：                 +${(playableAt - audioEndAt).toFixed(1)}ms`);
+  console.log(`全程（音频结束 → 可播放）：      ${(playableAt - audioEndAt).toFixed(1)}ms`);
   console.log("------------------");
 
   return {
     stt: sttEnd - sttStart,
     llmFirstToken: firstTokenAt ? firstTokenAt - llmStart : 0,
     llmFirstSentence: sentenceEndAt ? sentenceEndAt - llmStart : 0,
-    tts: ttsEnd - ttsStart,
-    total: ttsEnd - audioEndAt,
+    tts: ttsEnd - sentenceEndAt!,
+    total: playableAt - audioEndAt,
     text,
     firstSentence
   };
@@ -350,15 +391,15 @@ async function runBenchmark(args: Arguments): Promise<void> {
   const combos = [
     { stt: "paraformer-zh-small", tts: "vits-zh-ll" },
     { stt: "whisper-tiny", tts: "vits-zh-ll" },
-    { stt: "whisper-small", tts: "vits-zh-ll" },
-    { stt: "paraformer-zh-small", tts: "kokoro-multi-lang-v1_0" }
+    { stt: "streaming-zipformer-zh-14m", tts: "vits-zh-ll" },
+    { stt: "streaming-zipformer-bilingual-zh-en", tts: "vits-zh-ll" }
   ];
 
   const results: Array<{ stt: string; tts: string; total: number; sttMs: number; ttsMs: number; text: string; firstSentence: string }> = [];
 
   for (const combo of combos) {
     console.log(`\n[benchmark] 组合：STT=${combo.stt}, TTS=${combo.tts}`);
-    const runArgs = { ...args, sttModel: combo.stt, ttsModel: combo.tts, benchmark: false };
+    const runArgs = { ...args, sttModel: combo.stt, ttsModel: combo.tts, benchmark: false, fastLlm: true };
     try {
       const result = await runOnce(runArgs);
       results.push({
@@ -396,7 +437,8 @@ async function main(): Promise<void> {
 
   console.log(`[latency-test] 模型目录：${args.modelsDir}`);
   console.log(`[latency-test] STT：${args.sttModel}，TTS：${args.ttsModel}`);
-  console.log(`[latency-test] LLM：${args.llmBaseUrl ? `${args.llmModel} @ ${args.llmBaseUrl}` : "Echo (mock)"}`);
+  let llmLabel = args.llmBaseUrl ? `${args.llmModel} @ ${args.llmBaseUrl}` : (args.fastLlm ? "FastEcho (short first sentence)" : "Echo (mock)");
+  console.log(`[latency-test] LLM：${llmLabel}`);
 
   await runOnce(args);
 }

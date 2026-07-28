@@ -315,6 +315,39 @@ function buildOfflineReply(utterance: string): string {
   return `收到，你说的是「${trimmed}」。我会先复述目标再分点回答；这是离线回退语气，配置本地 Qwen2.5 后即为真实推理。你可以随时插话改需求，或说“停”来暂停。`;
 }
 
+/**
+ * 低延迟离线回退：用于测试首句 TTS 延迟，先返回一个短句再继续。
+ */
+export class FastEchoLlmAdapter implements LlmAdapter {
+  readonly label = "offline-fast-echo";
+  readonly usingRealInference = false;
+
+  constructor(private readonly chunkDelayMs = 10) {}
+
+  async *stream(messages: LlmMessage[], signal?: AbortSignal): AsyncIterable<string> {
+    const lastUser = [...messages].reverse().find((message) => message.role === "user");
+    const utterance = lastUser?.content ?? "";
+    const prefix = "收到，";
+    const suffix = `关于「${utterance.trim() || "你的请求"}」，我来分点说明。`;
+    // 先快速吐出极短前缀，让 TTS 可以立刻开始；后续内容继续流出。
+    yield prefix;
+    await delay(this.chunkDelayMs, signal);
+    yield suffix;
+  }
+
+  async complete(messages: LlmMessage[]): Promise<string> {
+    const result: string[] = [];
+    for await (const delta of this.stream(messages)) {
+      result.push(delta);
+    }
+    return result.join("");
+  }
+
+  async healthCheck(): Promise<boolean> {
+    return true;
+  }
+}
+
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
