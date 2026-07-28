@@ -94,6 +94,56 @@ export const SPEECH_CATALOG: SpeechCatalogItem[] = [
     }
   },
   {
+    id: "streaming-zipformer-zh-14m",
+    name: "Streaming Zipformer 中文 14M",
+    role: "stt",
+    language: "zh",
+    quality: "low",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2",
+    archiveSizeBytes: 74_063_872,
+    extractedDirName: "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23",
+    approxSizeGB: 0.07,
+    memoryRecommendedGB: 2,
+    description: "流式 Zipformer 中文 ASR，小体积低延迟，适合实时对话",
+    tags: ["chinese", "streaming", "zipformer"],
+    sttConfig: {
+      type: "zipformerCtc",
+      streaming: true,
+      transducer: {
+        encoder: "encoder-epoch-99-avg-1.int8.onnx",
+        decoder: "decoder-epoch-99-avg-1.int8.onnx",
+        joiner: "joiner-epoch-99-avg-1.int8.onnx"
+      },
+      tokens: "tokens.txt"
+    }
+  },
+  {
+    id: "streaming-zipformer-bilingual-zh-en",
+    name: "Streaming Zipformer 中英双语",
+    role: "stt",
+    language: "zh",
+    quality: "medium",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2",
+    archiveSizeBytes: 511_104_573,
+    extractedDirName: "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
+    approxSizeGB: 0.48,
+    memoryRecommendedGB: 4,
+    description: "流式 Zipformer 中英双语 ASR，精度更高，适合实时对话",
+    tags: ["chinese", "english", "streaming", "zipformer"],
+    sttConfig: {
+      type: "transducer",
+      streaming: true,
+      transducer: {
+        encoder: "encoder-epoch-99-avg-1.int8.onnx",
+        decoder: "decoder-epoch-99-avg-1.int8.onnx",
+        joiner: "joiner-epoch-99-avg-1.int8.onnx"
+      },
+      tokens: "tokens.txt"
+    }
+  },
+  {
     id: "vits-piper-en_US-lessac-low",
     name: "Piper 英语 Lessac Low",
     role: "tts",
@@ -135,7 +185,7 @@ export const SPEECH_CATALOG: SpeechCatalogItem[] = [
       lexicon: "lexicon.txt",
       tokens: "tokens.txt",
       ruleFsts: ["date.fst", "phone.fst", "number.fst"],
-      numThreads: 1
+      numThreads: 4
     }
   },
   {
@@ -224,6 +274,8 @@ export const SPEECH_CATALOG: SpeechCatalogItem[] = [
       model: "model.onnx",
       voices: "voices.bin",
       tokens: "tokens.txt",
+      lexicon: "lexicon-zh.txt",
+      language: "zh",
       dataDir: "espeak-ng-data",
       numThreads: 2
     }
