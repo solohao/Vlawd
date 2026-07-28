@@ -201,52 +201,52 @@ export function ConfigViewNew({
 
               {/* LLM 单元格 */}
               <TableCell className="align-top p-4 bg-brand-50/20">
-                {installedLLMs.length === 0 && selectedConfig.brain.type !== 'remote' ? (
-                  <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50/50 px-3 py-6 text-center">
-                    <p className="text-[11px] text-amber-700 mb-2">
-                      尚未安装LLM模型
-                    </p>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
                     <button
-                      onClick={onNavigateToLibrary}
-                      className="text-[10px] font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                      onClick={() => onConfigChange({
+                        ...selectedConfig,
+                        brain: { type: 'local', modelId: selectedConfig.brain.modelId || installedLLMs[0]?.id }
+                      })}
+                      className={cn(
+                        "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
+                        selectedConfig.brain.type === 'local'
+                          ? "bg-brand-500 text-white"
+                          : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                      )}
                     >
-                      前往模型库 →
+                      本地模型
+                    </button>
+                    <button
+                      onClick={() => onConfigChange({
+                        ...selectedConfig,
+                        brain: { type: 'remote' }
+                      })}
+                      className={cn(
+                        "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
+                        selectedConfig.brain.type === 'remote'
+                          ? "bg-brand-500 text-white"
+                          : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                      )}
+                    >
+                      远程API
                     </button>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => onConfigChange({
-                          ...selectedConfig,
-                          brain: { type: 'local', modelId: selectedConfig.brain.modelId || installedLLMs[0]?.id }
-                        })}
-                        className={cn(
-                          "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
-                          selectedConfig.brain.type === 'local'
-                            ? "bg-brand-500 text-white"
-                            : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
-                        )}
-                      >
-                        本地模型
-                      </button>
-                      <button
-                        onClick={() => onConfigChange({
-                          ...selectedConfig,
-                          brain: { type: 'remote' }
-                        })}
-                        className={cn(
-                          "flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all",
-                          selectedConfig.brain.type === 'remote'
-                            ? "bg-brand-500 text-white"
-                            : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
-                        )}
-                      >
-                        远程API
-                      </button>
-                    </div>
 
-                    {selectedConfig.brain.type === 'local' ? (
+                  {selectedConfig.brain.type === 'local' ? (
+                    installedLLMs.length === 0 ? (
+                      <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50/50 px-3 py-4 text-center">
+                        <p className="text-[11px] text-amber-700 mb-2">
+                          尚未安装LLM模型
+                        </p>
+                        <button
+                          onClick={onNavigateToLibrary}
+                          className="text-[10px] font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                        >
+                          前往模型库 →
+                        </button>
+                      </div>
+                    ) : (
                       <>
                         <select
                           value={selectedConfig.brain.modelId || ''}
@@ -275,15 +275,15 @@ export function ConfigViewNew({
                           </div>
                         )}
                       </>
-                    ) : (
-                      <RemoteProviderTable
-                        endpoints={customEndpoints}
-                        onAddEndpoint={onAddEndpoint}
-                        onDeleteEndpoint={onDeleteEndpoint}
-                      />
-                    )}
-                  </div>
-                )}
+                    )
+                  ) : (
+                    <RemoteProviderTable
+                      endpoints={customEndpoints}
+                      onAddEndpoint={onAddEndpoint}
+                      onDeleteEndpoint={onDeleteEndpoint}
+                    />
+                  )}
+                </div>
               </TableCell>
 
               {/* TTS 单元格 */}

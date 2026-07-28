@@ -5,3 +5,8 @@ dist/
 coverage/
 release/
 packages/renderer/assets/vad/
+test-models/
+models/
+*.tar.bz2
+latency-test-input.wav
+settings.json
