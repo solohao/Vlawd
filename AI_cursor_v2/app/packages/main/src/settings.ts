@@ -1,11 +1,27 @@
-import { app, safeStorage } from "electron";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import type {
   CustomEndpointConfig,
   ModelBackendKind,
   ModelStorageConfig
 } from "@ai-cursor-v2/shared";
+
+const require = createRequire(import.meta.url);
+let app: { getPath(name: string): string } | undefined;
+let safeStorage: {
+  isEncryptionAvailable(): boolean;
+  encryptString(plaintext: string): Buffer;
+  decryptString(encrypted: Buffer): string;
+} | undefined;
+
+try {
+  const electron = require("electron");
+  app = electron?.app;
+  safeStorage = electron?.safeStorage;
+} catch {
+  // 非 Electron 运行时（如单元测试或命令行脚本）使用默认降级。
+}
 
 export interface ModelSettings {
   storage?: ModelStorageConfig;
@@ -23,6 +39,7 @@ export interface AppSettings {
 const ENCRYPTED_PREFIX = "encrypted:";
 
 function canEncrypt(): boolean {
+  if (!safeStorage) return false;
   try {
     return safeStorage.isEncryptionAvailable();
   } catch {
@@ -38,7 +55,7 @@ function encryptApiKeys(obj: unknown): unknown {
   const record = obj as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(record)) {
-    if (key === "apiKey" && typeof value === "string" && value && canEncrypt()) {
+    if (key === "apiKey" && typeof value === "string" && value && safeStorage && canEncrypt()) {
       try {
         const encrypted = safeStorage.encryptString(value);
         result[key] = `${ENCRYPTED_PREFIX}${encrypted.toString("base64")}`;
@@ -60,7 +77,7 @@ function decryptApiKeys(obj: unknown): unknown {
   const record = obj as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(record)) {
-    if (key === "apiKey" && typeof value === "string" && value.startsWith(ENCRYPTED_PREFIX)) {
+    if (key === "apiKey" && typeof value === "string" && value.startsWith(ENCRYPTED_PREFIX) && safeStorage) {
       try {
         const b64 = value.slice(ENCRYPTED_PREFIX.length);
         const buffer = Buffer.from(b64, "base64");
