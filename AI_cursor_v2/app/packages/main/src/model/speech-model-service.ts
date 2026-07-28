@@ -118,6 +118,24 @@ export class SpeechModelService {
     this.ttsEngines.clear();
   }
 
+  /** 预热当前激活的 STT/TTS 模型，避免把模型加载时间算进延迟。 */
+  warmUp(): void {
+    if (this.active.stt) {
+      const modelDir = this.getSttModelDir();
+      if (modelDir) {
+        if (this.getCatalogItem(this.active.stt)?.sttConfig?.streaming) {
+          this.loadStreamingRecognizer(modelDir);
+        } else {
+          this.loadRecognizer(modelDir);
+        }
+      }
+    }
+    if (this.active.tts) {
+      const modelDir = this.getTtsModelDir();
+      if (modelDir) this.loadTts(modelDir);
+    }
+  }
+
   getModelsDir(): string {
     return this.modelsDir;
   }
@@ -557,6 +575,38 @@ export class SpeechModelService {
       throw new Error("text contains only unsupported characters for local TTS");
     }
     return tts.generate({ text: safeText, sid: 0, speed: 1.0, enableExternalBuffer: false });
+  }
+
+  /**
+   * 流式 TTS：边合成边回调音频块，拿到第一块即可播放。
+   * onProgress 回调 { samples, sampleRate, progress }，其中 progress 是 0-1。
+   */
+  async synthesizeStreaming(
+    text: string,
+    onProgress: (info: { samples: Float32Array; sampleRate: number; progress: number }) => void
+  ): Promise<{ samples: Float32Array; sampleRate: number }> {
+    const modelDir = this.getTtsModelDir();
+    if (!modelDir) throw new Error("未选择或未安装本地 TTS 模型");
+    const tts = this.loadTts(modelDir);
+    const safeText = text.replace(/[a-zA-Z]+/g, " ").trim();
+    if (!safeText) {
+      throw new Error("text contains only unsupported characters for local TTS");
+    }
+    let finalResult: { samples: Float32Array; sampleRate: number } | undefined;
+    await tts.generateAsync({
+      text: safeText,
+      sid: 0,
+      speed: 1.0,
+      enableExternalBuffer: false,
+      onProgress: (info: { samples: Float32Array; progress: number }) => {
+        finalResult = { samples: info.samples, sampleRate: tts.sampleRate };
+        onProgress({ samples: info.samples, sampleRate: tts.sampleRate, progress: info.progress });
+      }
+    });
+    if (!finalResult) {
+      throw new Error("TTS 流式合成未返回音频");
+    }
+    return finalResult;
   }
 
   private resample(input: Float32Array, fromRate: number, toRate: number): Float32Array {
