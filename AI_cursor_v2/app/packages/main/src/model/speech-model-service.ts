@@ -7,14 +7,24 @@ import { loadSettings, saveSettings, type ModelSettings } from "../settings.js";
 import { downloadWithResume, type DownloadProgress } from "./download-resume.js";
 import { SPEECH_CATALOG } from "./speech-catalog.js";
 
-const { OfflineRecognizer, OfflineTts } = pkg;
+const { OfflineRecognizer, OfflineTts, OnlineRecognizer } = pkg;
 
 type SpeechRole = "stt" | "tts";
 
-export type SpeechSttType = "whisper" | "paraformer" | "senseVoice" | "zipformerCtc";
+export type SpeechSttType = "whisper" | "paraformer" | "senseVoice" | "zipformerCtc" | "transducer";
+
+export interface SpeechTransducerConfig {
+  encoder: string;
+  decoder: string;
+  joiner: string;
+}
 
 export interface SpeechSttConfig {
   type: SpeechSttType;
+  /** 是否为流式（Online）模型；true 时走 OnlineRecognizer，false 或省略时走 OfflineRecognizer。 */
+  streaming?: boolean;
+  /** 流式 transducer 编码器/解码器/joiner 路径。 */
+  transducer?: SpeechTransducerConfig;
   /** Whisper 编码器路径（相对 extractedDirName）。 */
   encoder?: string;
   /** Whisper 解码器路径（相对 extractedDirName）。 */
@@ -38,6 +48,7 @@ export interface SpeechTtsConfig {
   lexicon?: string;
   dataDir?: string;
   voices?: string;
+  language?: string;
   ruleFsts?: string[];
   numThreads?: number;
 }
@@ -92,6 +103,7 @@ export class SpeechModelService {
   private downloadControllers = new Map<string, AbortController>();
   private pausedDownloads = new Set<string>();
   private recognizers = new Map<string, InstanceType<typeof OfflineRecognizer>>();
+  private onlineRecognizers = new Map<string, InstanceType<typeof OnlineRecognizer>>();
   private ttsEngines = new Map<string, InstanceType<typeof OfflineTts>>();
 
   constructor() {
@@ -102,6 +114,7 @@ export class SpeechModelService {
     if (this.modelsDir === dir) return;
     this.modelsDir = dir;
     this.recognizers.clear();
+    this.onlineRecognizers.clear();
     this.ttsEngines.clear();
   }
 
@@ -171,6 +184,8 @@ export class SpeechModelService {
         const files = [cfg.tokens];
         if (cfg.type === "whisper") {
           files.push(cfg.encoder!, cfg.decoder!);
+        } else if (cfg.transducer) {
+          files.push(cfg.transducer.encoder, cfg.transducer.decoder, cfg.transducer.joiner);
         } else {
           files.push(cfg.model!);
         }
@@ -404,7 +419,9 @@ export class SpeechModelService {
         model: join(modelDir, cfg.model),
         voices: join(modelDir, cfg.voices!),
         tokens: join(modelDir, cfg.tokens),
-        dataDir: cfg.dataDir ? join(modelDir, cfg.dataDir) : ""
+        dataDir: cfg.dataDir ? join(modelDir, cfg.dataDir) : "",
+        lexicon: cfg.lexicon ? join(modelDir, cfg.lexicon) : "",
+        lang: cfg.language ?? "zh"
       };
     }
 
@@ -434,10 +451,96 @@ export class SpeechModelService {
       samples = this.resample(samples, sampleRate, 16000);
       sampleRate = 16000;
     }
+    const item = this.getCatalogItem(this.active.stt!);
+    if (item?.sttConfig?.streaming) {
+      return this.transcribeStreaming(samples, sampleRate, modelDir);
+    }
     const recognizer = this.loadRecognizer(modelDir);
     const stream = recognizer.createStream();
     stream.acceptWaveform({ samples, sampleRate });
     recognizer.decode(stream);
+    const result = recognizer.getResult(stream);
+    stream.free?.();
+    return result.text ?? "";
+  }
+
+  private loadStreamingRecognizer(modelDir: string): InstanceType<typeof OnlineRecognizer> {
+    const id = this.active.stt!;
+    const cached = this.onlineRecognizers.get(id);
+    if (cached) return cached;
+
+    const item = this.getCatalogItem(id);
+    if (!item || !item.sttConfig) {
+      throw new Error("STT 模型配置不存在");
+    }
+    const cfg = item.sttConfig;
+
+    const modelConfig: any = {
+      tokens: join(modelDir, cfg.tokens),
+      numThreads: 2,
+      provider: "cpu",
+      debug: 0
+    };
+
+    if (cfg.transducer) {
+      modelConfig.transducer = {
+        encoder: join(modelDir, cfg.transducer.encoder),
+        decoder: join(modelDir, cfg.transducer.decoder),
+        joiner: join(modelDir, cfg.transducer.joiner)
+      };
+    } else if (cfg.type === "paraformer" && cfg.model) {
+      modelConfig.paraformer = {
+        encoder: join(modelDir, cfg.model),
+        decoder: ""
+      };
+    }
+
+    const config = {
+      featConfig: { sampleRate: 16000, featureDim: 80 },
+      modelConfig,
+      decodingMethod: "greedy_search",
+      maxActivePaths: 4,
+      endpointConfig: {
+        rule1MinTrailingSilence: 0.5,
+        rule2MinTrailingSilence: 1.0,
+        rule3MinUtteranceLength: 20.0
+      },
+      enableEndpoint: true
+    };
+
+    const recognizer = new OnlineRecognizer(config);
+    this.onlineRecognizers.set(id, recognizer);
+    return recognizer;
+  }
+
+  /**
+   * 流式转写：分块喂入音频，endpoint 触发后返回最终文本。
+   * 用于模拟真实麦克风采集+VAD场景，显著缩短"用户说完→文本可用"的延迟。
+   */
+  private async transcribeStreaming(samples: Float32Array, sampleRate: number, modelDir: string): Promise<string> {
+    if (sampleRate !== 16000) {
+      samples = this.resample(samples, sampleRate, 16000);
+      sampleRate = 16000;
+    }
+
+    const recognizer = this.loadStreamingRecognizer(modelDir);
+    const stream = recognizer.createStream();
+
+    const chunkSize = Math.floor(0.5 * sampleRate); // 500ms 一喂
+    for (let offset = 0; offset < samples.length; offset += chunkSize) {
+      const chunk = samples.subarray(offset, Math.min(offset + chunkSize, samples.length));
+      stream.acceptWaveform({ samples: chunk, sampleRate });
+      while (recognizer.isReady(stream)) {
+        recognizer.decode(stream);
+      }
+    }
+
+    stream.inputFinished();
+    // 音频结束后反复解码，确保 transducer 把所有状态都刷出来。
+    for (let i = 0; i < 50 && recognizer.isReady(stream); i++) {
+      recognizer.decode(stream);
+    }
+
     const result = recognizer.getResult(stream);
     stream.free?.();
     return result.text ?? "";
