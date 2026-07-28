@@ -289,7 +289,7 @@ async function runOnce(args: Arguments): Promise<LatencyResult> {
     throw new Error("STT 未识别到文本，无法继续");
   }
 
-  const systemPrompt = "你是 Vlawd 的本地全双工桌面助手。用简洁自然的中文口语回答，适合语音朗读。";
+  const systemPrompt = "你是 Vlawd 的本地全双工桌面助手。用简洁自然的中文口语回答，适合语音朗读。请先用一个简短的回应（如'好的'、'收到'、'明白'）开头，逗号停顿，再给出具体内容。";
   const messages = [
     { role: "system" as const, content: systemPrompt },
     { role: "user" as const, content: text }
@@ -297,36 +297,45 @@ async function runOnce(args: Arguments): Promise<LatencyResult> {
 
   console.log("[latency-test] 开始 LLM 流式生成 ...");
   const llmStart = performance.now();
+  const abortController = new AbortController();
   const BREAK_PUNCTUATION = /[。！？!?？.．，,；;：:\n]/;
   let firstTokenAt: number | undefined;
   let sentenceEndAt: number | undefined;
   let sentenceEndIndex = 0;
   let reply = "";
-  for await (const delta of llm.stream(messages)) {
-    if (firstTokenAt === undefined) {
-      firstTokenAt = performance.now();
-    }
-    reply += delta;
-    // 拿到第一个可朗读短句就准备 TTS（去气泡：不等后续句子）。
-    // 强句末标点（。！？）立刻切；逗号/分号等软停顿只在长度足够时切，避免只拿到"收到"这类语气词。
-    if (sentenceEndAt === undefined) {
-      const hasStrongEnding = /[。！？!?？.．\n]/.test(reply);
-      const hasSoftPause = /[，,；;：:]/.test(reply);
-      const ready = hasStrongEnding
-        ? reply.length >= args.minTtsLength
-        : hasSoftPause && reply.length >= args.minTtsLength;
-      if (ready) {
-        const match = BREAK_PUNCTUATION.exec(reply);
-        sentenceEndIndex = match ? match.index : reply.length;
-        sentenceEndAt = performance.now();
-        if (!args.streamingTts) {
+  try {
+    for await (const delta of llm.stream(messages, abortController.signal)) {
+      if (firstTokenAt === undefined) {
+        firstTokenAt = performance.now();
+      }
+      reply += delta;
+      // 拿到第一个可朗读短句就准备 TTS（去气泡：不等后续句子）。
+      // 强句末标点（。！？）立刻切；逗号/分号等软停顿只在长度足够时切，避免只拿到"收到"这类语气词。
+      if (sentenceEndAt === undefined) {
+        const hasStrongEnding = /[。！？!?？.．\n]/.test(reply);
+        const hasSoftPause = /[，,；;：:]/.test(reply);
+        const ready = hasStrongEnding
+          ? reply.length >= args.minTtsLength
+          : hasSoftPause && reply.length >= args.minTtsLength;
+        if (ready) {
+          const match = BREAK_PUNCTUATION.exec(reply);
+          sentenceEndIndex = match ? match.index : reply.length;
+          sentenceEndAt = performance.now();
+          // 流式首块到手后就不需要继续 LLM 了，立即 abort，释放 CPU 给 TTS。
+          abortController.abort();
           break;
         }
       }
+      // 流式模式下限制单句最大长度，避免过度聚合。
+      if (args.streamingTts && reply.length >= args.maxTtsLength) {
+        abortController.abort();
+        break;
+      }
     }
-    // 流式模式下限制单句最大长度，避免过度聚合。
-    if (args.streamingTts && reply.length >= args.maxTtsLength) {
-      break;
+  } catch (err) {
+    // AbortError 是预期内的，说明我们主动掐断了 LLM。
+    if (!(err instanceof Error && err.name === "AbortError")) {
+      throw err;
     }
   }
   const llmEnd = performance.now();
